@@ -9,6 +9,7 @@
     <link rel="icon" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/ui.css" />
     <link rel="stylesheet" href="/css/historico.css" />
   </head>
   <body>
@@ -21,26 +22,43 @@
       <div class="dashboard-content history-content">
         <header class="topbar"><div><p class="eyebrow">Rastreabilidade e gestão</p><h1>Histórico de processos</h1></div><a class="back-link" href="/">← Dashboard</a></header>
         <section class="history-toolbar panel">
-          <div class="panel-heading"><div><p class="eyebrow">Pesquisa</p><h2>Encontre um processo</h2></div><span id="result-count" class="process-status">0 resultados</span></div>
+          <div class="panel-heading"><div><p class="eyebrow">Pesquisa</p><h2>Encontre um processo</h2></div><span id="result-count" class="process-status" role="status">0 resultados</span></div>
           <form id="search-form" class="history-filters">
             <label>Processo<input name="process" type="search" placeholder="Ex.: GAR-2026-0045" /></label>
-            <label>Cliente<input name="client" type="search" placeholder="Nome do cliente" /></label><label>Produto<input name="product" type="search" placeholder="Produto" /></label><label>Código<input name="productCode" type="search" placeholder="Código" /></label><label>Documento<input name="document" type="search" placeholder="NF, pedido ou documento" /></label>
-            <label>Tipo<select name="type"><option value="">Todos</option><option>Pedido de venda</option><option>Base de troca</option><option>Garantia</option></select></label>
-            <label>Status<select name="status"><option value="">Todos</option><option>Criado</option><option>Em analise</option><option>Aguardando documento</option><option>Aprovado</option><option>Improcedente</option><option>Em faturamento</option><option>Processando</option><option>Concluido</option><option>Encerrado</option><option>Cancelado</option></select></label>
-            <label>Data de atualização<input name="updatedAt" type="date" /></label>
+            <label>Cliente<input name="client" type="search" placeholder="Nome do cliente" /></label>
+            <label>Produto<input name="product" type="search" placeholder="Produto" /></label>
+            <label>Código<input name="productCode" type="search" placeholder="Código" /></label>
+            <label>Documento<input name="document" type="search" placeholder="NF, pedido ou documento" /></label>
+            <label>Série ou lote<input name="serial" type="search" placeholder="Nº de série ou lote" /></label>
+            <label>Tipo<select name="type"><option value="">Todos</option></select></label>
+            <label>Status<select name="status"><option value="">Todos</option></select></label>
+            <label>Responsável<select name="assignedTo"><option value="">Todos</option></select></label>
+            <label>Atualizado de<input name="from" type="date" /></label>
+            <label>Atualizado até<input name="to" type="date" /></label>
+            <label class="check-filter"><input name="mine" type="checkbox" value="true" /> Somente meus casos</label>
+            <label class="check-filter"><input name="overdue" type="checkbox" value="true" /> Somente atrasados</label>
+            <label class="check-filter"><input name="archived" type="checkbox" value="true" /> Arquivados</label>
             <div class="filter-actions"><button class="button button-primary" type="submit">Pesquisar <span>→</span></button><button id="clear-filters" class="button button-secondary" type="button">Limpar</button></div>
           </form>
+          <div class="inline-form" style="margin-top:12px">
+            <label>Filtros salvos<select id="saved-filters"><option value="">Selecione…</option></select></label>
+            <button id="save-filter" class="button button-secondary compact-button" type="button">Salvar filtro atual</button>
+            <button id="delete-filter" class="button button-secondary compact-button" type="button">Excluir filtro</button>
+            <span style="flex:1"></span>
+            <button class="button button-secondary compact-button" type="button" data-export="xlsx">Exportar XLSX</button>
+            <button class="button button-secondary compact-button" type="button" data-export="pdf">Exportar PDF</button>
+            <button class="button button-secondary compact-button" type="button" data-export="csv">Exportar CSV</button>
+          </div>
         </section>
-        <section class="history-layout">
-          <article class="panel history-results"><div class="panel-heading"><div><p class="eyebrow">Resultados</p><h2>Processos encontrados</h2></div><span class="muted">Selecione uma linha para gerenciar</span></div><div class="table-wrap"><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Atualização</th></tr></thead><tbody id="history-body"></tbody></table></div></article>
-          <aside id="management-panel" class="panel management-panel"><div class="empty-selection"><span class="empty-icon">◷</span><h2>Selecione um processo</h2><p class="muted">Os dados, eventos e ações aparecerão aqui.</p></div></aside>
+        <section class="panel history-results" style="margin-top:16px">
+          <div id="bulk-bar" class="bulk-bar hidden"><strong id="bulk-count"></strong><label class="sr-only" for="bulk-assignee">Responsável</label><select id="bulk-assignee"></select><button id="bulk-assign" class="button button-primary compact-button" type="button">Atribuir selecionados</button></div>
+          <div class="table-wrap"><table aria-describedby="result-count"><thead><tr><th><input type="checkbox" id="select-all" aria-label="Selecionar todos desta página" class="hidden" /></th><th class="sortable" data-sort="case_number"><button type="button">Processo</button></th><th class="sortable" data-sort="client"><button type="button">Cliente</button></th><th class="sortable" data-sort="type"><button type="button">Tipo</button></th><th class="sortable" data-sort="status"><button type="button">Status</button></th><th class="sortable" data-sort="due_at"><button type="button">Prazo</button></th><th>Responsável</th><th class="sortable" data-sort="updated_at"><button type="button">Atualização</button></th></tr></thead><tbody id="history-body"></tbody></table></div>
+          <nav class="pagination" aria-label="Paginação"><span id="page-info" class="muted"></span><span class="pager"><button id="prev-page" class="button button-secondary compact-button" type="button">← Anterior</button><button id="next-page" class="button button-secondary compact-button" type="button">Próxima →</button></span></nav>
         </section>
       </div>
     </main>
+    <script src="/js/api.js" defer></script>
     <script src="/js/pwa.js" defer></script>
-    <script src="/js/case-editor.js" defer></script>
     <script src="/js/historico.js" defer></script>
-    <script src="/js/history-editor.js" defer></script>
-    <script src="/js/case-management.js" defer></script>
   </body>
 </html>

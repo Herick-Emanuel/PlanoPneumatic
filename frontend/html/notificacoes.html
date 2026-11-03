@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plano Pneumatic | Notificações</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#092d57" />
+    <link rel="icon" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/ui.css" />
+    <link rel="stylesheet" href="/css/admin.css" />
+</head>
+
+<body>
+    <main class="dashboard-layout" data-admin-page="notifications">
+        <aside class="sidebar">
+            <div class="brand brand-sidebar"><img src="/logo.png" alt="Plano Pneumatic" /><span>OPERAÇÃO</span></div>
+            <nav class="nav"><a class="nav-link" href="/"><span>▦</span> Dashboard</a><a class="nav-link"
+                    href="/triagem.html"><span>◎</span> Triagem</a><a class="nav-link"
+                    href="/pendencias.html"><span>!</span> Pendências</a><a class="nav-link active"
+                    href="/cadastros.html"><span>♙</span> Cadastros</a><a class="nav-link"
+                    href="/configuracoes.html"><span>⚙</span> Configurações</a></nav>
+            <div class="sidebar-bottom">
+                <div class="profile-mini"><span id="profile-initials">--</span>
+                    <div><strong id="profile-name">Carregando</strong><small id="profile-role">Perfil</small></div>
+                </div><button data-logout class="logout-button" type="button">Sair <span>↗</span></button>
+            </div>
+        </aside>
+        <div class="dashboard-content admin-content">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Central</p>
+                    <h1>Notificações</h1>
+                </div><a class="back-link" href="/">← Dashboard</a>
+            </header>
+            <div id="page-content" class="admin-page-content">
+                <p class="muted">Carregando...</p>
+            </div>
+        </div>
+    </main>
+    <script src="/js/api.js" defer></script>
+    <script src="/js/pwa.js" defer></script>
+    <script src="/js/admin-page.js" defer></script>
+</body>
+
+</html>

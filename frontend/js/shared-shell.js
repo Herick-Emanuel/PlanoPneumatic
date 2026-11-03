@@ -14,7 +14,13 @@
     "/relatorios.html": "Relatórios",
     "/relatorios-time.html": "Desempenho por time",
     "/relatorios-gerentes.html": "Desempenho de gerentes",
-    "/cadastros.html": "Cadastros",
+    "/cadastros.html": "Usuários",
+    "/cadastro-base.html": "Clientes e produtos",
+    "/importar.html": "Importar pedidos",
+    "/auditoria.html": "Auditoria",
+    "/integracoes.html": "Integrações",
+    "/notificacoes.html": "Notificações",
+    "/caso.html": "Processo",
     "/configuracoes.html": "Configurações",
     "/conta.html": "Minha conta"
   };
@@ -137,6 +143,7 @@
       trackActivity("navigation", labels[targetPath] || targetPath);
       renderNavigation();
       renderBreadcrumb(targetPath);
+      window.PPShellTools?.mount();
       const scripts = [...nextDocument.querySelectorAll("script[src]")];
       for (const script of scripts) {
         const loadedScript = document.createElement("script");
@@ -162,34 +169,59 @@
     });
   }
 
+  // [href, icone, rotulo, chave, capacidade exigida (opcional)]
   const navigation = [
     ["/", "▦", "Dashboard", "dashboard"],
-    ["/triagem.html", "◎", "Triagem", "triagem"],
-    ["/pedido-venda.html", "▤", "Pedidos de venda", "pedido"],
-    ["/base-troca.html", "↻", "Base de troca", "troca"],
-    ["/garantia.html", "✓", "Garantias", "garantia"],
+    ["/triagem.html", "◎", "Triagem", "triagem", "cases.create"],
+    ["/pedido-venda.html", "▤", "Pedidos de venda", "pedido", "cases.create"],
+    ["/base-troca.html", "↻", "Base de troca", "troca", "cases.create"],
+    ["/garantia.html", "✓", "Garantias", "garantia", "cases.create"],
     ["/historico.html", "◷", "Histórico", "historico"],
-    ["/relatorios.html", "◷", "Relatórios", "relatorios"],
-    ["/cadastros.html", "♙", "Cadastros", "cadastros"],
+    ["/relatorios.html", "▥", "Relatórios", "relatorios"],
+    ["/cadastro-base.html", "▣", "Clientes e produtos", "registro", "cases.create"],
+    ["/importar.html", "⇪", "Importar pedidos", "importar", "cases.import"],
+    ["/cadastros.html", "♙", "Usuários", "cadastros", "users.view"],
+    ["/auditoria.html", "☰", "Auditoria", "auditoria", "users.audit.view"],
+    ["/integracoes.html", "⇄", "Integrações", "integracoes", "integrations.manage"],
     ["/configuracoes.html", "⚙", "Configurações", "configuracoes"],
     ["/conta.html", "◉", "Minha conta", "conta"]
   ];
-  const session = (() => {
+  const readSession = () => {
     try { return JSON.parse(localStorage.getItem("plano-pneumatic-session")); } catch { return null; }
-  })();
-  const visibleNavigation = navigation.filter(([, , , key]) => key !== "cadastros" || ["admin", "manager"].includes(session?.user?.role));
-
-  const currentPath = window.location.pathname === "/" ? "/" : window.location.pathname.replace(/\/$/, "");
-  const links = visibleNavigation.map(([href, icon, label, key]) => {
-    const normalizedHref = href === "/" ? "/" : href;
-    const active = normalizedHref === currentPath;
-    return `<a class="nav-link${active ? " active" : ""}" href="${href}" data-nav-key="${key}"><span>${icon}</span> ${label}</a>`;
-  }).join("");
+  };
+  // Sessoes antigas nao guardam capacidades: ate atualizar, mostra apenas o que nao depende delas.
+  const allowed = (capability) => !capability || (readSession()?.user?.capabilities || []).includes(capability);
 
   const nav = sidebar.querySelector(".nav");
+  function renderNavLinks() {
+    if (!nav) return;
+    const path = window.location.pathname === "/" ? "/" : window.location.pathname.replace(/\/$/, "");
+    nav.innerHTML = navigation.filter(([, , , , capability]) => allowed(capability)).map(([href, icon, label, key]) => {
+      const active = href === path || (path === "/caso.html" && key === "historico");
+      return `<a class="nav-link${active ? " active" : ""}" href="${href}" data-nav-key="${key}"${active ? ' aria-current="page"' : ""}><span aria-hidden="true">${icon}</span> ${label}</a>`;
+    }).join("");
+  }
+
+  const currentPath = window.location.pathname === "/" ? "/" : window.location.pathname.replace(/\/$/, "");
+  const toolsScript = document.createElement("script");
+  toolsScript.src = "/js/shell-tools.js";
+  document.head.appendChild(toolsScript);
+  // Atualiza as capacidades do usuario (o perfil pode ter mudado) e redesenha o menu.
+  function refreshUser() {
+    if (!readSession()?.token || !window.PP) return;
+    window.PP.api.get("/api/auth/me").then((data) => {
+      window.PP.setSession({ ...readSession(), user: data.user });
+      renderNavLinks();
+      window.PPShellTools?.mount();
+    }).catch(() => {});
+  }
+  if (document.readyState === "complete") refreshUser(); else window.addEventListener("load", refreshUser);
+  // Disparado pela tela de login quando a sessao muda (o menu depende das capacidades do usuario).
+  window.addEventListener("pp-session-changed", () => { renderNavLinks(); window.PPShellTools?.mount(); });
+
   if (nav) {
     nav.setAttribute("aria-label", "Navegação principal");
-    nav.innerHTML = links;
+    renderNavLinks();
     nav.addEventListener("click", (event) => {
       const link = event.target.closest("a[href]");
       if (!link || new URL(link.href, window.location.origin).origin !== window.location.origin) return;

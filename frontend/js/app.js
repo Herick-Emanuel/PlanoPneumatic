@@ -2,51 +2,17 @@ const sharedShellScript = document.createElement("script");
 sharedShellScript.src = "/js/shared-shell.js";
 document.head.appendChild(sharedShellScript);
 
-const sessionKey = "plano-pneumatic-session";
+const PP = window.PP;
+const { esc, api: apiRequest } = PP;
 const loginView = document.querySelector("#login-view");
 const dashboardView = document.querySelector("#dashboard-view");
 const loginForm = document.querySelector("#login-form");
 const feedback = document.querySelector("#login-feedback");
-const detailModal = document.querySelector("#detail-modal");
-const apiOrigin = window.location.hostname === "planopneumatic-production.up.railway.app" ? "https://planopneumaticapi-production.up.railway.app" : window.location.origin;
-function apiUrl(url) { return new URL(url, apiOrigin).toString(); }
-function esc(value) { return String(value == null ? "" : value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character])); }
-
-function getSession() {
-  try {
-    return JSON.parse(localStorage.getItem(sessionKey));
-  } catch {
-    return null;
-  }
-}
-
-function setSession(session) {
-  localStorage.setItem(sessionKey, JSON.stringify(session));
-}
-
-function clearSession() {
-  localStorage.removeItem(sessionKey);
-}
-
-async function apiRequest(url, options = {}) {
-  const session = getSession();
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (session?.token) headers.Authorization = `Bearer ${session.token}`;
-
-  const response = await fetch(apiUrl(url), { ...options, headers });
-  if (response.status === 401 && session?.token && !url.endsWith("/api/auth/login")) {
-    clearSession();
-    showLogin();
-    throw new Error("Sua sessao expirou. Entre novamente.");
-  }
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Nao foi possivel concluir a solicitacao." }));
-    throw new Error(error.message);
-  }
-  return response.status === 204 ? null : response.json();
-}
+let refreshTimer = null;
 
 function showLogin(message = "") {
+  try { message = message || sessionStorage.getItem(PP.SESSION_EXPIRED_KEY) || ""; sessionStorage.removeItem(PP.SESSION_EXPIRED_KEY); } catch { /* sem sessionStorage */ }
+  clearInterval(refreshTimer);
   loginView.classList.remove("hidden");
   dashboardView.classList.add("hidden");
   feedback.textContent = message;
@@ -63,37 +29,35 @@ function showDashboard(user) {
   loginView.classList.add("hidden");
   dashboardView.classList.remove("hidden");
   document.querySelector("#welcome-name").textContent = user.name.split(" ")[0];
-  document.querySelector("#profile-name").textContent = user.name;
-  document.querySelector("#profile-role").textContent = user.role === "admin" ? "Administrador" : user.role === "manager" ? "Gerente" : user.role;
-  document.querySelector("#profile-initials").textContent = user.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  PP.fillProfile(user);
+  const dateLabel = document.querySelector(".date-label");
+  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString("pt-BR", { dateStyle: "long", timeZone: "America/Sao_Paulo" });
 }
 
 function renderDashboard(data) {
   document.querySelector("#indicator-grid").innerHTML = data.indicators.map((indicator) => `
-    <article class="indicator-card ${indicator.tone}">
-      <div class="indicator-top"><span>${indicator.label}</span><span class="indicator-mark">${indicator.tone === "red" ? "!" : "↗"}</span></div>
-      <strong>${indicator.value}</strong>
+    <article class="indicator-card ${esc(indicator.tone)}">
+      <div class="indicator-top"><span>${esc(indicator.label)}</span><span class="indicator-mark" aria-hidden="true">${indicator.tone === "red" ? "!" : "↗"}</span></div>
+      <strong>${esc(indicator.value)}</strong>
       <small>Atualizado agora</small>
     </article>
   `).join("");
 
   document.querySelector("#cases-body").innerHTML = data.recentCases.map((item) => `
-    <tr class="case-row" data-case-number="${esc(item.id)}"><td><strong>${esc(item.id)}</strong></td><td>${esc(item.client)}</td><td>${esc(item.type)}</td><td><span class="table-status ${statusTone(item.status)}">${esc(item.status)}</span></td><td class="muted">${esc(item.updatedAt)}</td></tr>
-  `).join("");
-  document.querySelectorAll(".case-row").forEach((row) => row.addEventListener("click", () => openCaseDetail(row.dataset.caseNumber)));
+    <tr class="case-row"><td><a class="table-link" href="/caso.html?id=${encodeURIComponent(item.id)}">${esc(item.id)}</a></td><td>${esc(item.client)}</td><td>${esc(item.type)}</td><td><span class="table-status ${PP.statusTone(item.status)}">${esc(PP.statusLabel(item.status))}</span></td><td>${PP.slaBadge(item)}</td><td class="muted">${esc(item.updatedAt)}</td></tr>
+  `).join("") || `<tr><td colspan="6">${PP.emptyState("Nenhum processo no período", "Crie um processo na triagem para começar.", '<a class="button button-primary compact-button" href="/triagem.html">+ Novo processo</a>')}</td></tr>`;
   renderInsights(data);
 }
 
 function renderInsights(data) {
-  document.querySelector("#comparison-grid").innerHTML = `<div><span>Abertos</span><strong>${data.comparison.openCases}</strong></div><div><span>Concluídos</span><strong>${data.comparison.completed}</strong></div>`;
+  document.querySelector("#comparison-grid").innerHTML = `<div><span>Abertos</span><strong>${esc(data.comparison.openCases)}</strong></div><div><span>Concluídos</span><strong>${esc(data.comparison.completed)}</strong></div>`;
   const maxType = Math.max(...data.byType.map((item) => item.value), 1);
   document.querySelector("#type-chart").innerHTML = data.byType.map((item) => `<div class="distribution-row"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i style="width:${Math.max(8, item.value / maxType * 100)}%"></i></div>`).join("") || '<p class="muted">Sem dados no período.</p>';
   const maxEvolution = Math.max(...data.evolution.map((item) => item.total), 1);
   document.querySelector("#evolution-chart").innerHTML = data.evolution.map((item) => `<div class="chart-column" title="${esc(item.date)}: ${esc(item.total)} processos"><span style="height:${Math.max(8, item.total / maxEvolution * 100)}%"></span><small>${esc(String(item.date).slice(5))}</small></div>`).join("") || '<p class="muted">Sem dados no período.</p>';
   const alertList = document.querySelector("#alert-list");
-  document.querySelector("#alert-count").textContent = `${data.alerts.length} alertas`;
-  alertList.innerHTML = data.alerts.map((item) => `<button class="alert-row" type="button" data-case-number="${esc(item.id)}"><strong>${esc(item.id)}</strong><span>${esc(item.client)}</span><small>${esc(item.status)} · ${esc(item.updatedAt)}</small></button>`).join("") || '<p class="muted">Nenhum processo atrasado no período.</p>';
-  alertList.querySelectorAll("[data-case-number]").forEach((item) => item.addEventListener("click", () => openCaseDetail(item.dataset.caseNumber)));
+  document.querySelector("#alert-count").textContent = `${data.alerts.length} alerta${data.alerts.length === 1 ? "" : "s"}`;
+  alertList.innerHTML = data.alerts.map((item) => `<a class="alert-row" href="/caso.html?id=${encodeURIComponent(item.id)}"><strong>${esc(item.id)}</strong><span>${esc(item.client)}</span><small>${item.overdue ? "Prazo vencido em" : "Vence em"} ${esc(PP.formatDateTime(item.dueAt))} · ${esc(PP.statusLabel(item.status))}</small></a>`).join("") || '<p class="muted">Nenhum processo vencido ou próximo do vencimento.</p>';
 }
 
 function dashboardQuery() {
@@ -107,40 +71,58 @@ function dashboardQuery() {
 function renderAttention(items) {
   const actionList = document.querySelector("#action-list");
   if (!actionList) return;
-  actionList.innerHTML = items.slice(0, 5).map((item) => `<li class="action-item" data-case-number="${esc(item.id)}"><span class="action-icon ${item.risk === "Alto" ? "red" : "orange"}">${item.risk === "Alto" ? "!" : "◷"}</span><div><strong>${esc(item.id)} · ${esc(item.description)}</strong><small>${esc(item.client)} · ${esc(item.responsible)}</small></div><span>→</span></li>`).join("") || `<li class="empty-action">Nenhuma proxima acao no seu escopo.</li>`;
-  actionList.querySelectorAll("[data-case-number]").forEach((item) => item.addEventListener("click", () => openCaseDetail(item.dataset.caseNumber)));
+  actionList.innerHTML = items.slice(0, 5).map((item) => `<li class="action-item"><a href="/caso.html?id=${encodeURIComponent(item.id)}" style="display:contents;color:inherit;text-decoration:none"><span class="action-icon ${item.risk === "Alto" ? "red" : "orange"}" aria-hidden="true">${item.risk === "Alto" ? "!" : "◷"}</span><div><strong>${esc(item.id)} · ${esc(item.description)}</strong><small>${esc(item.client)} · ${esc(item.responsible)}</small></div><span aria-hidden="true">→</span></a></li>`).join("") || `<li class="empty-action">Nenhuma próxima ação no seu escopo.</li>`;
 }
 
-async function openCaseDetail(caseNumber) {
-  const detailContent = document.querySelector("#case-detail-content");
-  document.querySelector("#detail-modal-title").textContent = caseNumber;
-  detailContent.innerHTML = "<p class=\"muted\">Carregando processo...</p>";
-  detailModal.classList.remove("hidden");
-  try {
-    const data = await apiRequest(`/api/cases/${encodeURIComponent(caseNumber)}`);
-    detailContent.innerHTML = `<div class="detail-actions"><button id="edit-dashboard-case" class="button button-secondary" type="button">Editar processo <span>✎</span></button></div><div class="detail-grid"><div><small>Cliente</small><strong>${esc(data.case.client)}</strong></div><div><small>Tipo</small><strong>${esc(data.case.type)}</strong></div><div><small>Produto</small><strong>${esc(data.case.product)}</strong></div><div><small>Código</small><strong>${esc(data.case.productCode)}</strong></div><div><small>Quantidade</small><strong>${esc(data.case.quantity)}</strong></div><div><small>Responsável</small><strong>${esc(data.case.responsible)}</strong></div></div><div class="detail-section"><p class="eyebrow">Histórico</p>${data.case.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(event.createdAt)}</small></div></div>`).join("")}</div>`;
-    document.querySelector("#edit-dashboard-case").addEventListener("click", () => window.caseEditor.open(data.case, apiRequest, () => openCaseDetail(caseNumber)));
-  } catch (error) {
-    detailContent.innerHTML = `<p class="feedback">${error.message}</p>`;
+// F15: dashboard avancado (comparativo mensal, tempo por etapa, reincidencia, custo de garantia, metas).
+async function renderAdvanced() {
+  const content = document.querySelector("#dashboard-view .dashboard-content");
+  let panel = document.querySelector("#advanced-panel");
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = "advanced-panel";
+    panel.className = "panel";
+    content.appendChild(panel);
   }
+  try {
+    const data = await apiRequest(`/api/reports/advanced${dashboardQuery()}`);
+    const maxMonth = Math.max(...data.monthly.map((item) => item.total), 1);
+    panel.innerHTML = `
+      <div class="panel-heading"><div><p class="eyebrow">Análise avançada</p><h2>Evolução mensal e qualidade</h2></div></div>
+      <div class="content-grid">
+        <article><p class="eyebrow">Comparativo mensal</p><div class="bar-chart" role="img" aria-label="Processos por mês">${data.monthly.map((item) => `<div class="chart-column" title="${esc(item.month)}: ${esc(item.total)} abertos, ${esc(item.completed)} concluídos"><span style="height:${Math.max(8, item.total / maxMonth * 100)}%"></span><small>${esc(item.month.slice(2))}</small></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
+        <article><p class="eyebrow">Tempo médio por etapa (dias)</p>${data.stageDurations.map((item) => `<div class="distribution-row"><div><strong>${esc(PP.statusLabel(item.stage))}</strong><span>${esc(item.average_days)}</span></div></div>`).join("") || '<p class="muted">Ainda sem histórico suficiente.</p>'}</article>
+      </div>
+      <div class="content-grid" style="margin-top:16px">
+        <article><p class="eyebrow">Reincidência de defeito (produtos com 2+ ocorrências)</p>${data.recurrence.map((item) => `<div class="distribution-row"><div><strong>${esc(item.productCode)} · ${esc(item.product)}</strong><span>${esc(item.total)}</span></div></div>`).join("") || '<p class="muted">Nenhuma reincidência.</p>'}</article>
+        <article><p class="eyebrow">Custo estimado de garantia</p><strong style="font-size:24px">${esc(PP.money(data.warrantyCost.estimated))}</strong><p class="muted">${esc(data.warrantyCost.approved)} garantia(s) procedente(s) com valor unitário informado.</p><p class="eyebrow">Metas do mês</p>${data.goals.map((goal) => `<div class="distribution-row"><div><strong>${esc(goal.managerName)}</strong><span>${esc(goal.achieved)}/${esc(goal.monthlyTarget)}</span></div><i style="width:${Math.min(100, goal.achieved / goal.monthlyTarget * 100)}%"></i></div>`).join("") || '<p class="muted">Sem metas definidas (Desempenho por time).</p>'}</article>
+      </div>`;
+  } catch (error) { panel.innerHTML = `<p class="feedback">${esc(error.message)}</p>`; }
 }
 
-async function refreshDashboard() {
+async function loadSummary(user) {
   const data = await apiRequest(`/api/dashboard/summary${dashboardQuery()}`);
   renderDashboard(data);
   const pendingData = await apiRequest("/api/pending");
   renderAttention(pendingData.items);
+  if (user && !PP.getSession()?.user?.capabilities?.includes("cases.view.all")) document.querySelector("#advanced-panel")?.remove(); else renderAdvanced();
 }
 
-function statusTone(status) {
-  if (status.includes("Aprovado")) return "green";
-  if (status.includes("documento")) return "orange";
-  return "blue";
+async function populateFilters() {
+  const meta = await PP.meta();
+  const form = document.querySelector("#dashboard-filters");
+  const status = form.elements.status;
+  if (status && !status.dataset.ready) {
+    status.dataset.ready = "1";
+    status.innerHTML = `<option value="">Todos</option>${meta.statuses.map((entry) => `<option value="${esc(entry.code)}">${esc(entry.label)}</option>`).join("")}`;
+  }
 }
 
 async function loadDashboard(user) {
   showDashboard(user);
+  document.querySelector("#cases-body").innerHTML = `<tr><td colspan="6">${PP.skeleton(4)}</td></tr>`;
   try {
+    await populateFilters();
     const filterForm = document.querySelector("#dashboard-filters");
     const savedFilters = sessionStorage.getItem("dashboard-filters");
     if (savedFilters) Object.entries(JSON.parse(savedFilters)).forEach(([name, value]) => { if (filterForm.elements[name]) filterForm.elements[name].value = value; });
@@ -149,13 +131,18 @@ async function loadDashboard(user) {
       filterForm.addEventListener("submit", async (event) => { event.preventDefault(); await loadDashboard(user); });
       document.querySelector("#clear-dashboard-filters").addEventListener("click", () => { filterForm.reset(); sessionStorage.removeItem("dashboard-filters"); loadDashboard(user); });
     }
-    const data = await apiRequest(`/api/dashboard/summary${dashboardQuery()}`);
-    renderDashboard(data);
-    const pendingData = await apiRequest("/api/pending");
-    renderAttention(pendingData.items);
+    await loadSummary(user);
+    window.PPShellTools?.mount();
+    // Configuracao "atualizacao automatica": atualiza indicadores a cada minuto enquanto a aba esta visivel.
+    clearInterval(refreshTimer);
+    const settings = await apiRequest("/api/settings").catch(() => null);
+    if (settings?.settings.auto_refresh) refreshTimer = setInterval(() => { if (!document.hidden) loadSummary(user).catch(() => {}); }, 60000);
+    const created = new URLSearchParams(window.location.search).get("created");
+    if (created) { PP.toast(`Processo ${created} criado.`, "success"); window.history.replaceState({}, "", "/"); }
   } catch (error) {
-    if (error.message.includes("API está indisponível")) showApiUnavailable();
-    else document.querySelector("#cases-body").innerHTML = `<tr><td colspan="5">${error.message}</td></tr>`;
+    if (error.status === 0) showApiUnavailable();
+    else document.querySelector("#cases-body").innerHTML = `<tr><td colspan="6">${PP.errorState(error.message)}</td></tr>`;
+    document.querySelector("#cases-body [data-retry]")?.addEventListener("click", () => loadDashboard(user));
   }
 }
 
@@ -166,12 +153,12 @@ loginForm.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
 
   try {
-    const data = await apiRequest("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email: loginForm.email.value, password: loginForm.password.value })
-    });
-    setSession(data);
-    await loadDashboard(data.user);
+    const data = await apiRequest("/api/auth/login", { method: "POST", json: { email: loginForm.email.value, password: loginForm.password.value } });
+    PP.setSession(data);
+    const me = await apiRequest("/api/auth/me");
+    PP.setSession({ ...data, user: me.user });
+    window.dispatchEvent(new Event("pp-session-changed"));
+    await loadDashboard(me.user);
   } catch (error) {
     feedback.textContent = error.message;
   } finally {
@@ -179,17 +166,7 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-document.querySelector("#logout-button").addEventListener("click", async () => {
-  try { await apiRequest("/api/auth/logout", { method: "POST" }); } catch {}
-  clearSession();
-  loginForm.reset();
-  showLogin();
-});
-
-document.querySelector("#close-detail-modal").addEventListener("click", () => detailModal.classList.add("hidden"));
-detailModal.addEventListener("click", (event) => {
-  if (event.target === detailModal) detailModal.classList.add("hidden");
-});
+PP.bindLogout();
 
 const pwaInstallBlock = document.querySelector("#pwa-install-block");
 const pwaInstallButton = document.querySelector("#pwa-install-button");
@@ -213,10 +190,13 @@ pwaInstallButton?.addEventListener("click", async () => {
 });
 
 (async function bootstrap() {
-  const session = getSession();
+  const session = PP.getSession();
   if (!session?.token) return showLogin();
   try {
     const data = await apiRequest("/api/auth/me");
+    PP.setSession({ ...session, user: data.user });
     await loadDashboard(data.user);
-  } catch {}
+  } catch (error) {
+    if (error.status === 0) showApiUnavailable(); else showLogin();
+  }
 })();

@@ -1,0 +1,49 @@
+name: Backup do banco
+
+# Backup diario (copia fora do provedor, como artefato do GitHub) e teste mensal de restauracao.
+# Exige o segredo BACKUP_DATABASE_URL (URL de conexao do PostgreSQL de producao, preferencialmente de um usuario somente leitura).
+on:
+  schedule:
+    - cron: "0 5 * * *"
+    - cron: "30 5 1 * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    services:
+      restore-target:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Dump
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          test -n "$BACKUP_DATABASE_URL" || { echo "Segredo BACKUP_DATABASE_URL nao configurado"; exit 1; }
+          sudo apt-get install -y --no-install-recommends postgresql-client-16 >/dev/null 2>&1 || true
+          pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" | gzip -9 > backup.dump.gz
+          ls -lh backup.dump.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: backup.dump.gz
+          retention-days: 30
+      # Teste de restauracao (roda no dia 1 de cada mes e sob demanda).
+      - name: Testar restauracao
+        if: github.event.schedule == '30 5 1 * *' || github.event_name == 'workflow_dispatch'
+        env:
+          PGPASSWORD: postgres
+        run: |
+          gunzip -c backup.dump.gz > backup.dump
+          psql -h localhost -U postgres -c "CREATE DATABASE restore_check"
+          pg_restore --no-owner -h localhost -U postgres -d restore_check backup.dump
+          psql -h localhost -U postgres -d restore_check -tAc "SELECT 'cases=' || COUNT(*) FROM cases"
+          psql -h localhost -U postgres -d restore_check -tAc "SELECT 'users=' || COUNT(*) FROM users"

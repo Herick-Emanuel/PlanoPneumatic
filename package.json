@@ -8,11 +8,29 @@
     "dev": "node --watch backend/server.js",
     "start": "node backend/server.js",
     "migrate": "node backend/db.js",
-    "test": "node --test backend/server.test.js"
+    "create-admin": "node backend/scripts/create-admin.js",
+    "test": "node --test --test-concurrency=1 \"backend/test/*.test.js\"",
+    "lint": "eslint .",
+    "format": "prettier --check backend frontend",
+    "e2e": "playwright test",
+    "docs:api": "node scripts/generate-openapi.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
-    "pg": "^8.13.1"
+    "pdfkit": "^0.20.2",
+    "pg": "^8.13.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.64.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

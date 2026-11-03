@@ -9,6 +9,7 @@
     <link rel="icon" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/ui.css" />
     <link rel="stylesheet" href="/css/dashboard.css" />
   </head>
   <body>
@@ -78,7 +79,7 @@
         <div class="dashboard-content">
           <header class="topbar">
             <div><p class="eyebrow">Visão geral</p><h1>Dashboard operacional</h1></div>
-            <div class="topbar-actions"><span class="date-label">20 de setembro de 2026</span><button class="icon-button" type="button" title="Notificações">♧</button></div>
+            <div class="topbar-actions"><span class="date-label">20 de setembro de 2026</span></div>
           </header>
           <section class="welcome-row"><div><h2>Bom dia, <span id="welcome-name">Administrador</span>.</h2><p class="muted">Acompanhe os processos que precisam da sua atenção.</p></div><a class="button button-primary" href="/triagem.html">+ Novo processo</a></section>
           <form id="dashboard-filters" class="dashboard-filters panel">
@@ -88,18 +89,15 @@
           <section class="comparison-strip panel"><div><p class="eyebrow">Comparativo</p><h2>Período anterior</h2></div><div id="comparison-grid" class="comparison-grid"></div></section>
           <section class="dashboard-insights"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Evolução</p><h2>Volume por dia</h2></div></div><div id="evolution-chart" class="bar-chart"></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Processos por tipo</h2></div></div><div id="type-chart" class="distribution-list"></div></article></section>
           <section class="content-grid">
-            <article class="panel process-panel"><div class="panel-heading"><div><p class="eyebrow">Acompanhamento</p><h2>Casos recentes</h2></div><a href="/historico.html">Ver histórico →</a></div><div class="table-wrap"><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Atualizado</th></tr></thead><tbody id="cases-body"></tbody></table></div></article>
+            <article class="panel process-panel"><div class="panel-heading"><div><p class="eyebrow">Acompanhamento</p><h2>Casos recentes</h2></div><a href="/historico.html">Ver histórico →</a></div><div class="table-wrap"><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Prazo</th><th>Atualizado</th></tr></thead><tbody id="cases-body"></tbody></table></div></article>
             <article class="panel attention-panel"><div class="panel-heading"><div><p class="eyebrow">Atenção</p><h2>Minhas pendências</h2></div><span class="status-dot orange"></span></div><ul id="action-list" class="action-list"><li class="empty-action">Carregando próximas ações...</li></ul></article>
           </section>
           <section class="panel dashboard-alerts"><div class="panel-heading"><div><p class="eyebrow">Alertas</p><h2>Processos próximos do vencimento</h2></div><span id="alert-count" class="process-status">0 alertas</span></div><div id="alert-list" class="alert-list"></div></section>
         </div>
       </section>
     </main>
-    <div id="detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
-      <div class="modal-card detail-card"><div class="panel-heading"><div><p class="eyebrow">Detalhes do processo</p><h2 id="detail-modal-title">Processo</h2></div><button id="close-detail-modal" class="close-button" type="button" aria-label="Fechar">×</button></div><div id="case-detail-content" class="detail-content"></div></div>
-    </div>
+    <script src="/js/api.js" defer></script>
     <script src="/js/pwa.js" defer></script>
-    <script src="/js/case-editor.js" defer></script>
-    <script src="/js/app.js" defer></script>
+        <script src="/js/app.js" defer></script>
   </body>
 </html>

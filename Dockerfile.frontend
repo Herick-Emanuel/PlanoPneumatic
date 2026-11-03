@@ -8,6 +8,10 @@ COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY scripts/start-frontend.sh /usr/local/bin/start-frontend.sh
 COPY scripts/frontend-healthcheck.sh /usr/local/bin/frontend-healthcheck.sh
 
+ARG BUILD_ID=
+ARG RAILWAY_GIT_COMMIT_SHA=dev
+RUN sed -i "s/__BUILD_ID__/${BUILD_ID:-$RAILWAY_GIT_COMMIT_SHA}/g" /usr/share/nginx/html/sw.js
+
 RUN chmod +x /usr/local/bin/start-frontend.sh /usr/local/bin/frontend-healthcheck.sh
 
 EXPOSE 80
