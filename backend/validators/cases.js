@@ -47,7 +47,8 @@ const baseFields = {
 	serialNumber: optionalText(80),
 	lotNumber: optionalText(80),
 	items: z.array(itemSchema).max(100, "Maximo de 100 itens por pedido.").optional(),
-	intake: z.boolean().optional()
+	intake: z.boolean().optional(),
+	omieOrderNumber: optionalText(20)
 };
 
 function requireByType(data, context) {

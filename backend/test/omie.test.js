@@ -116,3 +116,39 @@ test("order lookup returns customer and items; invoice lookup validates the docu
 	const auditor = await h.createUser("auditor");
 	assert.equal((await h.api("GET", "/api/omie/orders/1001", { token: auditor.token })).status, 403);
 });
+
+test("F6: pedido que diverge do Omie e sinalizado e avisa os gerentes; pedido que confere nao", async () => {
+	const operator = await h.createUser("operator");
+	const manager = await h.createUser("manager");
+	handlers.ConsultarPedido = () => jsonResponse({ pedido_venda_produto: { cabecalho: { codigo_pedido: 9, numero_pedido: "2002", codigo_cliente: 0 }, det: [{ produto: { codigo: "VL-52", descricao: "Valvula", quantidade: 2, valor_unitario: 150 } }, { produto: { codigo: "CP-1", descricao: "Compressor", quantidade: 1, valor_unitario: 900 } }] } });
+	const body = (extra) => ({ token: operator.token, body: { type: "Pedido de venda", client: "Oficina", product: "Valvula", productCode: "VL-52", quantity: 2, unitPrice: 150, documentReference: "2002", omieOrderNumber: "2002", ...extra } });
+	const diverging = await h.api("POST", "/api/cases", body({ quantity: 3, unitPrice: 140 }));
+	assert.equal(diverging.status, 201);
+	await require("../services/cases").idle();
+	const detail = (await h.api("GET", `/api/cases/${diverging.body.case.id}`, { token: manager.token })).body.case;
+	assert.deepEqual(detail.commercialDivergence.issues.map((issue) => `${issue.code}:${issue.kind}`).sort(), ["CP-1:item_ausente", "VL-52:preco", "VL-52:quantidade"]);
+	assert.equal(detail.omieOrderNumber, "2002");
+	assert.ok(detail.events.some((event) => event.type === "DIVERGENCIA"));
+	const notes = (await h.api("GET", "/api/notifications", { token: manager.token })).body.notifications;
+	assert.equal(notes[0].kind, "COMMERCIAL_DIVERGENCE");
+
+	const matching = await h.api("POST", "/api/cases", body({ documentReference: "2002-B", items: [{ productCode: "VL-52", description: "Valvula", quantity: 2, unitPrice: 150 }, { productCode: "CP-1", description: "Compressor", quantity: 1, unitPrice: 900 }] }));
+	await require("../services/cases").idle();
+	const ok = (await h.api("GET", `/api/cases/${matching.body.case.id}`, { token: manager.token })).body.case;
+	assert.equal(ok.commercialDivergence, null);
+	assert.ok(ok.events.some((event) => event.type === "VALIDACAO" && /conferem/.test(event.description)));
+
+	handlers.ConsultarPedido = () => jsonResponse({ faultstring: "indisponivel" }, 500);
+	const offline = await h.api("POST", "/api/cases", body({ documentReference: "2002-C" }));
+	await require("../services/cases").idle();
+	assert.equal(offline.status, 201, "falha do Omie nunca impede a criacao");
+});
+
+test("Omie pedindo para aguardar muito tempo nao trava a consulta de tela", async () => {
+	const operator = await h.createUser("operator");
+	handlers.ConsultarPedido = () => jsonResponse({ faultstring: "Consumo redundante detectado. Aguarde 35 segundos para tentar novamente (REDUNDANT)." }, 500);
+	const response = await h.api("GET", "/api/omie/orders/11", { token: operator.token });
+	assert.equal(response.status, 429);
+	assert.equal(response.body.code, "OMIE_RATE_LIMIT");
+	assert.match(response.body.message, /35 segundos/);
+});

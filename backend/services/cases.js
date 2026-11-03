@@ -8,6 +8,7 @@ const { getSlaDays, slaState } = require("./sla");
 const { notifyCaseParticipants, notifyUser } = require("./notifications");
 const { dispatchWebhook } = require("./webhooks");
 const settings = require("./settings");
+const omie = require("./omie");
 
 const FIELD_COLUMNS = Object.freeze({
 	client: "client", clientDocument: "client_document", product: "product", productCode: "product_code", quantity: "quantity",
@@ -78,7 +79,9 @@ function formatCaseDetail(item) {
 		technicalOwnerId: item.technical_owner_id,
 		decidedAt: item.decided_at,
 		closedAt: item.closed_at,
-		reopenCount: item.reopen_count
+		reopenCount: item.reopen_count,
+		omieOrderNumber: item.omie_order_number || "",
+		commercialDivergence: item.commercial_divergence || null
 	};
 }
 
@@ -185,9 +188,35 @@ async function createCase(user, data) {
 			return inserted;
 		});
 		dispatchWebhook("case.created", { id: created.case_number, type: created.type, client: created.client });
+		if (data.omieOrderNumber) track(validateAgainstOmie(created, user, data));
 		return created;
 	} catch (error) {
 		throw duplicateOriginError(error, data.documentReference);
+	}
+}
+
+// Validacoes com o Omie rodam em segundo plano (o Omie pode pedir para aguardar); idle() permite aos testes esperar o fim.
+const background = new Set();
+function track(promise) {
+	background.add(promise);
+	promise.finally(() => background.delete(promise));
+}
+const idle = () => Promise.allSettled([...background]);
+
+// F6: confere o pedido digitado com o do Omie. Divergencia nao bloqueia: sinaliza o processo e avisa os gerentes para revisao.
+async function validateAgainstOmie(created, user, data) {
+	try {
+		const order = await omie.lookupOrder(data.omieOrderNumber, { maxWait: 90000 });
+		const lines = data.items?.length ? data.items : [{ productCode: data.productCode, quantity: data.quantity, unitPrice: data.unitPrice }];
+		const issues = omie.compareOrderLines(order.items, lines);
+		await database.query("UPDATE cases SET omie_order_number = $2, omie_order_code = $3, commercial_divergence = $4 WHERE id = $1", [created.id, order.orderNumber, order.omieOrderCode, issues.length ? JSON.stringify({ checkedAt: new Date().toISOString(), issues }) : null]);
+		if (issues.length) {
+			await addEvent(database, created.id, "DIVERGENCIA", `Divergencia comercial com o pedido ${order.orderNumber} do Omie (${issues.length}): enviada para revisao`, user, { issues });
+			const { rows: managers } = await database.query("SELECT id FROM users WHERE role = 'manager' AND active = TRUE");
+			for (const manager of managers) await notifyUser(manager.id, created.id, "COMMERCIAL_DIVERGENCE", `O processo ${created.case_number} diverge do pedido ${order.orderNumber} do Omie. Revise antes de aprovar.`);
+		} else await addEvent(database, created.id, "VALIDACAO", `Itens conferem com o pedido ${order.orderNumber} do Omie`, user);
+	} catch (error) {
+		await addEvent(database, created.id, "VALIDACAO", `Nao foi possivel validar com o Omie: ${error.message}`, user).catch(() => {});
 	}
 }
 
@@ -353,5 +382,5 @@ async function setArchived(user, caseNumber, archived) {
 
 module.exports = {
 	FIELD_COLUMNS, ASSIGNABLE_ROLES, formatCase, formatCaseDetail, formatDate, nextCaseNumber, addEvent, canView, findCase,
-	createCase, getCaseDetail, listCases, updateCase, changeStatus, assignCase, setArchived
+	createCase, idle, getCaseDetail, listCases, updateCase, changeStatus, assignCase, setArchived
 };

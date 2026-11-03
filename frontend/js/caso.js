@@ -20,7 +20,7 @@ document.head.appendChild(sharedShellScript);
 	};
 	const COMMON_FIELDS = [["client", "Cliente"], ["clientDocument", "CPF/CNPJ", "document"], ["product", "Produto"], ["productCode", "Código"], ["quantity", "Quantidade", "number"], ["documentReference", "Documento de origem"], ["serialNumber", "Nº de série"], ["lotNumber", "Lote"], ["notes", "Observações", "textarea"]];
 	const MAIN_PATH = { "Pedido de venda": ["Criado", "Em analise", "Aprovado", "Em faturamento", "Concluido", "Encerrado"], "Base de troca": ["Criado", "Em analise", "Aprovado", "Processando", "Concluido", "Encerrado"], Garantia: ["Criado", "Em analise", "Aprovado", "Processando", "Concluido", "Encerrado"] };
-	const EVENT_LABELS = { ABERTURA: "Abertura", STATUS: "Status", EDICAO: "Edição", ATRIBUICAO: "Atribuição", COMENTARIO: "Comentário", ANEXO: "Anexo", CHECKLIST: "Checklist", REABERTURA: "Reabertura", ARQUIVAMENTO: "Arquivamento", DESARQUIVAMENTO: "Restauração" };
+	const EVENT_LABELS = { ABERTURA: "Abertura", STATUS: "Status", EDICAO: "Edição", ATRIBUICAO: "Atribuição", COMENTARIO: "Comentário", ANEXO: "Anexo", CHECKLIST: "Checklist", REABERTURA: "Reabertura", ARQUIVAMENTO: "Arquivamento", DIVERGENCIA: "Divergência", VALIDACAO: "Validação Omie", DESARQUIVAMENTO: "Restauração" };
 	const COLUMN_LABELS = { client: "Cliente", client_document: "Documento", product: "Produto", product_code: "Código", quantity: "Quantidade", document_reference: "Documento de origem", notes: "Observações", sales_representative: "Vendedor", unit_price: "Valor unitário", payment_terms: "Pagamento", sales_channel: "Canal", exchange_reason: "Motivo da troca", item_condition: "Condição", origin_order: "Pedido de origem", tracking_code: "Rastreio", received_at: "Recebimento", defect_description: "Defeito", risk_level: "Risco", serial_number: "Série", lot_number: "Lote", technical_report: "Laudo", technical_owner_id: "Responsável técnico", warranty_destination: "Destino", logistics_status: "Logística" };
 
 	function options(list, selected, placeholder = "—") {
@@ -59,6 +59,13 @@ document.head.appendChild(sharedShellScript);
 		return hints;
 	}
 
+	const DIVERGENCE_TEXT = { quantidade: (i) => `quantidade ${i.local} (Omie: ${i.omie})`, preco: (i) => `preço ${PP.money(i.local)} (Omie: ${PP.money(i.omie)})`, item_fora_do_pedido: () => "item que não consta no pedido do Omie", item_ausente: (i) => `item do Omie ausente aqui (qtd ${i.omie.quantity})` };
+	function divergenceBanner() {
+		const issues = data.commercialDivergence?.issues;
+		if (!issues?.length) return data.omieOrderNumber ? `<p class="muted" style="margin-top:12px">✔ Itens conferem com o pedido ${esc(data.omieOrderNumber)} do Omie.</p>` : "";
+		return `<div class="draft-banner" role="alert" style="margin-top:12px"><span><strong>Divergência comercial com o pedido ${esc(data.omieOrderNumber)} do Omie — revisão do gerente necessária antes de aprovar:</strong><ul style="margin:6px 0 0">${issues.map((issue) => `<li><strong>${esc(issue.code)}</strong>: ${esc((DIVERGENCE_TEXT[issue.kind] || (() => issue.kind))(issue))}</li>`).join("")}</ul></span></div>`;
+	}
+
 	function render() {
 		const permissions = data.permissions;
 		document.querySelector("#case-title").textContent = data.id;
@@ -94,6 +101,7 @@ document.head.appendChild(sharedShellScript);
 				<ol class="stepper" aria-label="Etapas do processo">${stepper}${finalNote}</ol>
 				${data.statusReason ? `<p class="muted"><strong>Motivo registrado:</strong> ${esc(data.statusReason)}</p>` : ""}
 				<div class="transition-bar" role="group" aria-label="Ações permitidas">${transitionButtons}${permissions.archive && (data.archived || ["Concluido", "Encerrado", "Cancelado"].includes(data.status)) ? `<button class="button button-secondary compact-button" type="button" data-archive="${data.archived ? "off" : "on"}">${data.archived ? "Restaurar do arquivo" : "Arquivar"}</button>` : ""}</div>
+				${divergenceBanner()}
 				${hints.length ? `<div class="draft-banner" style="margin-top:12px"><span><strong>O que falta para avançar:</strong> ${hints.map(esc).join(" ")}</span></div>` : ""}
 			</section>
 			<div class="case-grid" style="margin-top:16px">
@@ -262,6 +270,15 @@ document.head.appendChild(sharedShellScript);
 		if (data.permissions.assign) assignees = (await api.get("/api/users/assignable").catch(() => ({ users: [] }))).users;
 		render();
 		window.PPShellTools?.mount();
+		// Recem-criado: a conferencia com o Omie roda em segundo plano; atualiza ate aparecer o resultado.
+		if (new URLSearchParams(window.location.search).get("created") && data.type === "Pedido de venda" && data.documentReference) {
+			let tries = 0;
+			const timer = setInterval(async () => {
+				tries += 1;
+				if (tries > 20 || data.events.some((event) => ["VALIDACAO", "DIVERGENCIA"].includes(event.type))) return clearInterval(timer);
+				try { await reload(); } catch { clearInterval(timer); }
+			}, 5000);
+		}
 	} catch (error) {
 		root.innerHTML = PP.errorState(error.status === 404 ? "Processo não encontrado ou sem permissão de acesso." : error.message);
 		root.querySelector("[data-retry]")?.addEventListener("click", () => window.location.reload());

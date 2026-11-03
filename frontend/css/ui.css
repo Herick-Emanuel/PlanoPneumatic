@@ -111,3 +111,10 @@ th.sortable[aria-sort="descending"] button::after { content: " ▼"; font-size: 
 	.shell-tools kbd { display: none; }
 	.notification-panel { right: 8px; top: 60px; }
 }
+
+/* Contraste WCAG AA (>= 4.5:1) nas cores de status e no texto secundario; o significado nao depende so da cor (todo status tem texto). */
+.table-status.orange, .process-status { color: #8a5100; }
+.table-status.green { color: #17724b; }
+.table-status.red { color: #a8363b; }
+.muted, small { color: #5b6a7c; }
+.sidebar small, .sidebar .muted, .login-visual small { color: inherit; }

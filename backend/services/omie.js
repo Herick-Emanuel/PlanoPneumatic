@@ -18,7 +18,8 @@ function setTransport({ fetch: nextFetch, sleep: nextSleep }) {
 
 const isConfigured = () => Boolean(process.env.OMIE_APP_KEY && process.env.OMIE_APP_SECRET);
 
-async function call(endpoint, method, param) {
+// `maxWait`: maior espera aceita por pedido de "aguarde N segundos" do Omie (consultas de tela usam pouco; rotinas em segundo plano usam mais).
+async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
 	if (!isConfigured()) throw new AppError(503, "Integracao com o Omie nao configurada (OMIE_APP_KEY / OMIE_APP_SECRET).", "OMIE_NOT_CONFIGURED");
 	const body = JSON.stringify({ call: method, app_key: process.env.OMIE_APP_KEY, app_secret: process.env.OMIE_APP_SECRET, param: [param] });
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -33,7 +34,12 @@ async function call(endpoint, method, param) {
 		const data = await response.json().catch(() => ({}));
 		const fault = data.faultstring || "";
 		const rateLimited = response.status === 429 || response.status === 425 || /consumo redundante|aguarde|muitas requisi/i.test(fault);
-		if (rateLimited && attempt < MAX_ATTEMPTS) { await sleep(2000 * attempt); continue; }
+		if (rateLimited) {
+			const hint = Number(/aguarde (\d+) segundos/i.exec(fault)?.[1]);
+			const delay = hint ? hint * 1000 + 500 : 2000 * attempt;
+			if (delay > maxWait) throw new AppError(429, `O Omie pediu para aguardar ${hint || Math.round(delay / 1000)} segundos. Tente novamente em instantes.`, "OMIE_RATE_LIMIT");
+			if (attempt < MAX_ATTEMPTS) { await sleep(delay); continue; }
+		}
 		if (!response.ok || data.faultstring) {
 			const notFound = /nao encontrad|não encontrad|inexistente|nao cadastrad|não cadastrad/i.test(fault);
 			throw new AppError(notFound ? 404 : 502, notFound ? "Registro nao encontrado no Omie." : `Omie respondeu com erro: ${fault || response.status}`, notFound ? "OMIE_NOT_FOUND" : "OMIE_ERROR");
@@ -143,8 +149,8 @@ async function status() {
 }
 
 // Pedido de venda -> dados para abrir o processo (cliente e itens).
-async function lookupOrder(orderNumber) {
-	const data = await call("produtos/pedido", "ConsultarPedido", { numero_pedido: String(orderNumber).trim() });
+async function lookupOrder(orderNumber, options) {
+	const data = await call("produtos/pedido", "ConsultarPedido", { numero_pedido: String(orderNumber).trim() }, options);
 	const order = data.pedido_venda_produto;
 	if (!order?.cabecalho) throw new AppError(404, "Pedido nao encontrado no Omie.", "OMIE_NOT_FOUND");
 	const omieCustomerCode = Number(order.cabecalho.codigo_cliente);
@@ -153,7 +159,7 @@ async function lookupOrder(orderNumber) {
 		const { rows } = await database.query("SELECT id, name, document FROM customers WHERE omie_code = $1", [omieCustomerCode]);
 		customer = rows[0] || null;
 		if (!customer) {
-			const remote = mapCustomer(await call("geral/clientes", "ConsultarCliente", { codigo_cliente_omie: omieCustomerCode }));
+			const remote = mapCustomer(await call("geral/clientes", "ConsultarCliente", { codigo_cliente_omie: omieCustomerCode }, options));
 			if (remote.name) customer = { id: null, name: remote.name, document: remote.document };
 		}
 	}
@@ -182,6 +188,24 @@ async function lookupInvoice(number) {
 	};
 }
 
+// Compara as linhas do processo com as do pedido no Omie. Retorna a lista de divergencias (vazia = confere).
+function compareOrderLines(omieItems, localLines) {
+	const byCode = (lines) => lines.reduce((map, line) => map.set(line.productCode, { quantity: (map.get(line.productCode)?.quantity || 0) + Number(line.quantity), unitPrice: Number(line.unitPrice) || 0 }), new Map());
+	const remote = byCode(omieItems);
+	const local = byCode(localLines);
+	const issues = [];
+	for (const [code, line] of local) {
+		const expected = remote.get(code);
+		if (!expected) issues.push({ code, kind: "item_fora_do_pedido", local: line });
+		else {
+			if (expected.quantity !== line.quantity) issues.push({ code, kind: "quantidade", omie: expected.quantity, local: line.quantity });
+			if (line.unitPrice && Math.abs(expected.unitPrice - line.unitPrice) > 0.009) issues.push({ code, kind: "preco", omie: expected.unitPrice, local: line.unitPrice });
+		}
+	}
+	for (const [code, line] of remote) if (!local.has(code)) issues.push({ code, kind: "item_ausente", omie: line });
+	return issues;
+}
+
 // Rotina agendada: sincroniza clientes e produtos quando a ultima execucao bem-sucedida passou do intervalo.
 function startOmieScheduler(intervalHours = Number(process.env.OMIE_SYNC_INTERVAL_HOURS || 24)) {
 	if (!intervalHours || intervalHours <= 0) return null;
@@ -200,4 +224,4 @@ function startOmieScheduler(intervalHours = Number(process.env.OMIE_SYNC_INTERVA
 	return timer;
 }
 
-module.exports = { setTransport, isConfigured, call, runSync, status, listRuns, lookupOrder, lookupInvoice, mapCustomer, startOmieScheduler };
+module.exports = { compareOrderLines, setTransport, isConfigured, call, runSync, status, listRuns, lookupOrder, lookupInvoice, mapCustomer, startOmieScheduler };

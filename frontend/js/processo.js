@@ -113,6 +113,7 @@ document.head.appendChild(sharedShellScript);
 		const button = document.createElement("button");
 		button.type = "button";
 		button.className = "button button-secondary compact-button";
+		button.style.cssText = "align-self:end;justify-self:start;margin-bottom:2px";
 		button.textContent = isOrder ? "Buscar pedido no Omie" : "Validar NF no Omie";
 		input.closest("label").after(button);
 		button.addEventListener("click", async () => {
@@ -127,6 +128,7 @@ document.head.appendChild(sharedShellScript);
 					if (first) { form.productCode.value = first.productCode; form.product.value = first.description; form.quantity.value = first.quantity; if (form.unitPrice) form.unitPrice.value = first.unitPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); }
 					rest.forEach((item) => window.__addItemRow?.(item));
 					updateTotal();
+					form.dataset.omieOrder = order.orderNumber;
 					PP.toast(`Pedido ${order.orderNumber} importado do Omie (${order.items.length} item(ns)).`, "success");
 				} else {
 					const { invoice } = await api.get(`/api/omie/invoices/${encodeURIComponent(number)}`);
@@ -180,6 +182,7 @@ document.head.appendChild(sharedShellScript);
 		}
 		if (form.dataset.customerId) payload.customerId = Number(form.dataset.customerId);
 		if (form.dataset.productId) payload.productId = Number(form.dataset.productId);
+		if (form.dataset.omieOrder && form.dataset.omieOrder === payload.documentReference) payload.omieOrderNumber = form.dataset.omieOrder;
 		const extra = readItems();
 		if (extra.length) payload.items = [{ productCode: payload.productCode, description: payload.product, quantity: payload.quantity, ...(payload.unitPrice !== undefined ? { unitPrice: payload.unitPrice } : {}) }, ...extra];
 		return payload;

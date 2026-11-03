@@ -433,6 +433,9 @@
                       - "quantity"
                 "intake":
                   "type": "boolean"
+                "omieOrderNumber":
+                  "type": "string"
+                  "maxLength": 20
               "required":
                 - "type"
                 - "client"
@@ -606,6 +609,9 @@
                       - "quantity"
                 "intake":
                   "type": "boolean"
+                "omieOrderNumber":
+                  "type": "string"
+                  "maxLength": 20
                 "technicalReport":
                   "type": "string"
                   "maxLength": 8000

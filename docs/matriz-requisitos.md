@@ -11,7 +11,7 @@ Rastreia o escopo de evolução ("Escopo de evolução do PlanoPneumatic", 19/10
 | F3 | Validação CPF/CNPJ, cadastro de clientes e produtos, bloqueio de duplicidade por documento de origem | Feito | `validators/document.js`, `routes/registry.js`, índice `cases_origin_document_unique`; testes de cadastro e duplicidade |
 | F4 | Anexos reais (foto/PDF/laudo), limite de tamanho e tipo, tipo e etapa, leitura por perfil | Parcial | `services/attachments.js` (arquivo no PostgreSQL, tipo real por assinatura, 10 MB, laudo restrito). Antivírus opcional **não** implementado |
 | F5 | Garantia completa: laudo, decisão, destino, responsável técnico | Feito | `services/cases.js#changeStatus`, tela do caso; teste "warranty needs a technical report" |
-| F6 | Pedido: itens múltiplos, totais | Parcial | Itens e total (`case_items`); "validação comercial com divergência de preço" ainda não tem regra específica |
+| F6 | Pedido: itens múltiplos, totais, validação comercial | Feito | Itens e total (`case_items`). Pedido importado do Omie é conferido em segundo plano; divergência de preço/quantidade/item sinaliza o processo e avisa os gerentes (migration 011) |
 | F7 | Base de troca: avaliação, aprovação/recusa, logística reversa | Feito | Campos de condição/motivo exigidos antes de aprovar; `logistics_status` e rastreio (perfil Logística) |
 | F8 | SLA aplicado de verdade (por tipo, cor, alerta, pausa aguardando cliente) | Feito | `due_at`, `services/sla.js`; teste "SLA pauses while waiting for a document" |
 | F9 | Central de notificações; e-mail e WhatsApp | Parcial | Sino, central, alertas de SLA por job. **E-mail/WhatsApp pendentes** (precisam de provedor) |
