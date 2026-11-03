@@ -55,9 +55,16 @@ CREATE INDEX IF NOT EXISTS case_items_serial_idx ON case_items(serial_number) WH
 CREATE INDEX IF NOT EXISTS cases_serial_idx ON cases(serial_number) WHERE serial_number IS NOT NULL;
 
 -- Bloqueio de duplicidade por documento de origem (F3).
-CREATE UNIQUE INDEX IF NOT EXISTS cases_origin_document_unique
-  ON cases (type, lower(document_reference))
-  WHERE document_reference IS NOT NULL AND archived_at IS NULL AND status NOT IN ('Cancelado', 'Improcedente');
+-- Se a base ja tiver documentos de origem repetidos, o indice nao e criado (a migration nao pode derrubar o deploy);
+-- a validacao da aplicacao continua bloqueando novas duplicidades.
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS cases_origin_document_unique
+    ON cases (type, lower(document_reference))
+    WHERE document_reference IS NOT NULL AND archived_at IS NULL AND status NOT IN ('Cancelado', 'Improcedente');
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'Indice cases_origin_document_unique nao criado: ha documentos de origem duplicados. Revise e crie manualmente.';
+END $$;
 
 -- Configuracoes persistidas.
 CREATE TABLE IF NOT EXISTS app_settings (
