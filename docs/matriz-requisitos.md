@@ -19,7 +19,7 @@ Rastreia o escopo de evolução ("Escopo de evolução do PlanoPneumatic", 19/10
 | F11 | Relatórios por caso/cliente/produto, XLSX e PDF, agendamento por e-mail | Parcial | `services/exports.js`, `routes/reports.js`. **Agendamento por e-mail pendente** (precisa de SMTP) |
 | F12 | Busca global, filtros salvos, filtro por responsável e período, paginação | Feito | `Ctrl+K`, `/api/search`, `saved_filters`, histórico paginado |
 | F13 | Editar usuário/perfil, redefinir senha, convite, desativação que reatribui casos | Parcial | Edição, reset pelo admin, reatribuição automática. **Convite por e-mail pendente** |
-| F14 | Integração com ERP (Omie) | Pendente | Próxima etapa combinada |
+| F14 | Integração com ERP (Omie) | Parcial | `services/omie.js`, `routes/omie.js`, migration 010: importação de clientes e produtos (manual e diária, incremental), consulta de pedido (pré-preenche o pedido de venda) e de NF (valida troca/garantia). Testada só com o Omie simulado; **falta validar com as chaves reais** |
 | F15 | Dashboard avançado (metas, tempo por etapa, reincidência, custo, comparativo mensal) | Feito | `GET /api/reports/advanced`, painel no dashboard |
 | F16 | Histórico de peças (série e lote) | Feito | Campos em todos os tipos, filtro `serial`, busca global |
 

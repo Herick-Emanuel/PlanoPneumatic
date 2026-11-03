@@ -1307,6 +1307,97 @@
           "description": "Perfil sem permissao"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/invoices/{number}":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/invoices/{number}"
+      "parameters":
+        - "name": "number"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/orders/{number}":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/orders/{number}"
+      "parameters":
+        - "name": "number"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/status":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/status"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/sync":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/sync"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/sync"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
   "/api/pending":
     "get":
       "tags":

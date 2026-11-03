@@ -10,6 +10,7 @@ const mounts = [
 	["/api/cases", "../backend/routes/cases", "Processos"],
 	["/api/reports", "../backend/routes/reports", "Relatorios"],
 	["/api/users", "../backend/routes/users", "Usuarios"],
+	["/api/omie", "../backend/routes/omie", "Omie"],
 	["/api", "../backend/routes/registry", "Cadastros"],
 	["/api", "../backend/routes/system", "Sistema"]
 ];

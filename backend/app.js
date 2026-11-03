@@ -48,6 +48,7 @@ app.use("/api/auth", require("./routes/auth").router);
 app.use("/api/cases", require("./routes/cases").router);
 app.use("/api/reports", require("./routes/reports").router);
 app.use("/api/users", require("./routes/users").router);
+app.use("/api/omie", require("./routes/omie").router);
 app.use("/api", require("./routes/registry").router);
 app.use("/api", require("./routes/system").router);
 app.use("/api", (request, response) => response.status(404).json({ message: "Rota nao encontrada.", code: "NOT_FOUND", requestId: request.id }));

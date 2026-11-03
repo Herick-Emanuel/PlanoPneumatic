@@ -6,12 +6,14 @@ const { hasRole } = require("./domain/permissions");
 const { logEvent } = require("./middleware/errors");
 const { startRateLimitCleanup } = require("./middleware/security");
 const { startSlaScheduler } = require("./services/sla");
+const { startOmieScheduler } = require("./services/omie");
 
 async function start() {
 	for (const warning of validateConfig()) logEvent("config_warning", { warning });
 	await initializeDatabase();
 	startRateLimitCleanup();
 	startSlaScheduler(config.slaCheckIntervalMs);
+	startOmieScheduler();
 	const server = app.listen(config.port, config.host, () => logEvent("server_started", { host: config.host, port: config.port }));
 
 	let shuttingDown = false;

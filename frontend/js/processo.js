@@ -104,6 +104,42 @@ document.head.appendChild(sharedShellScript);
 		});
 	}
 
+	// ---- Consulta ao Omie (pedido para vendas; nota fiscal para troca/garantia) --------
+	async function bindOmieLookup() {
+		const status = await api.get("/api/omie/status").catch(() => ({ configured: false }));
+		const input = form.documentReference;
+		if (!status.configured || !input) return;
+		const isOrder = processType === "Pedido de venda";
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = "button button-secondary compact-button";
+		button.textContent = isOrder ? "Buscar pedido no Omie" : "Validar NF no Omie";
+		input.closest("label").after(button);
+		button.addEventListener("click", async () => {
+			const number = input.value.trim();
+			if (!number) return PP.setFieldError(input, isOrder ? "Informe o número do pedido." : "Informe o número da nota fiscal.");
+			button.disabled = true;
+			try {
+				if (isOrder) {
+					const { order } = await api.get(`/api/omie/orders/${encodeURIComponent(number)}`);
+					if (order.customer) { form.client.value = order.customer.name; if (order.customer.document) form.clientDocument.value = PP.formatDocument(order.customer.document); }
+					const [first, ...rest] = order.items;
+					if (first) { form.productCode.value = first.productCode; form.product.value = first.description; form.quantity.value = first.quantity; if (form.unitPrice) form.unitPrice.value = first.unitPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); }
+					rest.forEach((item) => window.__addItemRow?.(item));
+					updateTotal();
+					PP.toast(`Pedido ${order.orderNumber} importado do Omie (${order.items.length} item(ns)).`, "success");
+				} else {
+					const { invoice } = await api.get(`/api/omie/invoices/${encodeURIComponent(number)}`);
+					if (invoice.customer.name && !form.client.value) form.client.value = invoice.customer.name;
+					if (invoice.customer.document && !form.clientDocument.value) form.clientDocument.value = PP.formatDocument(invoice.customer.document);
+					PP.toast(`NF ${invoice.number} encontrada no Omie (${invoice.customer.name || "destinatário"}, emitida em ${invoice.emittedAt || "—"}).`, "success");
+				}
+				PP.setFieldError(input, "");
+				saveDraftSoon();
+			} catch (error) { PP.setFieldError(input, error.message); } finally { button.disabled = false; }
+		});
+	}
+
 	// ---- Rascunho ------------------------------------------------------------------
 	const readForm = () => {
 		const values = {};
@@ -192,6 +228,7 @@ document.head.appendChild(sharedShellScript);
 		PP.bindDocumentInput(form.clientDocument);
 		if (form.unitPrice) PP.bindMoneyInput(form.unitPrice);
 		addItemsBlock();
+		bindOmieLookup();
 		bindRegistry();
 		form.addEventListener("input", updateTotal);
 		offerDraft();
