@@ -11,6 +11,7 @@ const APP_SHELL = [
   "/css/admin.css",
   "/js/api.js",
   "/js/shell-tools.js",
+  "/js/theme.js",
   "/js/shared-shell.js",
   "/css/ui.css",
   "/js/app.js",

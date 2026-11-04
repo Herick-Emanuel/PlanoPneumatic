@@ -1,143 +1,78 @@
-.admin-content {
-    max-width: 1280px;
-}
+/* =====================================================================
+   Telas administrativas: relatorios, usuarios, cadastros, integracoes,
+   auditoria, notificacoes, configuracoes e conta.
+   ===================================================================== */
+.admin-content { max-width: 1400px; }
+.admin-page-content { display: grid; gap: 20px; }
+.admin-page-content > .panel + .panel { margin-top: 0; }
 
-.admin-page-content {
-    margin-top: 28px;
-}
+/* Abas de relatorios (links entre paginas). */
+.report-tabs { border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 2px; }
+.report-tab { border-bottom: 2px solid transparent; color: var(--text-3); font-size: 13.5px; font-weight: 650; margin-bottom: -1px; padding: 10px 14px; text-decoration: none; }
+.report-tab:hover { color: var(--text); }
+.report-tab.active { border-bottom-color: var(--accent); color: var(--accent); }
 
-.create-user-form {
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 20px;
-    padding-bottom: 18px;
-}
+/* Filtros dos relatorios. */
+#report-filters { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+#report-filters .filter-actions { grid-column: auto; justify-content: flex-start; }
+#report-view { display: grid; gap: 20px; }
+.report-cards { margin: 0; }
+.report-grid { margin: 0; }
+.report-bars { display: grid; gap: 16px; }
+.report-bar { display: grid; gap: 7px; }
+.report-bar > div { align-items: baseline; display: flex; justify-content: space-between; }
+.report-bar strong { font-size: 13.5px; font-weight: 600; }
+.report-bar span { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 700; }
+.report-bar i { background: linear-gradient(90deg, var(--chart-1), var(--chart-2)); border-radius: 99px; display: block; height: 8px; min-width: 6%; }
+.event-list { display: grid; }
+.team-performance-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.team-performance-grid .inline-form { margin-bottom: 14px; }
+.team-performance-grid .distribution-row { margin-bottom: 14px; }
 
-.create-user-form .form-actions {
-    margin-top: 8px;
-}
+/* Formularios de criacao (usuarios, cadastros, webhooks). */
+.create-user-form { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); display: grid; gap: 14px; margin-bottom: 20px; padding: 16px 18px; }
+.create-user-form .editor-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.create-user-form fieldset { border: 0; display: grid; gap: 6px; margin: 0; padding: 0; }
+.create-user-form legend { color: var(--text-2); font-size: 12.5px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.create-user-form fieldset label { align-items: center; color: var(--text); display: flex !important; font-weight: 500; gap: 8px; }
 
-.report-cards {
-    margin-bottom: 20px;
+/* Configuracoes. */
+.settings-grid { align-items: start; display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.settings-grid h2 { margin-bottom: 8px; }
+.setting-row { align-items: center; border-bottom: 1px solid var(--border); cursor: pointer; display: flex !important; gap: 16px; justify-content: space-between; padding: 14px 0; }
+.setting-row:last-child { border-bottom: 0; }
+.setting-row span { display: grid; gap: 2px; }
+.setting-row strong { color: var(--text); font-size: 14px; font-weight: 600; }
+.setting-row small { font-size: 12.5px; font-weight: 400; }
+/* Interruptor (checkbox estilizado). */
+.setting-row input[type="checkbox"] {
+    appearance: none;
+    background: var(--border-strong);
+    border-radius: 99px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    height: 24px;
+    position: relative;
+    transition: background .18s;
+    width: 42px;
 }
+.setting-row input[type="checkbox"]::after { background: #fff; border-radius: 99px; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); content: ""; height: 18px; left: 3px; position: absolute; top: 3px; transition: transform .18s; width: 18px; }
+.setting-row input[type="checkbox"]:checked { background: #1fa36b; }
+.setting-row input[type="checkbox"]:checked::after { transform: translateX(18px); }
+.setting-row input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .55; }
+.settings-grid .inline-form { border-bottom: 1px solid var(--border); padding: 12px 0; }
+.settings-grid .inline-form:last-child { border-bottom: 0; }
+.settings-grid .inline-form label { flex: 1; }
+.status-reference { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 
-.report-grid {
-    margin-top: 0;
-}
+/* Conta. */
+.account-panel { max-width: 640px; }
+.account-form { margin-top: 18px; }
+.account-form .button { justify-self: start; }
 
-.team-performance-grid {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    margin-top: 0;
-}
-
-.report-tabs {
-    border-bottom: 1px solid var(--line);
-    display: flex;
-    gap: 6px;
-    margin: 20px 0 4px;
-}
-
-.report-tab {
-    border-bottom: 2px solid transparent;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-    padding: 10px 6px;
-    text-decoration: none;
-}
-
-.report-tab:hover,
-.report-tab.active {
-    border-bottom-color: var(--blue);
-    color: var(--navy);
-}
-
-.report-bars {
-    display: grid;
-    gap: 18px;
-    padding-top: 12px;
-}
-
-.report-bar {
-    display: grid;
-    gap: 7px;
-}
-
-.report-bar>div {
-    display: flex;
-    justify-content: space-between;
-}
-
-.report-bar strong,
-.report-bar span {
-    color: var(--navy);
-    font-size: 12px;
-}
-
-.report-bar i {
-    background: var(--blue);
-    border-radius: 4px;
-    display: block;
-    height: 9px;
-    min-width: 10%;
-}
-
-.event-list {
-    display: grid;
-    gap: 12px;
-}
-
-.setting-row {
-    align-items: center;
-    border-bottom: 1px solid var(--line);
-    display: flex;
-    justify-content: space-between;
-    padding: 18px 0;
-}
-
-.setting-row span {
-    display: grid;
-    gap: 3px;
-}
-
-.setting-row strong {
-    color: var(--navy);
-    font-size: 12px;
-}
-
-.setting-row small {
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.setting-row input {
-    accent-color: var(--blue);
-    height: 18px;
-    width: 18px;
-}
-
-.settings-grid {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: 1.2fr .8fr;
-}
-
-.status-reference {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 22px 0;
-}
-
-.account-panel {
-    max-width: 620px;
-}
-
-.account-form {
-    margin-top: 24px;
-}
-
-.success-feedback {
-    color: var(--green);
+@media (max-width: 680px) {
+    .team-performance-grid, .settings-grid { grid-template-columns: minmax(0, 1fr); }
+    #report-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #report-filters .filter-actions { grid-column: 1 / -1; }
+    #report-filters .filter-actions .button { flex: 1; }
 }

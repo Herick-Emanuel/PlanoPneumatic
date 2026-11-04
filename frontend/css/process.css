@@ -1,37 +1,35 @@
-.process-content {
-    width: 100%;
-}
-
+/* =====================================================================
+   Formularios de pedido de venda, base de troca e garantia
+   ===================================================================== */
+.process-content { width: 100%; }
 .process-intro {
     align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     display: flex;
     gap: 16px;
     justify-content: space-between;
-    margin: 28px 0 20px;
+    padding: 14px 18px;
 }
-
-.process-intro p {
-    margin: 0;
-    max-width: 680px;
+.process-intro p { color: var(--text-2); margin: 0; max-width: 720px; }
+.process-intro .process-status { background: var(--orange-soft); color: var(--orange); }
+.process-form { display: grid; gap: 18px; margin: 0 auto; max-width: 1080px; width: 100%; }
+.process-form > .form-actions {
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    bottom: 12px;
+    box-shadow: var(--shadow);
+    padding: 12px 16px;
+    position: sticky;
+    z-index: 5;
 }
-
-.process-status {
-    background: var(--orange-soft);
-    border-radius: 99px;
-    color: var(--orange);
-    font-size: 11px;
-    font-weight: 800;
-    padding: 7px 11px;
-}
-
-.process-form {
-    display: grid;
-    gap: 18px;
-}
+.process-content > .draft-banner, .process-content .draft-banner { margin: 0 auto; max-width: 1080px; width: 100%; }
+.field-grid > .button { align-self: end; justify-self: start; }
 
 @media (max-width: 760px) {
-    .process-intro {
-        align-items: flex-start;
-        flex-direction: column;
-    }
+    .process-intro { align-items: flex-start; flex-direction: column; }
+    .process-form > .form-actions { bottom: 8px; }
 }

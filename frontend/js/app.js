@@ -29,19 +29,33 @@ function showDashboard(user) {
   loginView.classList.add("hidden");
   dashboardView.classList.remove("hidden");
   document.querySelector("#welcome-name").textContent = user.name.split(" ")[0];
+  const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }));
+  const greeting = document.querySelector(".welcome-row h2");
+  if (greeting?.firstChild?.nodeType === Node.TEXT_NODE) greeting.firstChild.textContent = `${hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"}, `;
   PP.fillProfile(user);
   const dateLabel = document.querySelector(".date-label");
   if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString("pt-BR", { dateStyle: "long", timeZone: "America/Sao_Paulo" });
 }
 
+// Rotulos acentuados e icone de cada indicador (a API envia o rotulo sem acento).
+const INDICATOR_META = {
+  "Processos abertos": ["Processos abertos", "order", "em andamento"],
+  "Processos concluidos": ["Processos concluídos", "warranty", "concluídos ou encerrados"],
+  "Tempo medio (dias)": ["Tempo médio (dias)", "history", "da abertura à conclusão"],
+  "Pendencias criticas": ["Pendências críticas", "bell", "aguardando documento"],
+  "Processos atrasados": ["Processos atrasados", "reports", "com prazo vencido"]
+};
+
 function renderDashboard(data) {
-  document.querySelector("#indicator-grid").innerHTML = data.indicators.map((indicator) => `
+  document.querySelector("#indicator-grid").innerHTML = data.indicators.map((indicator) => {
+    const [label, iconName, hint] = INDICATOR_META[indicator.label] || [indicator.label, "dashboard", ""];
+    return `
     <article class="indicator-card ${esc(indicator.tone)}">
-      <div class="indicator-top"><span>${esc(indicator.label)}</span><span class="indicator-mark" aria-hidden="true">${indicator.tone === "red" ? "!" : "↗"}</span></div>
-      <strong>${esc(indicator.value)}</strong>
-      <small>Atualizado agora</small>
-    </article>
-  `).join("");
+      <div class="indicator-top"><span>${esc(label)}</span><span class="indicator-mark" aria-hidden="true">${PP.icon(iconName)}</span></div>
+      <strong>${esc(String(indicator.value).replace(".", ","))}</strong>
+      <small>${esc(hint)}</small>
+    </article>`;
+  }).join("");
 
   document.querySelector("#cases-body").innerHTML = data.recentCases.map((item) => `
     <tr class="case-row"><td><a class="table-link" href="/caso.html?id=${encodeURIComponent(item.id)}">${esc(item.id)}</a></td><td>${esc(item.client)}</td><td>${esc(item.type)}</td><td><span class="table-status ${PP.statusTone(item.status)}">${esc(PP.statusLabel(item.status))}</span></td><td>${PP.slaBadge(item)}</td><td class="muted">${esc(item.updatedAt)}</td></tr>

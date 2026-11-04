@@ -1,270 +1,34 @@
-.history-content {
-    max-width: 1440px;
-}
-
-.history-toolbar {
-    margin-top: 24px;
-    padding: 18px 22px;
-}
-
-.history-filters {
-    align-items: end;
-    display: grid;
-    gap: 12px;
-    grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1fr auto;
-}
-
-.history-filters label,
-.status-form label {
-    color: var(--ink);
-    display: grid;
-    font-size: 11px;
-    font-weight: 700;
-    gap: 6px;
-}
-
-.history-filters input,
-.history-filters select,
-.status-form select {
-    background: #fbfcfd;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    color: var(--ink);
-    outline: 0;
-    padding: 10px;
-}
-
-.filter-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.filter-actions .button {
-    white-space: nowrap;
-    padding: 10px 13px;
-}
-
-.history-layout {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 1.6fr) minmax(310px, .8fr);
-    margin-top: 18px;
-}
-
-.history-results {
-    min-width: 0;
-}
-
-.history-row {
+/* =====================================================================
+   Historico de processos (filtros, resultados e paginacao)
+   ===================================================================== */
+.history-toolbar { display: grid; gap: 4px; }
+.history-filters { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.history-filters .check-filter {
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
     cursor: pointer;
-}
-
-.history-row:hover {
-    background: #f4f8fb;
-}
-
-.management-panel {
-    min-height: 360px;
-}
-
-.empty-selection {
-    align-items: center;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 310px;
-    text-align: center;
-}
-
-.empty-icon {
-    align-items: center;
-    background: #e7f0f8;
-    border-radius: 50%;
-    color: var(--blue);
-    display: flex;
-    font-size: 24px;
-    height: 48px;
-    justify-content: center;
-    width: 48px;
-}
-
-.empty-selection h2 {
-    color: var(--navy);
-    font-size: 16px;
-    margin: 14px 0 4px;
-}
-
-.management-summary {
-    display: grid;
-    gap: 14px;
-    grid-template-columns: 1fr 1fr;
-    margin: 22px 0;
-}
-
-.management-summary div {
-    display: grid;
-    gap: 3px;
-}
-
-.management-summary small {
-    color: var(--muted);
-    font-size: 10px;
-}
-
-.management-summary strong {
-    color: var(--navy);
-    font-size: 12px;
-}
-
-.status-form {
-    border-top: 1px solid var(--line);
-    display: grid;
+    font-weight: 550;
     gap: 10px;
-    padding-top: 18px;
+    min-height: 40px;
+    padding: 8px 12px;
 }
+.history-filters .check-filter:has(input:checked) { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+.filter-actions { align-items: end; display: flex; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; }
+.history-toolbar .inline-form { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+.history-results td { white-space: nowrap; }
+.history-results td:nth-child(3) { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.history-results th:first-child, .history-results td:first-child { padding-right: 0; width: 32px; }
 
-.status-form .button {
-    justify-content: center;
-    margin-top: 4px;
-    width: 100%;
-}
-
-.management-history {
-    border-top: 1px solid var(--line);
-    margin-top: 20px;
-    padding-top: 17px;
-}
-
-.case-management-tools {
-    border-top: 1px solid var(--line);
-    margin-top: 20px;
-    padding-top: 20px;
-}
-
-.case-tool-grid {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: 1.2fr 1fr;
-}
-
-.visual-timeline,
-.case-checklist,
-.case-attachments,
-.comment-list {
-    display: grid;
-    gap: 10px;
-}
-
-.timeline-item {
-    border-left: 2px solid var(--line);
-    display: flex;
-    gap: 10px;
-    padding: 0 0 12px 14px;
-    position: relative;
-}
-
-.timeline-item > span {
-    background: var(--blue);
-    border: 3px solid var(--white);
-    border-radius: 50%;
-    height: 11px;
-    left: -7px;
-    position: absolute;
-    top: 2px;
-    width: 11px;
-}
-
-.timeline-item div,
-.comment-item {
-    display: grid;
-    gap: 3px;
-}
-
-.timeline-item small,
-.comment-item small {
-    color: var(--muted);
-    font-size: 10px;
-}
-
-.case-checklist label {
-    align-items: center;
-    display: flex;
-    font-size: 12px;
-    gap: 8px;
-}
-
-.case-attachments a {
-    color: var(--blue);
-    font-size: 12px;
-}
-
-.tools-label {
-    margin-top: 20px;
-}
-
-.case-comments {
-    border-top: 1px solid var(--line);
-    margin-top: 18px;
-    padding-top: 18px;
-}
-
-.comment-item {
-    background: #f7fafc;
-    border-radius: 6px;
-    padding: 10px;
-}
-
-.comment-item p {
-    margin: 2px 0 0;
-}
-
-#case-comment-form {
-    display: grid;
-    gap: 8px;
-    margin-top: 14px;
-}
-
-#case-comment-form textarea {
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 10px;
-    resize: vertical;
-}
-
-@media (max-width: 960px) {
-    .history-filters {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .filter-actions {
-        grid-column: 1 / -1;
-    }
-
-    .history-layout {
-        grid-template-columns: 1fr;
-    }
-}
+/* Legado: painel de gestao lateral antigo (mantido para telas em cache). */
+.history-layout { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.6fr) minmax(310px, .8fr); }
+.management-panel { min-height: 360px; }
 
 @media (max-width: 680px) {
-    .history-filters {
-        grid-template-columns: 1fr;
-    }
-
-    .filter-actions {
-        grid-column: auto;
-    }
-
-    .history-toolbar {
-        padding: 15px;
-    }
-
-    .management-summary {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 760px) {
-    .case-tool-grid {
-        grid-template-columns: 1fr;
-    }
+    .history-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-actions .button { flex: 1; }
+    .history-toolbar .inline-form > span { display: none; }
 }

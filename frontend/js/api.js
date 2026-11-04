@@ -265,10 +265,49 @@
 	const emptyState = (title, hint, action) => `<div class="empty-state"><strong>${esc(title)}</strong>${hint ? `<p class="muted">${esc(hint)}</p>` : ""}${action || ""}</div>`;
 	const errorState = (message) => `<div class="empty-state error-state" role="alert"><strong>${esc(message)}</strong><button class="button button-secondary" type="button" data-retry>Tentar novamente</button></div>`;
 
+	// Icones SVG (traço, 24x24) usados no menu e nas ferramentas do topo.
+	const ICONS = {
+		dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+		triage: '<path d="M3 4h18l-7 8.5V18l-4 2v-7.5z"/>',
+		order: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+		exchange: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+		warranty: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+		history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+		reports: '<path d="M3 3v18h18"/><path d="M8 17v-4M13 17V8M18 17v-7"/>',
+		registry: '<path d="m21 8-9-5-9 5 9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+		import: '<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
+		users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+		audit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11h6M9 15h6M9 19h3"/>',
+		integrations: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
+		settings: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+		account: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.6 18.6a6 6 0 0 1 10.8 0"/>',
+		bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+		search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+		logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+		menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+		collapse: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m15.5 10-2 2 2 2"/>',
+		expand: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m13.5 10 2 2-2 2"/>',
+		sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+		moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+		monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+		plus: '<path d="M12 5v14M5 12h14"/>',
+		close: '<path d="M18 6 6 18M6 6l12 12"/>'
+	};
+	const icon = (name, className = "icon") => `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ""}</svg>`;
+
+	// Tema: "auto" segue o sistema; "light"/"dark" ficam salvos no navegador.
+	const THEME_KEY = "pp-theme";
+	const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || "auto"; } catch { return "auto"; } };
+	function setTheme(theme) {
+		try { if (theme === "auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, theme); } catch { /* sem armazenamento */ }
+		if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme;
+		window.dispatchEvent(new CustomEvent("pp-theme-changed", { detail: theme }));
+	}
+
 	window.PP = {
 		sessionKey, apiOrigin, esc, getSession, setSession, clearSession, api, ApiError, requireUser, meta, getMeta: () => metaCache,
 		statusLabel, statusTone, roleLabel, can, slaBadge, formatDate, formatDateTime, money, fileSize, initials,
 		digits, isValidDocument, formatDocument, bindDocumentInput, bindMoneyInput, parseMoney, setFieldError, clearFieldErrors, applyServerErrors,
-		outbox, toast, dialog, confirmAction, fillProfile, logout, bindLogout, download, openFile, debounce, skeleton, emptyState, errorState, SESSION_EXPIRED_KEY
+		icon, getTheme, setTheme, outbox, toast, dialog, confirmAction, fillProfile, logout, bindLogout, download, openFile, debounce, skeleton, emptyState, errorState, SESSION_EXPIRED_KEY
 	};
 })();

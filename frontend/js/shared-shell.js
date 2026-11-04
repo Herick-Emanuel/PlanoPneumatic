@@ -169,38 +169,96 @@
     });
   }
 
-  // [href, icone, rotulo, chave, capacidade exigida (opcional)]
+  // Grupos do menu: [titulo, [[href, icone, rotulo, chave, capacidade exigida (opcional)]]]
   const navigation = [
-    ["/", "▦", "Dashboard", "dashboard"],
-    ["/triagem.html", "◎", "Triagem", "triagem", "cases.create"],
-    ["/pedido-venda.html", "▤", "Pedidos de venda", "pedido", "cases.create"],
-    ["/base-troca.html", "↻", "Base de troca", "troca", "cases.create"],
-    ["/garantia.html", "✓", "Garantias", "garantia", "cases.create"],
-    ["/historico.html", "◷", "Histórico", "historico"],
-    ["/relatorios.html", "▥", "Relatórios", "relatorios"],
-    ["/cadastro-base.html", "▣", "Clientes e produtos", "registro", "cases.create"],
-    ["/importar.html", "⇪", "Importar pedidos", "importar", "cases.import"],
-    ["/cadastros.html", "♙", "Usuários", "cadastros", "users.view"],
-    ["/auditoria.html", "☰", "Auditoria", "auditoria", "users.audit.view"],
-    ["/integracoes.html", "⇄", "Integrações", "integracoes", "integrations.manage"],
-    ["/configuracoes.html", "⚙", "Configurações", "configuracoes"],
-    ["/conta.html", "◉", "Minha conta", "conta"]
+    ["Operação", [
+      ["/", "dashboard", "Dashboard", "dashboard"],
+      ["/triagem.html", "triage", "Triagem", "triagem", "cases.create"],
+      ["/pedido-venda.html", "order", "Pedidos de venda", "pedido", "cases.create"],
+      ["/base-troca.html", "exchange", "Base de troca", "troca", "cases.create"],
+      ["/garantia.html", "warranty", "Garantias", "garantia", "cases.create"]
+    ]],
+    ["Acompanhamento", [
+      ["/historico.html", "history", "Histórico", "historico"],
+      ["/relatorios.html", "reports", "Relatórios", "relatorios"]
+    ]],
+    ["Cadastros", [
+      ["/cadastro-base.html", "registry", "Clientes e produtos", "registro", "cases.create"],
+      ["/importar.html", "import", "Importar pedidos", "importar", "cases.import"]
+    ]],
+    ["Administração", [
+      ["/cadastros.html", "users", "Usuários", "cadastros", "users.view"],
+      ["/auditoria.html", "audit", "Auditoria", "auditoria", "users.audit.view"],
+      ["/integracoes.html", "integrations", "Integrações", "integracoes", "integrations.manage"],
+      ["/configuracoes.html", "settings", "Configurações", "configuracoes"],
+      ["/conta.html", "account", "Minha conta", "conta"]
+    ]]
   ];
   const readSession = () => {
     try { return JSON.parse(localStorage.getItem("plano-pneumatic-session")); } catch { return null; }
   };
   // Sessoes antigas nao guardam capacidades: ate atualizar, mostra apenas o que nao depende delas.
   const allowed = (capability) => !capability || (readSession()?.user?.capabilities || []).includes(capability);
+  const icon = (name) => window.PP?.icon(name) || "";
 
   const nav = sidebar.querySelector(".nav");
   function renderNavLinks() {
     if (!nav) return;
     const path = window.location.pathname === "/" ? "/" : window.location.pathname.replace(/\/$/, "");
-    nav.innerHTML = navigation.filter(([, , , , capability]) => allowed(capability)).map(([href, icon, label, key]) => {
-      const active = href === path || (path === "/caso.html" && key === "historico");
-      return `<a class="nav-link${active ? " active" : ""}" href="${href}" data-nav-key="${key}"${active ? ' aria-current="page"' : ""}><span aria-hidden="true">${icon}</span> ${label}</a>`;
+    nav.innerHTML = navigation.map(([group, items]) => {
+      const links = items.filter(([, , , , capability]) => allowed(capability)).map(([href, iconName, label, key]) => {
+        const active = href === path || (path === "/caso.html" && key === "historico");
+        return `<a class="nav-link${active ? " active" : ""}" href="${href}" data-nav-key="${key}"${active ? ' aria-current="page"' : ""}><span aria-hidden="true">${icon(iconName)}</span><span class="nav-label">${label}</span></a>`;
+      }).join("");
+      return links ? `<p class="nav-group">${group}</p>${links}` : "";
     }).join("");
   }
+
+  // Menu recolhivel (desktop) e gaveta (tablet/celular).
+  const root = document.documentElement;
+  function syncCollapseButton(button) {
+    const collapsed = root.classList.contains("sidebar-collapsed");
+    button.innerHTML = icon(collapsed ? "expand" : "collapse");
+    button.setAttribute("aria-label", collapsed ? "Expandir menu" : "Recolher menu");
+    button.setAttribute("aria-pressed", String(collapsed));
+    button.title = collapsed ? "Expandir menu" : "Recolher menu";
+  }
+  function closeDrawer() { document.body.classList.remove("nav-open"); }
+  function mountSidebarHead() {
+    const brandBlock = sidebar.querySelector(".brand-sidebar");
+    if (!brandBlock || sidebar.querySelector(".sidebar-head")) return;
+    brandBlock.innerHTML = '<img src="/logo.png" alt="Plano Pneumatic" /><span>OPERAÇÃO</span>';
+    const head = document.createElement("div");
+    head.className = "sidebar-head";
+    brandBlock.replaceWith(head);
+    head.appendChild(brandBlock);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "sidebar-toggle";
+    toggle.dataset.collapse = "true";
+    syncCollapseButton(toggle);
+    toggle.addEventListener("click", () => {
+      root.classList.toggle("sidebar-collapsed");
+      try { localStorage.setItem("pp-sidebar", root.classList.contains("sidebar-collapsed") ? "collapsed" : "expanded"); } catch { /* sem armazenamento */ }
+      syncCollapseButton(toggle);
+    });
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "sidebar-toggle sidebar-close";
+    close.setAttribute("aria-label", "Fechar menu");
+    close.innerHTML = icon("close");
+    close.addEventListener("click", closeDrawer);
+    head.append(toggle, close);
+    const logout = sidebar.querySelector(".logout-button");
+    if (logout) logout.innerHTML = `<span>Sair</span>${icon("logout")}`;
+  }
+  window.PPShell = { openDrawer: () => document.body.classList.add("nav-open"), closeDrawer };
+  document.addEventListener("click", (event) => {
+    if (!document.body.classList.contains("nav-open")) return;
+    if (event.target.closest(".sidebar") || event.target.closest(".menu-button")) return;
+    closeDrawer();
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeDrawer(); });
 
   const currentPath = window.location.pathname === "/" ? "/" : window.location.pathname.replace(/\/$/, "");
   const toolsScript = document.createElement("script");
@@ -226,12 +284,12 @@
       const link = event.target.closest("a[href]");
       if (!link || new URL(link.href, window.location.origin).origin !== window.location.origin) return;
       event.preventDefault();
+      closeDrawer();
       navigate(link.href).catch(() => { window.location.href = link.href; });
     });
   }
 
-  const brand = sidebar.querySelector(".brand-sidebar");
-  if (brand) brand.innerHTML = '<img src="/logo.png" alt="Plano Pneumatic" /><span>OPERAÇÃO</span>';
+  mountSidebarHead();
   renderBreadcrumb(currentPath);
   trackActivity("navigation", labels[currentPath] || currentPath);
   window.addEventListener("popstate", () => navigate(window.location.href, false));
