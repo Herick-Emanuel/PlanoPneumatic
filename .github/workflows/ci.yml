@@ -59,6 +59,8 @@ jobs:
             test-results
           retention-days: 7
       - run: docker compose config --quiet
+        env:
+          SEED_ADMIN_PASSWORD: validacao-do-compose-no-ci
       - run: docker build -f Dockerfile -t planopneumatic-api:${{ github.sha }} .
       - run: docker build -f Dockerfile.frontend --build-arg BUILD_ID=${{ github.sha }} -t planopneumatic-frontend:${{ github.sha }} .
       - run: git diff --check

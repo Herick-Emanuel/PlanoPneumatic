@@ -4,7 +4,7 @@ O backend do PlanoPneumatic e uma API Express conectada ao PostgreSQL.
 
 ## Responsabilidades
 
-- Autenticacao por sessao com token Bearer.
+- Autenticacao por sessao em cookie HttpOnly com protecao CSRF (ou token Bearer), MFA opcional e limite de login por e-mail ([seguranca.md](seguranca.md)).
 - Autorizacao por perfil e por processo.
 - Criacao, consulta, edicao e alteracao de status de casos.
 - Consulta de pendencias, dashboard e relatorios.

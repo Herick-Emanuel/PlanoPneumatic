@@ -18,9 +18,12 @@ module.exports = defineConfig({
 			PORT: String(port),
 			DATABASE_URL: databaseUrl,
 			SEED_ADMIN_EMAIL: "admin@e2e.local",
-			SEED_ADMIN_PASSWORD: "E2eAdminPass1",
+			SEED_ADMIN_PASSWORD: "Painel-Central-E2E-Seguro-7",
 			SEED_OPERATOR_EMAIL: "operador@e2e.local",
-			SEED_OPERATOR_PASSWORD: "E2eOperadorPass1",
+			SEED_OPERATOR_PASSWORD: "Bancada-Recepcao-E2E-Firme-4",
+			// A troca obrigatoria no primeiro acesso tem teste proprio (usuario criado pelo administrador).
+			SEED_FORCE_PASSWORD_CHANGE: "false",
+			FRONTEND_ORIGIN: `http://localhost:${port}`,
 			DISABLE_WEBHOOKS: "true"
 		}
 	}

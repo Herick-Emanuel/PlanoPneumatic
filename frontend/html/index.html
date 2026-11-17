@@ -32,7 +32,7 @@
           <div class="login-panel-inner">
             <p class="eyebrow">Acesso restrito</p>
             <h2 id="login-title">Entrar no sistema</h2>
-            <p class="muted">Use suas credenciais corporativas para continuar.</p>
+            <p id="login-subtitle" class="muted">Use suas credenciais corporativas para continuar.</p>
             <form id="login-form" class="form" novalidate>
               <label>
                 E-mail
@@ -45,6 +45,30 @@
               <button class="button button-primary" type="submit">Entrar <span aria-hidden="true">→</span></button>
               <p id="login-feedback" class="feedback" role="alert"></p>
             </form>
+            <form id="mfa-form" class="form hidden" novalidate>
+              <label>
+                Código de verificação
+                <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" />
+              </label>
+              <details class="auth-details">
+                <summary>Perdi o celular: usar um código de recuperação</summary>
+                <label>Código de recuperação<input name="recoveryCode" autocomplete="off" placeholder="xxxxx-xxxxx" /></label>
+              </details>
+              <button class="button button-primary" type="submit">Verificar <span aria-hidden="true">→</span></button>
+              <button class="button button-secondary" type="button" data-auth-back>Voltar</button>
+              <p class="feedback" role="alert"></p>
+            </form>
+            <form id="change-password-form" class="form hidden" novalidate>
+              <label>Senha atual (a que você acabou de usar)<input name="currentPassword" type="password" autocomplete="current-password" required /></label>
+              <label>Nova senha<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></label>
+              <label>Confirme a nova senha<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></label>
+              <p class="muted password-hint">Mínimo de 12 caracteres. Uma frase com várias palavras (ex.: <em>pneu-azul-na-estrada-17</em>) é fácil de lembrar e difícil de adivinhar. Não use seu nome, e-mail ou o nome da empresa.</p>
+              <button class="button button-primary" type="submit">Salvar nova senha <span aria-hidden="true">→</span></button>
+              <button class="button button-secondary" type="button" data-auth-logout>Sair</button>
+              <p class="feedback" role="alert"></p>
+            </form>
+            <section id="mfa-enroll" class="hidden" aria-live="polite"></section>
+            <button id="mfa-enroll-logout" class="button button-secondary hidden" type="button" data-auth-logout>Sair</button>
             <div id="pwa-install-block" class="pwa-install-block hidden">
               <div>
                 <strong>Instale o aplicativo</strong>
@@ -99,6 +123,7 @@
     </main>
     <script src="/js/api.js" defer></script>
     <script src="/js/pwa.js" defer></script>
-        <script src="/js/app.js" defer></script>
+    <script src="/js/mfa.js" defer></script>
+    <script src="/js/app.js" defer></script>
   </body>
 </html>

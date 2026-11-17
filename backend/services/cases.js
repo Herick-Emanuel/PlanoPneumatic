@@ -4,6 +4,7 @@ const { can, capabilities } = require("../domain/permissions");
 const { allowedTransitions, validateTransition, FINAL_STATUSES, REOPEN_TARGET } = require("../domain/workflow");
 const { AppError, badRequest, conflict, forbidden, notFound } = require("../middleware/errors");
 const { buildCaseFilters } = require("./caseFilters");
+const { audit } = require("./audit");
 const { getSlaDays, slaState } = require("./sla");
 const { notifyCaseParticipants, notifyUser } = require("./notifications");
 const { dispatchWebhook } = require("./webhooks");
@@ -100,16 +101,28 @@ async function addEvent(db, caseId, type, description, user, details = null) {
 		"INSERT INTO case_events (case_id, event_type, description, responsible, actor_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
 		[caseId, type, description, user.name, user.id, details ? JSON.stringify(details) : null]
 	);
+	// Auditoria geral (P2): o mesmo evento com IP e navegador de quem fez, na mesma transacao.
+	await audit("CASE_EVENT", { actorId: user.id || null, entityType: "case", entityId: caseId, details: { eventType: type, description, ...(details ? { changes: details } : {}) }, executor: db });
 }
 
 function canView(user, item) {
-	return can(user, capabilities.VIEW_ALL_CASES) || item.created_by === user.id || item.assigned_to === user.id;
+	if (item.created_by === user.id || item.assigned_to === user.id) return true;
+	return can(user, capabilities.VIEW_ALL_CASES) && !user.teamScoped;
+}
+
+// Gerente com escopo de time: o processo precisa ter sido criado por ou atribuido a alguem do time.
+async function inManagerTeam(db, user, item) {
+	const ids = [item.created_by, item.assigned_to].filter((id) => id !== null && id !== undefined);
+	if (!ids.length) return false;
+	const { rows } = await db.query("SELECT 1 FROM users WHERE id = ANY($1::int[]) AND (id = $2 OR manager_id = $2) LIMIT 1", [ids, user.id]);
+	return Boolean(rows[0]);
 }
 
 async function findCase(caseNumber, user, { db = database, lock = false, includeArchived = true } = {}) {
 	const { rows } = await db.query(`SELECT * FROM cases WHERE case_number = $1 ${lock ? "FOR UPDATE" : ""}`, [caseNumber]);
 	const item = rows[0];
-	if (!item || !canView(user, item) || (!includeArchived && item.archived_at)) throw notFound("Processo nao encontrado.");
+	const visible = item && (canView(user, item) || (user.teamScoped && can(user, capabilities.VIEW_ALL_CASES) && (await inManagerTeam(db, user, item))));
+	if (!visible || (!includeArchived && item.archived_at)) throw notFound("Processo nao encontrado.");
 	return item;
 }
 

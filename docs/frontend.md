@@ -52,11 +52,14 @@ O valor de `API_UPSTREAM_URL` deve ser uma URL completa, como `http://host.docke
 
 ## Fluxo de sessao
 
-1. O usuario envia e-mail e senha para `POST /api/auth/login`.
-2. O token retornado e salvo em `localStorage`.
-3. As requisicoes protegidas enviam `Authorization: Bearer <token>`.
-4. Uma resposta `401` remove a sessao e retorna o usuario para o login.
-5. O logout invalida a sessao na API e limpa o armazenamento local.
+1. O usuario envia e-mail e senha para `POST /api/auth/login` (e, se tiver MFA, o codigo para `POST /api/auth/mfa/verify`).
+2. A API grava a sessao num cookie `HttpOnly` (invisivel para o JavaScript) e um cookie `pp_csrf` legivel; o `localStorage` guarda so nome, perfil e capacidades para montar o menu.
+3. `api.js` chama a API sempre pela propria origem (proxy `/api` do Nginx) e envia `X-CSRF-Token` em POST/PUT/PATCH/DELETE.
+4. Se a resposta indicar troca de senha ou ativacao de MFA pendente (`403` com `PASSWORD_CHANGE_REQUIRED`/`MFA_ENROLLMENT_REQUIRED`), a tela inicial conduz o usuario antes de abrir o sistema.
+5. Uma resposta `401` remove os dados locais e retorna o usuario para o login.
+6. O logout invalida a sessao na API, apaga os cookies e os rascunhos de formularios.
+
+A CSP nao permite estilos inline: para larguras/alturas dinamicas use `data-w`/`data-h` (porcentagem), aplicados por `api.js`. Detalhes em [seguranca.md](seguranca.md).
 
 ## Validacao local
 

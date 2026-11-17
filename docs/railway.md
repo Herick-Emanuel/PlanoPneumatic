@@ -41,14 +41,18 @@ Variaveis recomendadas:
 | `PORT` | Fornecida pelo Railway ou `3000` |
 | `HOST` | `0.0.0.0` |
 | `DATABASE_URL` | Referencia `DATABASE_URL` do PostgreSQL Railway |
-| `SEED_ADMIN_EMAIL` | E-mail administrativo definido pela equipe |
-| `SEED_ADMIN_PASSWORD` | Senha forte definida como secret |
+| `NODE_ENV` | `production` |
+| `APP_ENCRYPTION_KEY` | **Obrigatoria.** 32 bytes em base64 (ver [seguranca.md](seguranca.md)) |
+| `PROXY_SHARED_SECRET` | Mesmo valor do servico do frontend |
+| `TRUST_PROXY` | `1` |
+| `FRONTEND_ORIGIN` | Dominio publico do frontend, com `https://` |
+| `API_PUBLIC_URL` | Dominio publico da API, com `https://` |
+| `SEED_ADMIN_EMAIL` | E-mail administrativo definido pela equipe (so na primeira subida) |
+| `SEED_ADMIN_PASSWORD` | Senha forte (12+ caracteres) como secret; remova depois da primeira subida |
 | `SEED_ADMIN_NAME` | Nome do administrador inicial |
-| `SEED_OPERATOR_EMAIL` | E-mail operacional inicial |
-| `SEED_OPERATOR_PASSWORD` | Senha forte definida como secret |
-| `SEED_OPERATOR_NAME` | Nome do operador inicial |
 
 Nao copie valores do `.env.example` para producao. As senhas devem ser configuradas como secrets no Railway.
+A API recusa subir com senha de seed fraca e o administrador inicial troca a senha no primeiro login.
 
 Health check:
 
@@ -67,6 +71,9 @@ Defina a URL completa da API:
 ```text
 API_UPSTREAM_URL=https://planopneumaticapi-production.up.railway.app
 ```
+
+Defina tambem `PROXY_SHARED_SECRET` com o mesmo valor do servico da API (IP real do cliente para o limite
+de tentativas e a auditoria).
 
 O Railway fornece automaticamente a variavel `PORT`; o Nginx do frontend deve usa-la para escutar a porta publicada. Nao defina uma porta manual diferente no servico.
 

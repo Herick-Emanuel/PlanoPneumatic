@@ -13,6 +13,7 @@ const APP_SHELL = [
   "/js/shell-tools.js",
   "/js/theme.js",
   "/js/shared-shell.js",
+  "/js/mfa.js",
   "/css/ui.css",
   "/js/app.js",
   "/icons/icon-192.png",
@@ -24,6 +25,9 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
       .then((cache) => cache.addAll(APP_SHELL))
+      // Esta versao muda a forma de sessao (cookie) e a CSP: assume o controle na hora, para que a pagina
+      // nunca misture scripts antigos do cache com o HTML novo (a pagina recarrega sozinha uma vez).
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -59,16 +63,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Scripts, estilos e imagens: rede primeiro (sempre a versao do mesmo deploy do HTML); o cache so
+  // atende quando estiver offline.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+        }
+        return response;
+      })
+      .catch(() => caches.match(request))
   );
 });

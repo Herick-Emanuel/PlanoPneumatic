@@ -7,11 +7,16 @@ const { logEvent } = require("./middleware/errors");
 const { startRateLimitCleanup } = require("./middleware/security");
 const { startSlaScheduler } = require("./services/sla");
 const { startOmieScheduler } = require("./services/omie");
+const { startHousekeeping } = require("./services/housekeeping");
+const { encryptLegacySecrets } = require("./services/webhooks");
 
 async function start() {
 	for (const warning of validateConfig()) logEvent("config_warning", { warning });
 	await initializeDatabase();
+	const encrypted = await encryptLegacySecrets();
+	if (encrypted) logEvent("webhook_secrets_encrypted", { count: encrypted });
 	startRateLimitCleanup();
+	startHousekeeping();
 	startSlaScheduler(config.slaCheckIntervalMs);
 	startOmieScheduler();
 	const server = app.listen(config.port, config.host, () => logEvent("server_started", { host: config.host, port: config.port }));

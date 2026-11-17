@@ -35,3 +35,12 @@ Clientes e produtos, importação de pedidos por CSV (modelo para baixar), usuá
 | Auditor | Somente leitura e auditoria |
 | Gerente | Tudo acima, encerra, reabre, arquiva e gerencia o time |
 | Administrador | Acesso total, usuários e integrações |
+
+## Segurança da conta
+
+- **Primeiro acesso:** se a sua senha foi criada pelo administrador, o sistema pede uma senha pessoal antes de abrir. Use pelo menos 12 caracteres; uma frase com várias palavras é fácil de lembrar e difícil de adivinhar.
+- **Esqueci a senha:** peça ao administrador uma senha provisória (Usuários > Redefinir senha). No próximo acesso você cria a sua.
+- **Muitas tentativas:** depois de 5 senhas erradas o acesso daquele e-mail fica bloqueado por alguns minutos (o tempo aumenta a cada nova falha). No computador ou tablet que você já usa, o bloqueio por ataques vindos de outros lugares não te afeta. Se precisar, o administrador desbloqueia em Usuários > Desbloquear login.
+- **Minha conta:** troque a senha (pede a senha atual e desconecta os outros aparelhos), veja os aparelhos conectados e encerre os que não reconhecer.
+- **Verificação em duas etapas (MFA):** em Minha conta, ative e leia o QR Code com o Google Authenticator ou Microsoft Authenticator. A partir daí o login pede também o código de 6 dígitos do celular. Guarde os códigos de recuperação: cada um permite entrar uma vez se você perder o celular. Se perder tudo, o administrador remove o MFA da sua conta.
+- **Inatividade:** a sessão termina sozinha depois de 2 horas sem uso.

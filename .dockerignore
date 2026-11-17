@@ -9,3 +9,12 @@ backend/data
 *-prototipo.html
 *-requisitos.md
 planejamento-issues-trello.md
+# Segredos e arquivos locais nunca entram na imagem
+.env
+.env.*
+*.pem
+*.key
+e2e
+playwright-report
+test-results
+backend/test

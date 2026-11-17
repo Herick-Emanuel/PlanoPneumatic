@@ -29,7 +29,7 @@ function listRoutes() {
 	return routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 }
 
-const PUBLIC = new Set(["post /api/auth/login", "post /api/auth/forgot-password", "post /api/auth/reset-password", "get /api/meta"]);
+const PUBLIC = new Set(["post /api/auth/login", "post /api/auth/mfa/verify", "post /api/auth/logout", "get /api/meta"]);
 
 function schemaOf(schema) {
 	const json = z.toJSONSchema(schema, { unrepresentable: "any", io: "input" });
@@ -63,7 +63,8 @@ function buildSpec() {
 				200: { description: "Sucesso" },
 				400: { description: "Dados invalidos (code VALIDATION_ERROR, errors[])" },
 				401: { description: "Sessao invalida ou expirada" },
-				403: { description: "Perfil sem permissao" },
+				403: { description: "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)" },
+				429: { description: "Muitas tentativas (Retry-After)" },
 				422: { description: "Regra de negocio violada (transicao, checklist, documentos)" }
 			}
 		};
@@ -71,9 +72,9 @@ function buildSpec() {
 	}
 	return {
 		openapi: "3.0.3",
-		info: { title: "Plano Pneumatic API", version: "1.0.0", description: "Gerado por scripts/generate-openapi.js. Todas as rotas (exceto as marcadas como publicas) exigem Authorization: Bearer <token>." },
-		components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer" } } },
-		security: [{ bearerAuth: [] }],
+		info: { title: "Plano Pneumatic API", version: "1.0.0", description: "Gerado por scripts/generate-openapi.js. Todas as rotas (exceto as marcadas como publicas) exigem sessao: no navegador, o cookie HttpOnly criado pelo login + o cabecalho X-CSRF-Token (valor do cookie pp_csrf) em POST/PUT/PATCH/DELETE; Authorization: Bearer <token> continua aceito para tokens emitidos pelo servidor (uso interno)." },
+		components: { securitySchemes: { cookieAuth: { type: "apiKey", in: "cookie", name: "__Host-pp_session" }, bearerAuth: { type: "http", scheme: "bearer" } } },
+		security: [{ cookieAuth: [] }, { bearerAuth: [] }],
 		paths
 	};
 }

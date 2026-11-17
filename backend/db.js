@@ -68,24 +68,43 @@ async function runMigrations() {
   }
 }
 
-async function createUserIfMissing(client, { name, email, password, role }) {
+// Usuarios criados a partir de variaveis de ambiente (seed) precisam trocar a senha no primeiro login:
+// a senha inicial ficou em arquivo/painel de deploy (SEED_FORCE_PASSWORD_CHANGE=false desliga, ex.: E2E).
+async function createUserIfMissing(client, { name, email, password, role, mustChangePassword = false }) {
   await client.query(
-    "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) ON CONFLICT (email) DO NOTHING",
-    [name, email, await bcrypt.hash(password, 12), role]
+    "INSERT INTO users (name, email, password_hash, role, must_change_password) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING",
+    [name, email, await bcrypt.hash(password, 12), role, mustChangePassword]
   );
 }
+
+const seedMustChange = () => !["false", "0", "no"].includes(String(process.env.SEED_FORCE_PASSWORD_CHANGE || "").toLowerCase());
 
 // Desenvolvimento/teste: usuarios de demonstracao e alguns casos de exemplo.
 async function seedDevelopment() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-  if (!adminEmail || !adminPassword) throw new Error("SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD sao obrigatorios.");
+  const { passwordProblem } = require("./security/passwords");
+  const { rows: existing } = await database.query("SELECT COUNT(*)::int AS count FROM users");
+  if (!adminEmail || !adminPassword) {
+    // Banco ja tem usuarios: as variaveis de seed podem ter sido removidas (recomendado depois da primeira subida).
+    if (existing[0].count > 0) return;
+    throw new Error("SEED_ADMIN_EMAIL e SEED_ADMIN_PASSWORD sao obrigatorios na primeira subida.");
+  }
+  const seeds = [{ name: process.env.SEED_ADMIN_NAME || "Administrador", email: adminEmail.toLowerCase(), password: adminPassword, role: "admin", variable: "SEED_ADMIN_PASSWORD" }];
+  if (process.env.SEED_OPERATOR_EMAIL && process.env.SEED_OPERATOR_PASSWORD) {
+    seeds.push({ name: process.env.SEED_OPERATOR_NAME || "Operador de Triagem", email: process.env.SEED_OPERATOR_EMAIL.toLowerCase(), password: process.env.SEED_OPERATOR_PASSWORD, role: "operator", variable: "SEED_OPERATOR_PASSWORD" });
+  }
   await withTransaction(async (client) => {
-    await createUserIfMissing(client, { name: process.env.SEED_ADMIN_NAME || "Administrador", email: adminEmail, password: adminPassword, role: "admin" });
-    if (process.env.SEED_OPERATOR_EMAIL && process.env.SEED_OPERATOR_PASSWORD) {
-      await createUserIfMissing(client, { name: process.env.SEED_OPERATOR_NAME || "Operador de Triagem", email: process.env.SEED_OPERATOR_EMAIL, password: process.env.SEED_OPERATOR_PASSWORD, role: "operator" });
+    for (const seed of seeds) {
+      const { rows: found } = await client.query("SELECT 1 FROM users WHERE email = $1", [seed.email]);
+      if (found[0]) continue;
+      // P0: recusa criar usuario com senha de seed fraca ou igual aos exemplos do repositorio.
+      const problem = passwordProblem(seed.password, seed);
+      if (problem) throw new Error(`${seed.variable} recusada: ${problem} Defina uma senha forte antes de subir a aplicacao.`);
+      await createUserIfMissing(client, { ...seed, mustChangePassword: seedMustChange() });
     }
-    const { rows: users } = await client.query("SELECT id FROM users WHERE email = $1", [adminEmail]);
+    const { rows: users } = await client.query("SELECT id FROM users WHERE email = $1", [adminEmail.toLowerCase()]);
+    if (!users[0]) return;
     const { rows: counts } = await client.query("SELECT COUNT(*)::int AS count FROM cases");
     if (counts[0].count > 0) return;
     const sample = [
@@ -109,14 +128,23 @@ async function seedDevelopment() {
 // Producao: nenhum dado de demonstracao. O primeiro administrador so e criado se ainda nao houver usuarios
 // e as variaveis SEED_ADMIN_* existirem; alternativamente use `npm run create-admin`.
 async function seedProduction() {
+  const { validateSeedPasswords } = require("./security/passwords");
   const { rows } = await database.query("SELECT COUNT(*)::int AS count FROM users");
-  if (rows[0].count > 0) return;
+  if (rows[0].count > 0) {
+    if (process.env.SEED_ADMIN_PASSWORD || process.env.SEED_OPERATOR_PASSWORD) {
+      console.log(JSON.stringify({ timestamp: new Date().toISOString(), event: "config_warning", warning: "SEED_*_PASSWORD continua definida no ambiente, mas nao e mais usada: remova a variavel." }));
+    }
+    return;
+  }
+  validateSeedPasswords(process.env);
   const { SEED_ADMIN_EMAIL: email, SEED_ADMIN_PASSWORD: password } = process.env;
   if (!email || !password) return;
-  await withTransaction((client) => createUserIfMissing(client, { name: process.env.SEED_ADMIN_NAME || "Administrador", email, password, role: "admin" }));
+  await withTransaction((client) => createUserIfMissing(client, { name: process.env.SEED_ADMIN_NAME || "Administrador", email: email.toLowerCase(), password, role: "admin", mustChangePassword: seedMustChange() }));
 }
 
 async function initializeDatabase() {
+  // As senhas de seed sao validadas so quando vao ser usadas (usuario ainda nao existe): uma variavel
+  // antiga esquecida no ambiente nao impede a subida, apenas gera aviso em producao.
   await waitForDatabase();
   await runMigrations();
   if (process.env.NODE_ENV === "production") await seedProduction();

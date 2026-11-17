@@ -63,12 +63,14 @@ docker compose down -v
 
 ## Acesso de desenvolvimento
 
-Os usuarios iniciais sao criados na primeira inicializacao do banco. Os valores padrao estao em `.env.example` e servem apenas para desenvolvimento local.
+Os usuarios iniciais sao criados na primeira inicializacao do banco a partir do `.env` (copie de
+`.env.example`). Nao ha senha padrao: defina `SEED_ADMIN_PASSWORD` com uma senha forte (12+ caracteres,
+fora das listas de senhas comuns); a API recusa subir com senha fraca e pede a troca no primeiro login.
 
-- Administrador: `admin@planopneumatic.com`
-- Operador: `operador@planopneumatic.com`
+- Administrador: `admin@planopneumatic.com` (ou o `SEED_ADMIN_EMAIL` definido)
+- Operador de demonstracao: criado so se `SEED_OPERATOR_PASSWORD` for preenchida
 
-Altere as senhas antes de compartilhar o ambiente ou publicar a aplicacao.
+Detalhes de sessao, CSRF, limite de login, MFA, auditoria e variaveis de deploy em [docs/seguranca.md](docs/seguranca.md).
 
 ## Estrutura do projeto
 
@@ -96,6 +98,7 @@ scripts/             Backup/restore, geracao do OpenAPI, healthchecks
 - [Executar o backend](docs/backend.md)
 - [Executar o frontend](docs/frontend.md)
 - [Publicar no Railway](docs/railway.md)
+- [Seguranca (sessao, senhas, MFA, auditoria, LGPD)](docs/seguranca.md)
 - [Operacao e suporte](docs/operacao-suporte.md)
 - [Runbook de incidentes](docs/runbook-incidentes.md)
 - [Manual do usuario](docs/manual-usuario.md)
@@ -105,7 +108,7 @@ scripts/             Backup/restore, geracao do OpenAPI, healthchecks
 
 ## API
 
-A especificacao completa (72 rotas, com schemas de entrada) fica em [docs/openapi.yaml](docs/openapi.yaml) e e servida em `GET /api/openapi.yaml`; ela e gerada do codigo e o CI falha se ficar desatualizada. Principais grupos: `/api/auth`, `/api/cases` (lista paginada, detalhe, status, anexos, checklist, comentarios, atribuicao, arquivamento), `/api/customers` e `/api/products`, `/api/reports` (XLSX/PDF/CSV), `/api/users`, `/api/notifications`, `/api/search`, `/api/settings`, `/api/sla` e `/api/integrations/webhooks`.
+A especificacao completa (91 rotas, com schemas de entrada) fica em [docs/openapi.yaml](docs/openapi.yaml) e e servida em `GET /api/openapi.yaml`; ela e gerada do codigo e o CI falha se ficar desatualizada. Principais grupos: `/api/auth`, `/api/cases` (lista paginada, detalhe, status, anexos, checklist, comentarios, atribuicao, arquivamento), `/api/customers` e `/api/products`, `/api/reports` (XLSX/PDF/CSV), `/api/users`, `/api/notifications`, `/api/search`, `/api/settings`, `/api/sla` e `/api/integrations/webhooks`.
 
 As rotas protegidas exigem o header `Authorization: Bearer <token>`. Erros de validacao devolvem `code: VALIDATION_ERROR` e `errors[]` por campo; regras de negocio devolvem 422 com `code`; toda resposta traz `X-Request-Id`.
 

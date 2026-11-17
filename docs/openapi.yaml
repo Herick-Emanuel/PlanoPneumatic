@@ -3,13 +3,18 @@
 "info":
   "title": "Plano Pneumatic API"
   "version": "1.0.0"
-  "description": "Gerado por scripts/generate-openapi.js. Todas as rotas (exceto as marcadas como publicas) exigem Authorization: Bearer <token>."
+  "description": "Gerado por scripts/generate-openapi.js. Todas as rotas (exceto as marcadas como publicas) exigem sessao: no navegador, o cookie HttpOnly criado pelo login + o cabecalho X-CSRF-Token (valor do cookie pp_csrf) em POST/PUT/PATCH/DELETE; Authorization: Bearer <token> continua aceito para tokens emitidos pelo servidor (uso interno)."
 "components":
   "securitySchemes":
+    "cookieAuth":
+      "type": "apiKey"
+      "in": "cookie"
+      "name": "__Host-pp_session"
     "bearerAuth":
       "type": "http"
       "scheme": "bearer"
 "security":
+  - "cookieAuth": []
   - "bearerAuth": []
 "paths":
   "/api/account":
@@ -25,9 +30,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/activity":
     "post":
       "tags":
@@ -41,15 +48,16 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
-  "/api/auth/forgot-password":
-    "post":
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/audit":
+    "get":
       "tags":
-        - "Autenticacao"
-      "summary": "POST /api/auth/forgot-password"
-      "security": []
+        - "Sistema"
+      "summary": "GET /api/audit"
       "responses":
         "200":
           "description": "Sucesso"
@@ -58,9 +66,29 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/change-password":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/change-password"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/auth/login":
     "post":
       "tags":
@@ -75,14 +103,17 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/auth/logout":
     "post":
       "tags":
         - "Autenticacao"
       "summary": "POST /api/auth/logout"
+      "security": []
       "responses":
         "200":
           "description": "Sucesso"
@@ -91,9 +122,29 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/logout-all":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/logout-all"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/auth/me":
     "get":
       "tags":
@@ -107,14 +158,106 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
-  "/api/auth/reset-password":
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa":
+    "get":
+      "tags":
+        - "Autenticacao"
+      "summary": "GET /api/auth/mfa"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa/disable":
     "post":
       "tags":
         - "Autenticacao"
-      "summary": "POST /api/auth/reset-password"
+      "summary": "POST /api/auth/mfa/disable"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa/enable":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/mfa/enable"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa/recovery-codes":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/mfa/recovery-codes"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa/setup":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/mfa/setup"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/mfa/verify":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/mfa/verify"
       "security": []
       "responses":
         "200":
@@ -124,9 +267,71 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/sessions":
+    "get":
+      "tags":
+        - "Autenticacao"
+      "summary": "GET /api/auth/sessions"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/sessions/{id}":
+    "delete":
+      "tags":
+        - "Autenticacao"
+      "summary": "DELETE /api/auth/sessions/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/auth/sessions/revoke-others":
+    "post":
+      "tags":
+        - "Autenticacao"
+      "summary": "POST /api/auth/sessions/revoke-others"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases":
     "get":
       "tags":
@@ -296,9 +501,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Processos"
@@ -450,9 +657,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}":
     "get":
       "tags":
@@ -472,9 +681,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "patch":
       "tags":
         - "Processos"
@@ -641,9 +852,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/archive":
     "post":
       "tags":
@@ -663,9 +876,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/assignee":
     "patch":
       "tags":
@@ -685,9 +900,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/attachments":
     "get":
       "tags":
@@ -707,9 +924,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Processos"
@@ -728,9 +947,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/attachments/{attachmentId}":
     "delete":
       "tags":
@@ -755,9 +976,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/attachments/{attachmentId}/file":
     "get":
       "tags":
@@ -782,9 +1005,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/attachments/upload":
     "post":
       "tags":
@@ -804,9 +1029,35 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/cases/{caseNumber}/audit":
+    "get":
+      "tags":
+        - "Processos"
+      "summary": "GET /api/cases/{caseNumber}/audit"
+      "parameters":
+        - "name": "caseNumber"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/checklist/{itemId}":
     "patch":
       "tags":
@@ -831,9 +1082,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/comments":
     "get":
       "tags":
@@ -853,9 +1106,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Processos"
@@ -874,9 +1129,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/management":
     "get":
       "tags":
@@ -896,9 +1153,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/status":
     "patch":
       "tags":
@@ -950,9 +1209,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/timeline":
     "get":
       "tags":
@@ -972,9 +1233,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/{caseNumber}/unarchive":
     "post":
       "tags":
@@ -994,9 +1257,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/bulk/assign":
     "post":
       "tags":
@@ -1010,9 +1275,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/cases/import":
     "post":
       "tags":
@@ -1026,9 +1293,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/customers":
     "get":
       "tags":
@@ -1042,9 +1311,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Cadastros"
@@ -1057,9 +1328,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/customers/{id}":
     "patch":
       "tags":
@@ -1079,9 +1352,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/dashboard/summary":
     "get":
       "tags":
@@ -1095,9 +1370,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/filters":
     "get":
       "tags":
@@ -1111,9 +1388,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Sistema"
@@ -1126,9 +1405,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/filters/{id}":
     "delete":
       "tags":
@@ -1148,9 +1429,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/integrations/webhooks":
     "get":
       "tags":
@@ -1164,9 +1447,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Sistema"
@@ -1179,9 +1464,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/integrations/webhooks/{id}":
     "patch":
       "tags":
@@ -1201,9 +1488,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/integrations/webhooks/{id}/deliveries":
     "get":
       "tags":
@@ -1223,9 +1512,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/me/capabilities":
     "get":
       "tags":
@@ -1239,9 +1530,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/meta":
     "get":
       "tags":
@@ -1256,9 +1549,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/notifications":
     "get":
       "tags":
@@ -1272,9 +1567,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/notifications/{id}/read":
     "patch":
       "tags":
@@ -1294,9 +1591,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/notifications/read-all":
     "post":
       "tags":
@@ -1310,9 +1609,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/omie/invoices/{number}":
     "get":
       "tags":
@@ -1332,9 +1633,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/omie/orders/{number}":
     "get":
       "tags":
@@ -1354,9 +1657,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/omie/status":
     "get":
       "tags":
@@ -1370,9 +1675,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/omie/sync":
     "get":
       "tags":
@@ -1386,9 +1693,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Omie"
@@ -1401,9 +1710,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/pending":
     "get":
       "tags":
@@ -1417,9 +1728,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/products":
     "get":
       "tags":
@@ -1433,9 +1746,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Cadastros"
@@ -1448,9 +1763,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/products/{id}":
     "patch":
       "tags":
@@ -1470,9 +1787,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/advanced":
     "get":
       "tags":
@@ -1486,9 +1805,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/by-case/{caseNumber}":
     "get":
       "tags":
@@ -1508,9 +1829,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/by-customer":
     "get":
       "tags":
@@ -1524,9 +1847,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/by-product":
     "get":
       "tags":
@@ -1540,9 +1865,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/export.csv":
     "get":
       "tags":
@@ -1556,9 +1883,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/export.html":
     "get":
       "tags":
@@ -1572,9 +1901,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/export.pdf":
     "get":
       "tags":
@@ -1588,9 +1919,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/export.xlsx":
     "get":
       "tags":
@@ -1604,9 +1937,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/manager-performance":
     "get":
       "tags":
@@ -1620,9 +1955,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/summary":
     "get":
       "tags":
@@ -1636,9 +1973,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/team-goals/{managerId}":
     "put":
       "tags":
@@ -1658,9 +1997,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/team-performance":
     "get":
       "tags":
@@ -1674,9 +2015,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/search":
     "get":
       "tags":
@@ -1690,9 +2033,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/settings":
     "get":
       "tags":
@@ -1706,9 +2051,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/settings/{key}":
     "put":
       "tags":
@@ -1728,9 +2075,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/sla":
     "get":
       "tags":
@@ -1744,9 +2093,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/sla/{type}":
     "put":
       "tags":
@@ -1766,9 +2117,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users":
     "get":
       "tags":
@@ -1782,9 +2135,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
     "post":
       "tags":
         - "Usuarios"
@@ -1797,9 +2152,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/{userId}":
     "patch":
       "tags":
@@ -1819,9 +2176,35 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/users/{userId}/mfa/reset":
+    "post":
+      "tags":
+        - "Usuarios"
+      "summary": "POST /api/users/{userId}/mfa/reset"
+      "parameters":
+        - "name": "userId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/{userId}/reset-password":
     "post":
       "tags":
@@ -1841,9 +2224,35 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/users/{userId}/sessions/revoke":
+    "post":
+      "tags":
+        - "Usuarios"
+      "summary": "POST /api/users/{userId}/sessions/revoke"
+      "parameters":
+        - "name": "userId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/{userId}/status":
     "patch":
       "tags":
@@ -1863,9 +2272,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/{userId}/team":
     "patch":
       "tags":
@@ -1885,9 +2296,35 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/users/{userId}/unlock-login":
+    "post":
+      "tags":
+        - "Usuarios"
+      "summary": "POST /api/users/{userId}/unlock-login"
+      "parameters":
+        - "name": "userId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/assignable":
     "get":
       "tags":
@@ -1901,9 +2338,11 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/users/audit":
     "get":
       "tags":
@@ -1917,6 +2356,8 @@
         "401":
           "description": "Sessao invalida ou expirada"
         "403":
-          "description": "Perfil sem permissao"
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"

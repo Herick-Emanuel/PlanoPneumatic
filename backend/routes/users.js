@@ -1,5 +1,4 @@
 const express = require("express");
-const bcrypt = require("bcryptjs");
 const { z } = require("zod");
 const { database, withTransaction } = require("../db");
 const { roles, ROLE_LABELS, FINISHED_STATUSES } = require("../domain/constants");
@@ -8,6 +7,9 @@ const { requireAuth, requireCapability } = require("../middleware/auth");
 const { badRequest, conflict, forbidden, notFound, wrap } = require("../middleware/errors");
 const { notifyUser } = require("../services/notifications");
 const { addEvent } = require("../services/cases");
+const { audit } = require("../services/audit");
+const accounts = require("../services/accounts");
+const throttle = require("../services/loginThrottle");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -15,12 +17,35 @@ router.use(requireAuth);
 const USER_FIELDS = "id, name, email, role, active, manager_id AS \"managerId\", created_at AS \"createdAt\"";
 const ALL_ROLES = Object.values(roles);
 
+// Grava na auditoria de usuarios (tela antiga) e na auditoria geral (com IP e navegador).
 async function auditUserChange(executor, actorId, targetUserId, action, details = {}) {
 	await executor.query("INSERT INTO user_audit_log (actor_id, target_user_id, action, details) VALUES ($1, $2, $3, $4)", [actorId, targetUserId, action, JSON.stringify(details)]);
+	await audit(action, { actorId, entityType: "user", entityId: targetUserId, details, executor });
+}
+
+const isAdmin = (user) => can(user, capabilities.CREATE_ANY_ROLE);
+
+// Gerente so administra o proprio time (usuarios com manager_id = ele), nunca administradores nem outros gerentes.
+async function assertManageable(actor, targetUserId, executor = database) {
+	const { rows } = await executor.query("SELECT id, role, manager_id FROM users WHERE id = $1", [targetUserId]);
+	const target = rows[0];
+	if (!target) throw notFound("Usuario nao encontrado.");
+	if (isAdmin(actor)) return target;
+	if (target.role === roles.ADMIN || target.manager_id !== actor.id) throw forbidden("Voce so pode administrar usuarios do seu time.");
+	return target;
 }
 
 router.get("/", requireCapability(capabilities.VIEW_USERS), wrap(async (request, response) => {
-	const { rows } = await database.query("SELECT u.id, u.name, u.email, u.role, u.active, u.created_at AS \"createdAt\", u.manager_id AS \"managerId\", mgr.name AS \"managerName\" FROM users u LEFT JOIN users mgr ON mgr.id = u.manager_id ORDER BY u.name");
+	// Gerente ve so o proprio time (e a si mesmo); administrador ve todos.
+	const scoped = !isAdmin(request.user);
+	const { rows } = await database.query(
+		`SELECT u.id, u.name, u.email, u.role, u.active, u.created_at AS "createdAt", u.manager_id AS "managerId", mgr.name AS "managerName",
+		        u.must_change_password AS "mustChangePassword", (u.mfa_enabled_at IS NOT NULL) AS "mfaEnabled"
+		   FROM users u LEFT JOIN users mgr ON mgr.id = u.manager_id
+		  ${scoped ? "WHERE u.id = $1 OR u.manager_id = $1" : ""}
+		  ORDER BY u.name`,
+		scoped ? [request.user.id] : []
+	);
 	return response.json({ users: rows, roles: ROLE_LABELS });
 }));
 
@@ -36,7 +61,9 @@ router.post("/", requireCapability(capabilities.CREATE_OPERATOR), wrap(async (re
 	const password = String(request.body.password || "");
 	const role = String(request.body.role || "operator").trim();
 	const allowedRoles = can(request.user, capabilities.CREATE_ANY_ROLE) ? ALL_ROLES.filter((value) => value !== roles.ADMIN) : [roles.OPERATOR];
-	if (!name || !email || password.length < 8 || !allowedRoles.includes(role)) throw badRequest("Informe nome, e-mail, senha com pelo menos 8 caracteres e um perfil permitido.");
+	if (!name || !email || !allowedRoles.includes(role)) throw badRequest("Informe nome, e-mail, senha inicial e um perfil permitido.");
+	if (name.length > 120 || email.length > 180 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Nome ou e-mail invalido.");
+	accounts.assertPasswordPolicy(password, { email, name });
 	let managerId = null;
 	if (request.user.role === roles.MANAGER) {
 		managerId = role === roles.OPERATOR ? request.user.id : null;
@@ -49,7 +76,8 @@ router.post("/", requireCapability(capabilities.CREATE_OPERATOR), wrap(async (re
 	}
 	try {
 		const created = await withTransaction(async (db) => {
-			const { rows } = await db.query(`INSERT INTO users (name, email, password_hash, role, manager_id) VALUES ($1, $2, $3, $4, $5) RETURNING ${USER_FIELDS}`, [name, email, await bcrypt.hash(password, 12), role, managerId]);
+			// Senha inicial definida por outra pessoa: o usuario troca no primeiro acesso.
+			const { rows } = await db.query(`INSERT INTO users (name, email, password_hash, role, manager_id, must_change_password) VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING ${USER_FIELDS}`, [name, email, await accounts.hashPassword(password), role, managerId]);
 			await auditUserChange(db, request.user.id, rows[0].id, "USER_CREATED", { role, managerId });
 			return rows[0];
 		});
@@ -61,7 +89,14 @@ router.post("/", requireCapability(capabilities.CREATE_OPERATOR), wrap(async (re
 }));
 
 router.get("/audit", requireCapability(capabilities.VIEW_AUDIT), wrap(async (request, response) => {
-	const { rows } = await database.query("SELECT audit.id, audit.action, audit.details, audit.created_at AS \"createdAt\", actor.name AS \"actorName\", target.name AS \"targetName\" FROM user_audit_log audit LEFT JOIN users actor ON actor.id = audit.actor_id LEFT JOIN users target ON target.id = audit.target_user_id ORDER BY audit.created_at DESC LIMIT 200");
+	const scoped = request.user.role === roles.MANAGER;
+	const { rows } = await database.query(
+		`SELECT audit.id, audit.action, audit.details, audit.created_at AS "createdAt", actor.name AS "actorName", target.name AS "targetName"
+		   FROM user_audit_log audit LEFT JOIN users actor ON actor.id = audit.actor_id LEFT JOIN users target ON target.id = audit.target_user_id
+		  ${scoped ? "WHERE audit.target_user_id IN (SELECT id FROM users WHERE id = $1 OR manager_id = $1) OR audit.actor_id = $1" : ""}
+		  ORDER BY audit.created_at DESC LIMIT 200`,
+		scoped ? [request.user.id] : []
+	);
 	return response.json({ audit: rows });
 }));
 
@@ -100,6 +135,7 @@ router.patch("/:userId/status", requireCapability(capabilities.MANAGE_USER_STATU
 	const active = request.body.active === true;
 	if (!Number.isInteger(targetUserId) || targetUserId === request.user.id) throw badRequest("Usuario alvo invalido.");
 	const result = await withTransaction(async (db) => {
+		await assertManageable(request.user, targetUserId, db);
 		const { rows } = await db.query(`UPDATE users SET active = $1 WHERE id = $2 RETURNING ${USER_FIELDS}, manager_id`, [active, targetUserId]);
 		if (!rows[0]) throw notFound("Usuario nao encontrado.");
 		let reassignment = { reassigned: 0 };
@@ -146,12 +182,56 @@ router.post("/:userId/reset-password", requireCapability(capabilities.EDIT_USER)
 	if (!can(request.user, capabilities.CREATE_ANY_ROLE)) throw forbidden();
 	const targetUserId = Number(request.params.userId);
 	const password = String(request.body.password || "");
-	if (!Number.isInteger(targetUserId) || password.length < 8) throw badRequest("Informe uma senha com pelo menos 8 caracteres.");
+	if (!Number.isInteger(targetUserId)) throw badRequest("Usuario alvo invalido.");
+	const { rows: targets } = await database.query("SELECT id, name, email FROM users WHERE id = $1", [targetUserId]);
+	if (!targets[0]) throw notFound("Usuario nao encontrado.");
+	accounts.assertPasswordPolicy(password, targets[0]);
+	const passwordHash = await accounts.hashPassword(password);
 	await withTransaction(async (db) => {
-		const { rows } = await db.query("UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id", [await bcrypt.hash(password, 12), targetUserId]);
-		if (!rows[0]) throw notFound("Usuario nao encontrado.");
+		// Senha provisoria: o usuario troca no proximo acesso.
+		await db.query("UPDATE users SET password_hash = $1, must_change_password = TRUE, password_changed_at = NOW() WHERE id = $2", [passwordHash, targetUserId]);
 		await db.query("DELETE FROM sessions WHERE user_id = $1", [targetUserId]);
+		await db.query("DELETE FROM trusted_devices WHERE user_id = $1", [targetUserId]);
+		await db.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [targetUserId]);
+		await throttle.unlockEmail(targets[0].email, db);
 		await auditUserChange(db, request.user.id, targetUserId, "PASSWORD_RESET", {});
+	});
+	return response.status(204).send();
+}));
+
+// Encerra todas as sessoes de um usuario (ex.: aparelho perdido). Gerente so no proprio time.
+router.post("/:userId/sessions/revoke", requireCapability(capabilities.MANAGE_USER_STATUS), wrap(async (request, response) => {
+	const targetUserId = Number(request.params.userId);
+	if (!Number.isInteger(targetUserId)) throw badRequest("Usuario alvo invalido.");
+	await assertManageable(request.user, targetUserId);
+	const { rowCount } = await database.query("DELETE FROM sessions WHERE user_id = $1", [targetUserId]);
+	await database.query("DELETE FROM trusted_devices WHERE user_id = $1", [targetUserId]);
+	await audit("SESSIONS_REVOKED_BY_ADMIN", { actorId: request.user.id, entityType: "user", entityId: targetUserId, details: { sessionsEnded: rowCount } });
+	return response.json({ sessionsEnded: rowCount });
+}));
+
+
+// Desbloqueia o login de um usuario bloqueado por tentativas (em todos os IPs). Gerente so no proprio time.
+router.post("/:userId/unlock-login", requireCapability(capabilities.MANAGE_USER_STATUS), wrap(async (request, response) => {
+	const targetUserId = Number(request.params.userId);
+	if (!Number.isInteger(targetUserId)) throw badRequest("Usuario alvo invalido.");
+	await assertManageable(request.user, targetUserId);
+	const { rows } = await database.query("SELECT email FROM users WHERE id = $1", [targetUserId]);
+	const cleared = await throttle.unlockEmail(rows[0].email);
+	await audit("LOGIN_UNLOCKED", { actorId: request.user.id, entityType: "user", entityId: targetUserId, details: { cleared } });
+	return response.json({ cleared });
+}));
+
+// Remove o MFA de quem perdeu o celular e os codigos de recuperacao (somente administrador).
+router.post("/:userId/mfa/reset", requireCapability(capabilities.EDIT_USER), wrap(async (request, response) => {
+	if (!isAdmin(request.user)) throw forbidden();
+	const targetUserId = Number(request.params.userId);
+	if (!Number.isInteger(targetUserId) || targetUserId === request.user.id) throw badRequest("Usuario alvo invalido.");
+	await withTransaction(async (db) => {
+		const { rows } = await db.query("SELECT id FROM users WHERE id = $1", [targetUserId]);
+		if (!rows[0]) throw notFound("Usuario nao encontrado.");
+		await accounts.disableMfa(rows[0], request.user.id, "MFA_RESET_BY_ADMIN", db);
+		await db.query("DELETE FROM sessions WHERE user_id = $1", [targetUserId]);
 	});
 	return response.status(204).send();
 }));

@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const express = require("express");
 const { z } = require("zod");
 const { database } = require("../db");
@@ -70,8 +71,10 @@ router.get("/export.html", requireExport, wrap(async (request, response) => {
 	const rows = (await reports.exportRows(request.user, parseFilters(request))).slice(0, 1000);
 	const rowsHtml = rows.map((item) => `<tr><td>${htmlCell(item.case_number)}</td><td>${htmlCell(item.client)}</td><td>${htmlCell(item.type)}</td><td>${htmlCell(item.status)}</td><td>${htmlCell(item.responsible)}</td><td>${htmlCell(new Date(item.updated_at).toLocaleString("pt-BR"))}</td></tr>`).join("");
 	response.setHeader("Content-Type", "text/html; charset=utf-8");
-	response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
-	return response.send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatorio de processos</title><style>body{font:14px Arial;color:#17283a}h1{color:#092d57}table{border-collapse:collapse;width:100%}th,td{border:1px solid #dfe7ef;padding:8px;text-align:left}th{background:#f1f5f8}@media print{button{display:none}}</style></head><body><button onclick="print()">Imprimir / salvar PDF</button><h1>Relatorio de processos</h1><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Responsavel</th><th>Atualizado</th></tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`);
+	// Pagina avulsa de impressao: estilo e script liberados so por nonce (sem 'unsafe-inline').
+	const nonce = crypto.randomBytes(16).toString("base64");
+	response.setHeader("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
+	return response.send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatorio de processos</title><style nonce="${nonce}">body{font:14px Arial;color:#17283a}h1{color:#092d57}table{border-collapse:collapse;width:100%}th,td{border:1px solid #dfe7ef;padding:8px;text-align:left}th{background:#f1f5f8}@media print{button{display:none}}</style></head><body><button type="button" id="print">Imprimir / salvar PDF</button><script nonce="${nonce}">document.getElementById("print").addEventListener("click", () => window.print());</script><h1>Relatorio de processos</h1><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Responsavel</th><th>Atualizado</th></tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`);
 }));
 
 module.exports = { router, buildCaseFilters };

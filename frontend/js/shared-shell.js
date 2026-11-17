@@ -25,24 +25,14 @@
     "/conta.html": "Minha conta"
   };
 
-  function trackActivity(action, label) {
-    try {
-      const session = JSON.parse(localStorage.getItem("plano-pneumatic-session"));
-      if (!session?.token) return;
-      const apiOrigin = window.location.hostname === "planopneumatic-production.up.railway.app" ? "https://planopneumaticapi-production.up.railway.app" : window.location.origin;
-      fetch(new URL("/api/activity", apiOrigin), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ action, path: window.location.pathname, label: String(label || "").slice(0, 200) }),
-        keepalive: true
-      }).catch(() => {});
-    } catch { /* activity tracking must never break navigation */ }
-  }
+  // Registro de uso revisado (LGPD): a tela visitada e, em cliques, so a chave de links do menu ou de
+  // elementos marcados com data-track. Nunca o texto do link (que pode conter nome de cliente).
+  function trackActivity(action, label) { window.PP?.track(action, label); }
 
   document.addEventListener("click", (event) => {
-    const target = event.target.closest("a, button");
+    const target = event.target.closest("[data-track], a[data-nav-key]");
     if (!target) return;
-    trackActivity("click", target.textContent.trim() || target.getAttribute("aria-label") || target.tagName.toLowerCase());
+    trackActivity("click", target.dataset.track || target.dataset.navKey);
   }, true);
 
   function setLoading(active) {
@@ -195,7 +185,7 @@
     ]]
   ];
   const readSession = () => {
-    try { return JSON.parse(localStorage.getItem("plano-pneumatic-session")); } catch { return null; }
+    return window.PP?.getSession() || null;
   };
   // Sessoes antigas nao guardam capacidades: ate atualizar, mostra apenas o que nao depende delas.
   const allowed = (capability) => !capability || (readSession()?.user?.capabilities || []).includes(capability);
@@ -266,9 +256,9 @@
   document.head.appendChild(toolsScript);
   // Atualiza as capacidades do usuario (o perfil pode ter mudado) e redesenha o menu.
   function refreshUser() {
-    if (!readSession()?.token || !window.PP) return;
+    if (!readSession()?.user || !window.PP) return;
     window.PP.api.get("/api/auth/me").then((data) => {
-      window.PP.setSession({ ...readSession(), user: data.user });
+      window.PP.setSession({ user: data.user });
       renderNavLinks();
       window.PPShellTools?.mount();
     }).catch(() => {});

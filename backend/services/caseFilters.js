@@ -3,6 +3,7 @@ const { FINISHED_STATUSES } = require("../domain/constants");
 
 const SAO_PAULO_DATE = (column) => `(${column} AT TIME ZONE 'America/Sao_Paulo')::date`;
 const FINISHED_SQL = FINISHED_STATUSES.map((status) => `'${status}'`).join(", ");
+const TEAM_SQL = "SELECT team.id FROM users team WHERE team.id = $V OR team.manager_id = $V";
 
 function likeTerm(value) {
 	return `%${String(value).trim().replace(/[\\%_]/g, "\\$&")}%`;
@@ -22,6 +23,9 @@ function buildCaseFilters(user, query = {}) {
 	};
 
 	if (!can(user, capabilities.VIEW_ALL_CASES)) add("(c.created_by = $V OR c.assigned_to = $V)", user.id);
+	// P1: gerente com escopo de time (configuracao manager_team_scope) ve os processos criados por ou
+	// atribuidos a ele e aos usuarios do seu time (users.manager_id).
+	else if (user.teamScoped) add(`(c.created_by IN (${TEAM_SQL}) OR c.assigned_to IN (${TEAM_SQL}))`, user.id);
 	if (query.mine === "true") add("(c.assigned_to = $V OR c.created_by = $V)", user.id);
 	clauses.push(query.archived === "true" ? "c.archived_at IS NOT NULL" : "c.archived_at IS NULL");
 
@@ -43,4 +47,4 @@ function buildCaseFilters(user, query = {}) {
 	return { where: clauses.join(" AND "), values };
 }
 
-module.exports = { buildCaseFilters, likeTerm, SAO_PAULO_DATE, FINISHED_SQL };
+module.exports = { buildCaseFilters, likeTerm, SAO_PAULO_DATE, FINISHED_SQL, TEAM_SQL };

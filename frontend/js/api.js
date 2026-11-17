@@ -1,15 +1,35 @@
 // Modulo comum (PDF 4: "api.js e session.js"): sessao, fetch, escape, formatadores e metadados.
 (() => {
 	if (window.PP) return;
+	// A sessao fica num cookie HttpOnly que o JavaScript nao le (protege contra roubo por XSS). No navegador
+	// guardamos so os dados de exibicao do usuario (nome, perfil, capacidades) para montar o menu.
 	const sessionKey = "plano-pneumatic-session";
-	const apiOrigin = window.location.hostname === "planopneumatic-production.up.railway.app" ? "https://planopneumaticapi-production.up.railway.app" : window.location.origin;
+	// A API e sempre chamada pela propria origem: o Nginx do frontend faz o proxy de /api (cookie SameSite=Strict).
+	const apiOrigin = window.location.origin;
 	const SESSION_EXPIRED_KEY = "pp-session-expired";
+	const PENDING_CODES = ["PASSWORD_CHANGE_REQUIRED", "MFA_ENROLLMENT_REQUIRED"];
+	const UNSAFE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
 	const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
-	const getSession = () => { try { return JSON.parse(localStorage.getItem(sessionKey)); } catch { return null; } };
-	const setSession = (session) => localStorage.setItem(sessionKey, JSON.stringify(session));
-	const clearSession = () => localStorage.removeItem(sessionKey);
+	function getSession() {
+		try {
+			const stored = JSON.parse(localStorage.getItem(sessionKey));
+			// Versao antiga guardava o token aqui: descarta (o usuario entra de novo e passa a usar o cookie).
+			if (stored?.token) { localStorage.removeItem(sessionKey); return null; }
+			return stored?.user ? stored : null;
+		} catch { return null; }
+	}
+	const setSession = (session) => { try { localStorage.setItem(sessionKey, JSON.stringify({ user: session?.user || null })); } catch { /* sem armazenamento */ } };
+	const clearSession = () => { try { localStorage.removeItem(sessionKey); } catch { /* sem armazenamento */ } };
 	const apiUrl = (url) => new URL(url, apiOrigin).toString();
+	// Token CSRF: cookie legivel criado no login (double submit), enviado no cabecalho X-CSRF-Token.
+	function csrfToken() {
+		for (const part of document.cookie.split(";")) {
+			const [name, ...rest] = part.trim().split("=");
+			if (name === "__Host-pp_csrf" || name === "pp_csrf") return decodeURIComponent(rest.join("="));
+		}
+		return "";
+	}
 
 	class ApiError extends Error {
 		constructor(message, status, body) { super(message); this.status = status; this.body = body; }
@@ -24,15 +44,19 @@
 	async function request(url, options = {}) {
 		const session = getSession();
 		const { json, raw, ...fetchOptions } = options;
+		const method = String(fetchOptions.method || "GET").toUpperCase();
 		const headers = { ...(fetchOptions.headers || {}) };
-		if (session?.token) headers.Authorization = `Bearer ${session.token}`;
+		if (UNSAFE_METHODS.includes(method)) { const token = csrfToken(); if (token) headers["X-CSRF-Token"] = token; }
 		if (json !== undefined) { headers["Content-Type"] = "application/json"; fetchOptions.body = JSON.stringify(json); }
 		let response;
-		try { response = await fetch(apiUrl(url), { ...fetchOptions, headers }); } catch { throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente novamente.", 0); }
-		if (response.status === 401 && session?.token && !url.includes("/api/auth/login")) { sessionExpired(); throw new ApiError("Sua sessão expirou. Entre novamente.", 401); }
+		try { response = await fetch(apiUrl(url), { ...fetchOptions, method, headers, credentials: "same-origin" }); } catch { throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente novamente.", 0); }
+		const isAuthStep = /\/api\/auth\/(login|mfa\/verify)$/.test(url);
+		if (response.status === 401 && session?.user && !isAuthStep) { sessionExpired(); throw new ApiError("Sua sessão expirou. Entre novamente.", 401); }
 		if (raw) return response;
 		if (!response.ok) {
 			const body = await response.json().catch(() => ({}));
+			// Troca de senha ou ativacao do MFA pendente: a tela inicial conduz o usuario.
+			if (response.status === 403 && PENDING_CODES.includes(body.code) && window.location.pathname !== "/") window.location.href = "/";
 			throw new ApiError(body.message || "Não foi possível concluir a operação.", response.status, body);
 		}
 		return response.status === 204 ? null : response.json();
@@ -45,13 +69,49 @@
 	api.put = (url, json) => request(url, { method: "PUT", json });
 	api.delete = (url) => request(url, { method: "DELETE" });
 
-	// Exige sessao: sem token volta ao login. Atualiza capacidades do usuario (perfil pode ter mudado).
+	// Exige sessao: sem usuario volta ao login. Atualiza capacidades do usuario (perfil pode ter mudado).
 	async function requireUser() {
 		const session = getSession();
-		if (!session?.token) { window.location.href = "/"; return null; }
+		if (!session?.user) { window.location.href = "/"; return null; }
 		const data = await api.get("/api/auth/me");
-		setSession({ ...session, user: data.user });
+		if (data.user.mustChangePassword || data.user.mfaEnrollmentRequired) { window.location.href = "/"; return null; }
+		setSession({ user: data.user });
 		return data.user;
+	}
+
+	// Registro de uso (LGPD): so a tela visitada e botoes marcados com data-track; nunca texto livre.
+	function track(action, label) {
+		if (!getSession()?.user) return;
+		try {
+			fetch(apiUrl("/api/activity"), {
+				method: "POST",
+				credentials: "same-origin",
+				keepalive: true,
+				headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
+				body: JSON.stringify({ action, path: window.location.pathname, label: label ? String(label).slice(0, 60) : undefined })
+			}).catch(() => {});
+		} catch { /* o registro de uso nunca pode quebrar a navegacao */ }
+	}
+
+	// CSP sem 'unsafe-inline' em estilos: barras e graficos marcam data-w / data-h (porcentagem) e o tamanho
+	// e aplicado via CSSOM (element.style), que a politica permite.
+	function applyDynamicStyles(root) {
+		const elements = root.matches?.("[data-w], [data-h]") ? [root] : [];
+		elements.push(...(root.querySelectorAll?.("[data-w], [data-h]") || []));
+		for (const element of elements) {
+			if (element.dataset.w !== undefined) element.style.width = `${Math.max(0, Math.min(100, Number(element.dataset.w) || 0))}%`;
+			if (element.dataset.h !== undefined) element.style.height = `${Math.max(0, Math.min(100, Number(element.dataset.h) || 0))}%`;
+		}
+	}
+	new MutationObserver((mutations) => { for (const mutation of mutations) for (const node of mutation.addedNodes) if (node.nodeType === 1) applyDynamicStyles(node); })
+		.observe(document.documentElement, { childList: true, subtree: true });
+
+	// LGPD: CPF/CNPJ mascarado nas telas de consulta (o valor completo aparece so nos formularios de edicao).
+	function maskDocument(value) {
+		const numbers = digits(value);
+		if (numbers.length === 11) return `***.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-**`;
+		if (numbers.length === 14) return `**.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8, 12)}-**`;
+		return numbers ? "***" : "";
 	}
 
 	let metaPromise;
@@ -205,6 +265,8 @@
 	async function logout() {
 		try { await api.post("/api/auth/logout"); } catch { /* sessao ja encerrada */ }
 		clearSession();
+		// Rascunhos com dados de clientes nao ficam no aparelho depois de sair (a fila offline e mantida).
+		try { Object.keys(localStorage).filter((key) => /draft/i.test(key)).forEach((key) => localStorage.removeItem(key)); } catch { /* sem armazenamento */ }
 		window.location.href = "/";
 	}
 	function bindLogout() {
@@ -232,27 +294,31 @@
 		window.open(URL.createObjectURL(blob), "_blank", "noopener");
 	}
 
-	// Fila offline: processos preenchidos sem conexao sao reenviados quando a internet volta.
+	// Fila offline: processos preenchidos sem conexao sao reenviados quando a internet volta. Cada item leva o
+	// id de quem preencheu e so e enviado na sessao dessa mesma pessoa (aparelho compartilhado).
 	const OUTBOX_KEY = "pp-outbox";
 	const outbox = {
 		list() { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || []; } catch { return []; } },
 		save(list) { try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list)); } catch { /* sem armazenamento */ } },
-		add(payload) { this.save([...this.list(), { payload, queuedAt: new Date().toISOString() }]); },
+		add(payload) { this.save([...this.list(), { payload, userId: getSession()?.user?.id ?? null, queuedAt: new Date().toISOString() }]); },
 		async flush() {
-			if (!getSession()?.token || outbox.flushing) return;
+			const userId = getSession()?.user?.id;
+			if (!userId || outbox.flushing) return;
 			outbox.flushing = true;
 			try {
-				let pending = outbox.list();
+				const mine = (item) => item.userId === userId;
+				let pending = outbox.list().filter(mine);
 				while (pending.length) {
+					const [item] = pending;
 					try {
-						const result = await api.post("/api/cases", pending[0].payload);
+						const result = await api.post("/api/cases", item.payload);
 						toast(`Processo ${result.case.id} enviado (estava na fila offline).`, "success");
 					} catch (error) {
-						if (error.status === 0 || error.status === 401) break;
+						if (error.status === 0 || error.status === 401 || error.status === 403) break;
 						toast(`Um processo da fila offline foi recusado: ${error.message}`, "error");
 					}
 					pending = pending.slice(1);
-					outbox.save(pending);
+					outbox.save(outbox.list().filter((entry) => entry.queuedAt !== item.queuedAt || !mine(entry)));
 				}
 			} finally { outbox.flushing = false; }
 		}
@@ -305,7 +371,7 @@
 	}
 
 	window.PP = {
-		sessionKey, apiOrigin, esc, getSession, setSession, clearSession, api, ApiError, requireUser, meta, getMeta: () => metaCache,
+		sessionKey, apiOrigin, esc, getSession, setSession, clearSession, api, ApiError, requireUser, meta, getMeta: () => metaCache, csrfToken, track, applyDynamicStyles, maskDocument,
 		statusLabel, statusTone, roleLabel, can, slaBadge, formatDate, formatDateTime, money, fileSize, initials,
 		digits, isValidDocument, formatDocument, bindDocumentInput, bindMoneyInput, parseMoney, setFieldError, clearFieldErrors, applyServerErrors,
 		icon, getTheme, setTheme, outbox, toast, dialog, confirmAction, fillProfile, logout, bindLogout, download, openFile, debounce, skeleton, emptyState, errorState, SESSION_EXPIRED_KEY

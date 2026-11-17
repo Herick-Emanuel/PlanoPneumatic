@@ -84,7 +84,7 @@ document.head.appendChild(sharedShellScript);
 		form.productCode.setAttribute("autocomplete", "off");
 		const searchCustomers = PP.debounce(async () => {
 			if (form.client.value.trim().length < 2) return;
-			try { customers = (await api.get(`/api/customers?q=${encodeURIComponent(form.client.value.trim())}&limit=8`)).customers; customerList.innerHTML = customers.map((customer) => `<option value="${esc(customer.name)}">${esc(PP.formatDocument(customer.document || ""))}</option>`).join(""); } catch { /* autocomplete e opcional */ }
+			try { customers = (await api.get(`/api/customers?q=${encodeURIComponent(form.client.value.trim())}&limit=8`)).customers; customerList.innerHTML = customers.map((customer) => `<option value="${esc(customer.name)}">${esc(PP.maskDocument(customer.document || ""))}</option>`).join(""); } catch { /* autocomplete e opcional */ }
 		});
 		const searchProducts = PP.debounce(async () => {
 			if (form.productCode.value.trim().length < 2) return;
@@ -113,7 +113,7 @@ document.head.appendChild(sharedShellScript);
 		const button = document.createElement("button");
 		button.type = "button";
 		button.className = "button button-secondary compact-button";
-		button.style.cssText = "align-self:end;justify-self:start;margin-bottom:2px";
+		button.classList.add("align-end-button");
 		button.textContent = isOrder ? "Buscar pedido no Omie" : "Validar NF no Omie";
 		input.closest("label").after(button);
 		button.addEventListener("click", async () => {

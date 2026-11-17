@@ -90,6 +90,18 @@ router.get("/:caseNumber/timeline", wrap(async (request, response) => {
 	return response.json({ timeline: detail.events });
 }));
 
+// Auditoria do processo (P2): eventos com IP e navegador de quem fez, inclusive antes/depois das edicoes.
+router.get("/:caseNumber/audit", requireCapability(capabilities.VIEW_AUDIT), wrap(async (request, response) => {
+	const item = await cases.findCase(caseParam(request), request.user);
+	const { rows } = await database.query(
+		`SELECT a.id, a.action, a.ip, a.user_agent AS "userAgent", a.details, a.created_at AS "createdAt", actor.name AS "actorName"
+		   FROM audit_log a LEFT JOIN users actor ON actor.id = a.actor_id
+		  WHERE a.entity_type = 'case' AND a.entity_id = $1 ORDER BY a.created_at DESC, a.id DESC LIMIT 500`,
+		[String(item.id)]
+	);
+	return response.json({ caseNumber: item.case_number, audit: rows });
+}));
+
 router.get("/:caseNumber/comments", wrap(async (request, response) => {
 	const item = await cases.findCase(caseParam(request), request.user);
 	const { rows } = await database.query("SELECT c.id, c.body, c.created_at AS \"createdAt\", u.name AS \"authorName\" FROM case_comments c JOIN users u ON u.id = c.author_id WHERE c.case_id = $1 ORDER BY c.created_at DESC", [item.id]);

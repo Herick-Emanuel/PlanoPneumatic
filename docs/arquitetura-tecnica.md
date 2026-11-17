@@ -26,7 +26,7 @@ Não há camada de ORM (Sequelize/Prisma) nem framework de rotas adicional. O ar
 
 ### 2.2 Autenticação e autorização
 - Login gera um token aleatório; apenas o **hash** do token fica no banco (`sessions.token_hash`), então um vazamento do banco não expõe tokens utilizáveis.
-- Cada rota protegida valida o `Authorization: Bearer <token>` e resolve o usuário autenticado.
+- No navegador o token vai num cookie `HttpOnly` + `SameSite=Strict` e as alterações exigem `X-CSRF-Token`; `Authorization: Bearer <token>` continua aceito para tokens emitidos pelo próprio servidor (uso interno e testes). Detalhes (limite de login, MFA, auditoria) em [seguranca.md](seguranca.md).
 - Autorização é feita por **capacidades** (`capabilities`), não só por papel: existe uma matriz (`permissionMatrix`) que mapeia `role → lista de capabilities`, e um middleware `requireCapability(capability)` que barra a requisição com `403` se o usuário não tiver a capacidade — isso deixa explícito, rota a rota, o que cada perfil pode fazer, em vez de espalhar `if (role === "admin")` pelo código.
 
 ### 2.3 Banco de dados e migrations

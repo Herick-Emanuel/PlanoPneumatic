@@ -14,10 +14,11 @@ test("login rejects invalid credentials", async () => {
 
 test("login creates a session for valid credentials and me exposes capabilities", async () => {
 	const admin = await h.createUser("admin", { email: "admin@example.com" });
-	const login = await h.api("POST", "/api/auth/login", { body: { email: "admin@example.com", password: "StrongPass123!" } });
+	const { response: login, cookies } = await h.loginWithCookies("admin@example.com");
 	assert.equal(login.status, 200);
 	assert.equal(login.body.user.role, "admin");
-	const me = await h.api("GET", "/api/auth/me", { token: login.body.token });
+	assert.equal(login.body.token, undefined, "o token nao vai no corpo (fica so no cookie HttpOnly)");
+	const me = await h.api("GET", "/api/auth/me", { cookies });
 	assert.equal(me.status, 200);
 	assert.ok(me.body.user.capabilities.includes("cases.decide"));
 	assert.ok(admin.id);
@@ -38,7 +39,7 @@ test("operator cannot list users or assign cases", async () => {
 
 test("manager can create an operator but not a manager; admin can create any non-admin role", async () => {
 	const manager = await h.createUser("manager");
-	const body = { name: "Novo", email: "novo@example.com", password: "StrongPass123!" };
+	const body = { name: "Novo", email: "novo@example.com", password: "Pastilha-de-Freio-Verde-12" };
 	assert.equal((await h.api("POST", "/api/users", { token: manager.token, body: { ...body, role: "operator" } })).status, 201);
 	assert.equal((await h.api("POST", "/api/users", { token: manager.token, body: { ...body, email: "outro@example.com", role: "manager" } })).status, 400);
 	const admin = await h.createUser("admin");
@@ -56,8 +57,8 @@ test("admin edits a user's profile and resets the password", async () => {
 	assert.equal(edit.status, 200);
 	assert.equal(edit.body.user.role, "logistics");
 	assert.equal((await h.api("GET", "/api/auth/me", { token: operator.token })).status, 401, "mudar o perfil encerra as sessoes");
-	assert.equal((await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "BrandNew123!" } })).status, 204);
-	const login = await h.api("POST", "/api/auth/login", { body: { email: operator.email, password: "BrandNew123!" } });
+	assert.equal((await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "Senha-Provisoria-Cinza-48" } })).status, 204);
+	const login = await h.api("POST", "/api/auth/login", { body: { email: operator.email, password: "Senha-Provisoria-Cinza-48" } });
 	assert.equal(login.status, 200);
 	const manager = await h.createUser("manager");
 	assert.equal((await h.api("PATCH", `/api/users/${operator.id}`, { token: manager.token, body: { name: "x" } })).status, 403);

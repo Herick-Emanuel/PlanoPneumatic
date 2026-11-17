@@ -342,3 +342,33 @@ tr.sla-warning td:first-child { box-shadow: inset 3px 0 #e0962f; }
     .inline-form > label, .inline-form > .button { flex: 1 1 100%; }
     .palette { padding-top: 8vh; }
 }
+
+/* Utilitarios que substituem estilos inline (a CSP nao permite 'unsafe-inline' em estilos). */
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.my-12 { margin: 12px 0; }
+.flex-spacer { flex: 1; }
+.pre-wrap { white-space: pre-wrap; }
+.comment-body { margin: 4px 0 10px; }
+.compact-list { margin: 6px 0 0; }
+.stat-figure { font-size: 24px; }
+.action-link { display: contents; color: inherit; text-decoration: none; }
+.plain-fieldset { border: 0; padding: 0; margin: 0; }
+.plain-legend { font-size: 11px; font-weight: 700; }
+.checkbox-row { display: flex; gap: 6px; font-weight: 400; }
+.align-end-button { align-self: end; justify-self: start; margin-bottom: 2px; }
+
+/* Telas de acesso, MFA e sessoes */
+.auth-details { margin: 4px 0; }
+.auth-details summary { cursor: pointer; color: var(--muted, #5b6b80); font-size: 13px; }
+.password-hint { font-size: 12px; margin: 0; }
+.mfa-step { display: grid; gap: 12px; }
+.mfa-qr { width: 200px; height: 200px; background: #fff; padding: 8px; border-radius: 8px; border: 1px solid var(--line, #d9e1ec); }
+.mfa-secret { display: inline-block; font-size: 15px; letter-spacing: 1px; padding: 6px 8px; background: var(--surface-2, #f2f5f9); border-radius: 6px; word-break: break-all; }
+.recovery-codes { columns: 2; margin: 0; padding-left: 20px; font-size: 15px; }
+.recovery-codes code { letter-spacing: 1px; }
+.account-sections { display: grid; gap: 16px; }
+.session-current { font-weight: 700; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.audit-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 12px; }
+.audit-details { font-size: 12px; max-width: 420px; overflow-wrap: anywhere; }

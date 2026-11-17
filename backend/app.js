@@ -3,17 +3,24 @@ const fs = require("node:fs");
 const express = require("express");
 const { config } = require("./config");
 const { database } = require("./db");
-const { securityHeaders, cors } = require("./middleware/security");
+const { securityHeaders, cors, originCheck } = require("./middleware/security");
 const { requestId, requestLogger, errorHandler } = require("./middleware/errors");
+const { requestContext } = require("./services/audit");
 const metrics = require("./services/metrics");
+const { safeEqual } = require("./security/crypto");
 
 const app = express();
+app.disable("x-powered-by");
+// IP real do cliente atras do proxy (Railway/Nginx). Ver TRUST_PROXY e PROXY_SHARED_SECRET em docs/seguranca.md.
+app.set("trust proxy", config.trustProxy);
 
 app.use(requestId);
+app.use(requestContext);
 app.use(requestLogger);
 app.use(metrics.metricsMiddleware);
 app.use(securityHeaders);
 app.use(cors);
+app.use("/api", originCheck);
 app.use(express.json({ limit: "1mb" }));
 // O service worker leva o ID do build: cada deploy invalida o cache do app.
 app.get("/sw.js", (request, response) => {
@@ -39,7 +46,7 @@ app.get("/api/metrics", async (request, response, next) => {
 	try {
 		const token = process.env.METRICS_TOKEN;
 		if (!token) return response.status(404).json({ message: "Rota nao encontrada." });
-		if (request.get("authorization") !== `Bearer ${token}`) return response.status(401).json({ message: "Nao autorizado." });
+		if (!safeEqual(request.get("authorization") || "", `Bearer ${token}`)) return response.status(401).json({ message: "Nao autorizado." });
 		return response.type("text/plain; version=0.0.4").send(await metrics.render());
 	} catch (error) { return next(error); }
 });
