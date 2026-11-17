@@ -1,0 +1,15 @@
+# Varredura de segredos (CI). Mantem as regras padrao do gitleaks e ignora apenas as senhas
+# ficticias usadas pelos testes automatizados (precisam ser "fortes" para passar na politica de senha).
+title = "PlanoPneumatic"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Senhas e chaves ficticias de testes automatizados"
+paths = [
+  '''(^|/)backend/test/''',
+  '''(^|/)e2e/''',
+  '''(^|/)playwright\.config\.js$''',
+  '''(^|/)\.env$'''
+]
