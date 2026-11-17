@@ -5,10 +5,7 @@
 /* ------------------------------------------------------------------ login */
 .login-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(400px, .9fr); min-height: 100vh; }
 .login-visual {
-    background:
-        radial-gradient(1200px 600px at 110% 110%, rgba(61, 133, 220, .35), transparent 60%),
-        radial-gradient(700px 500px at -10% -20%, rgba(29, 111, 214, .25), transparent 60%),
-        linear-gradient(160deg, #0b2f5b 0%, #071f3d 70%);
+    background: #0b2f5b;
     color: #fff;
     display: flex;
     flex-direction: column;
@@ -16,14 +13,6 @@
     overflow: hidden;
     padding: 48px 56px;
     position: relative;
-}
-.login-visual::after {
-    background-image: linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
-    background-size: 44px 44px;
-    content: "";
-    inset: 0;
-    mask-image: radial-gradient(circle at 70% 60%, #000 0%, transparent 70%);
-    position: absolute;
 }
 .login-visual > * { position: relative; z-index: 1; }
 .brand-light img { height: 40px; }
@@ -44,9 +33,7 @@
 /* ------------------------------------------------------------------ boas-vindas */
 .welcome-row {
     align-items: center;
-    background:
-        radial-gradient(500px 220px at 100% 0%, rgba(61, 133, 220, .28), transparent 70%),
-        linear-gradient(120deg, #0b2f5b, #123f75);
+    background: #0b2f5b;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     color: #fff;
@@ -88,7 +75,7 @@
 .bar-chart > p { align-self: center; margin: 0 auto; }
 .chart-column { align-items: center; display: flex; flex: 1 1 0; flex-direction: column; gap: 6px; height: 100%; justify-content: flex-end; max-width: 56px; min-width: 18px; position: relative; }
 .chart-column span {
-    background: linear-gradient(180deg, var(--chart-1), color-mix(in srgb, var(--chart-1) 70%, #0b2f5b));
+    background: var(--chart-1);
     border-radius: 6px 6px 2px 2px;
     min-height: 4px;
     transition: filter .15s;
@@ -102,7 +89,7 @@
 .distribution-row > div { align-items: baseline; display: flex; justify-content: space-between; }
 .distribution-row strong { font-size: 13.5px; font-weight: 600; }
 .distribution-row span { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 700; }
-.distribution-row i { background: linear-gradient(90deg, var(--chart-1), var(--chart-2)); border-radius: 99px; display: block; height: 8px; max-width: 100%; }
+.distribution-row i { background: var(--chart-1); border-radius: 99px; display: block; height: 8px; max-width: 100%; }
 .distribution-row:has(i) { background: none; }
 
 /* ------------------------------------------------------------------ pendencias e alertas */

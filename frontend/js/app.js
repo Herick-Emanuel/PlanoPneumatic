@@ -203,7 +203,61 @@ pwaInstallButton?.addEventListener("click", async () => {
   refreshInstallBlock();
 });
 
+// Esqueci a senha, redefinicao (?reset=) e primeiro acesso por convite (?convite=).
+const authForms = { login: loginForm, forgot: document.querySelector("#forgot-form"), reset: document.querySelector("#reset-form") };
+const authTitles = { login: "Entrar no sistema", forgot: "Recuperar acesso", reset: "Criar nova senha" };
+function showAuthView(name, title) {
+  Object.entries(authForms).forEach(([key, form]) => form?.classList.toggle("hidden", key !== name));
+  document.querySelector("#login-title").textContent = title || authTitles[name];
+  document.querySelector("#login-title + .muted")?.classList.toggle("hidden", name !== "login");
+  authForms[name]?.querySelector("input")?.focus();
+}
+document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => {
+  if (button.dataset.authView === "login") window.history.replaceState(null, "", "/");
+  showAuthView(button.dataset.authView);
+}));
+authForms.forgot?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const note = document.querySelector("#forgot-feedback");
+  if (!form.email.value.trim()) { note.textContent = "Informe seu e-mail."; return; }
+  form.querySelector("button[type=submit]").disabled = true;
+  try { await apiRequest("/api/auth/forgot-password", { method: "POST", json: { email: form.email.value } }); note.textContent = "Pronto. Se o e-mail estiver cadastrado, o link chega em alguns minutos (confira também o spam)."; } catch (error) { note.textContent = error.message; } finally { form.querySelector("button[type=submit]").disabled = false; }
+});
+let resetToken = "";
+authForms.reset?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const note = document.querySelector("#reset-feedback");
+  if (form.password.value.length < 8) { note.textContent = "A senha precisa ter pelo menos 8 caracteres."; return; }
+  if (form.password.value !== form.confirm.value) { note.textContent = "As senhas não conferem."; return; }
+  form.querySelector("button[type=submit]").disabled = true;
+  try {
+    await apiRequest("/api/auth/reset-password", { method: "POST", json: { token: resetToken, password: form.password.value } });
+    window.history.replaceState(null, "", "/");
+    showAuthView("login");
+    PP.toast("Senha salva. Entre com a nova senha.", "success");
+  } catch (error) { note.textContent = error.message; } finally { form.querySelector("button[type=submit]").disabled = false; }
+});
+async function openTokenFlow() {
+  const params = new URLSearchParams(window.location.search);
+  resetToken = params.get("reset") || params.get("convite") || "";
+  if (!resetToken) return false;
+  showLogin();
+  try {
+    const info = await apiRequest(`/api/auth/token/${encodeURIComponent(resetToken)}`);
+    const first = esc(info.name.split(" ")[0]);
+    showAuthView("reset", info.purpose === "invite" ? "Bem-vindo ao sistema" : "Criar nova senha");
+    document.querySelector("#reset-intro").innerHTML = info.purpose === "invite" ? `Olá, ${first}. Defina a senha do seu primeiro acesso (${esc(info.email)}).` : `Olá, ${first}. Escolha a nova senha para ${esc(info.email)}.`;
+  } catch (error) {
+    showAuthView("forgot", "Link expirado");
+    document.querySelector("#forgot-feedback").textContent = error.message;
+  }
+  return true;
+}
+
 (async function bootstrap() {
+  if (await openTokenFlow()) return;
   const session = PP.getSession();
   if (!session?.token) return showLogin();
   try {

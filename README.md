@@ -18,8 +18,10 @@ flowchart LR
 - Dashboard operacional com indicadores, atencao e proximas acoes.
 - Triagem de pedidos de venda, bases de troca e garantias.
 - Historico com filtros, consulta de detalhes, alteracao de status e edicao de dados.
-- Relatorios operacionais.
-- Administracao de usuarios e criacao de contas.
+- Relatorios operacionais (ultimos 90 dias por padrao) com exportacao XLSX/PDF/CSV e envios agendados por e-mail.
+- Administracao de usuarios, convite por e-mail e recuperacao de senha pelo login.
+- Integracao com o Omie: clientes, produtos e selecao de pedidos/NF-e para abrir processos.
+- Avisos no sistema, por e-mail e por WhatsApp (cada pessoa escolhe os canais).
 - Conta do usuario e configuracoes do sistema.
 
 ## Requisitos
@@ -158,4 +160,6 @@ O workflow `.github/workflows/ci.yml` roda lint, `npm audit`, varredura de segre
 
 `.github/dependabot.yml` mantem npm, Docker e GitHub Actions atualizados. `.github/workflows/backup.yml` faz o dump diario (artefato com retencao de 30 dias, fora do provedor) e o teste mensal de restauracao; configure o secret `BACKUP_DATABASE_URL`.
 
-Use `.env.homolog.example` e `.env.production.example` como modelos; valores reais ficam nos secrets da plataforma. Novas variaveis: `BUILD_ID` (versiona o cache do PWA), `MAX_ATTACHMENT_BYTES`, `DATABASE_STATEMENT_TIMEOUT_MS`, `METRICS_TOKEN` (habilita `GET /api/metrics`), `SLA_CHECK_INTERVAL_MS`.
+Use `.env.homolog.example` e `.env.production.example` como modelos; valores reais ficam nos secrets da plataforma. Novas variaveis: `BUILD_ID` (versiona o cache do PWA), `MAX_ATTACHMENT_BYTES`, `DATABASE_STATEMENT_TIMEOUT_MS`, `METRICS_TOKEN` (habilita `GET /api/metrics`), `SLA_CHECK_INTERVAL_MS`. Em producao, `FRONTEND_ORIGIN` e `API_PUBLIC_URL` sao obrigatorias. Canais opcionais: `SMTP_*`/`MAIL_FROM` (e-mail), `WHATSAPP_*` (WhatsApp), `SENTRY_DSN` (erros), `CLAMAV_HOST` (antivirus; `docker compose --profile antivirus up`). Detalhes em [docs/railway.md](docs/railway.md).
+
+Acessibilidade: `npx playwright test e2e/a11y.spec.js` roda o axe-core (WCAG 2.1 AA) nas telas principais, em modo claro e escuro.

@@ -33,3 +33,8 @@
     .process-intro { align-items: flex-start; flex-direction: column; }
     .process-form > .form-actions { bottom: 8px; }
 }
+
+/* F4: resultado do antivirus em cada anexo */
+.scan-badge { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.scan-badge.clean { background: var(--success-soft, #e3f4ea); color: var(--success-ink, #1c6b3d); }
+.scan-badge.warn { background: var(--warning-soft, #fdf0dc); color: var(--warning-ink, #8a4b0a); }

@@ -6,8 +6,20 @@ const { permissionMatrix } = require("../domain/permissions");
 const { rateLimit } = require("../middleware/security");
 const { requireAuth, createSession, hashToken, bearerToken } = require("../middleware/auth");
 const { logEvent, badRequest, wrap } = require("../middleware/errors");
+const mailer = require("../services/mailer");
 
 const router = express.Router();
+
+// Token de uso unico: "reset" vale 30 minutos; "invite" (primeiro acesso) vale 72 horas.
+async function issueToken(userId, purpose) {
+	const token = crypto.randomBytes(32).toString("hex");
+	await database.query("DELETE FROM password_reset_tokens WHERE user_id = $1 OR expires_at <= NOW()", [userId]);
+	await database.query(
+		`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, purpose) VALUES ($1, $2, NOW() + INTERVAL '${purpose === "invite" ? "72 hours" : "30 minutes"}', $3)`,
+		[userId, hashToken(token), purpose]
+	);
+	return token;
+}
 
 // Hash fixo usado para igualar o tempo de resposta quando o usuario nao existe (evita enumeracao por timing).
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync("invalid-placeholder-password", 12);
@@ -29,12 +41,17 @@ router.post("/login", rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }), wrap(asy
 router.post("/forgot-password", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), wrap(async (request, response) => {
 	const email = String(request.body.email || "").trim().toLowerCase();
 	if (email) {
-		const { rows } = await database.query("SELECT id FROM users WHERE email = $1 AND active = TRUE", [email]);
+		const { rows } = await database.query("SELECT id, name, email FROM users WHERE email = $1 AND active = TRUE", [email]);
 		if (rows[0]) {
-			const token = crypto.randomBytes(32).toString("hex");
-			await database.query("DELETE FROM password_reset_tokens WHERE user_id = $1 OR expires_at <= NOW()", [rows[0].id]);
-			await database.query("INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')", [rows[0].id, hashToken(token)]);
+			const token = await issueToken(rows[0].id, "reset");
 			if (process.env.NODE_ENV !== "production") logEvent("password_reset_token_dev", { userId: rows[0].id, token });
+			await mailer.send({
+				to: rows[0].email,
+				subject: "PlanoPneumatic: redefinição de senha",
+				title: "Redefina sua senha",
+				lines: [`Olá, ${rows[0].name.split(" ")[0]}.`, "Recebemos um pedido para redefinir a sua senha. O link vale por 30 minutos e só pode ser usado uma vez.", "Se não foi você, ignore este e-mail: sua senha continua a mesma."],
+				action: { label: "Definir nova senha", url: mailer.appUrl(`/?reset=${token}`) }
+			}).catch((error) => logEvent("password_reset_mail_error", { error: error.message }));
 		}
 	}
 	return response.json({ message: "Se o e-mail estiver cadastrado, enviaremos instrucoes para redefinir a senha." });
@@ -59,4 +76,11 @@ router.post("/logout", requireAuth, wrap(async (request, response) => {
 
 router.get("/me", requireAuth, (request, response) => response.json({ user: { ...request.user, capabilities: permissionMatrix[request.user.role] || [] } }));
 
-module.exports = { router };
+// Informa se o token ainda vale (a tela usa para mostrar o formulario certo ou avisar que expirou).
+router.get("/token/:token", wrap(async (request, response) => {
+	const { rows } = await database.query("SELECT t.purpose, u.name, u.email FROM password_reset_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > NOW() AND u.active = TRUE", [hashToken(String(request.params.token))]);
+	if (!rows[0]) return response.status(404).json({ message: "Este link expirou ou já foi usado. Peça um novo.", code: "TOKEN_INVALID" });
+	return response.json({ purpose: rows[0].purpose, name: rows[0].name, email: rows[0].email });
+}));
+
+module.exports = { router, issueToken };

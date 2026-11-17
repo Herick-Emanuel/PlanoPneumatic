@@ -18,6 +18,41 @@ document.head.appendChild(sharedShellScript);
 	const table = (heads, rows, empty = "Nenhum registro.") => `<div class="table-wrap"><table><thead><tr>${heads.map((head) => `<th>${esc(head)}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${heads.length}">${PP.emptyState(empty)}</td></tr>`}</tbody></table></div>`;
 	const filterQuery = (form) => { const params = new URLSearchParams(new FormData(form)); [...params.keys()].forEach((key) => { if (!params.get(key)) params.delete(key); }); return params.toString(); };
 
+	// F11: envios agendados (o arquivo chega por e-mail com os filtros escolhidos).
+	async function renderSchedules(host) {
+		const [{ schedules }, meta] = await Promise.all([api.get("/api/reports/schedules"), PP.meta()]);
+		const weekdays = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+		const hours = Array.from({ length: 24 }, (_, hour) => `<option value="${hour}" ${hour === 7 ? "selected" : ""}>${String(hour).padStart(2, "0")}h</option>`).join("");
+		const rows = schedules.map((item) => `<tr><td><strong>${esc(item.name)}</strong>${item.filters?.type ? `<br><small class="muted">${esc(item.filters.type)}</small>` : ""}</td><td>${esc(item.description)}</td><td>${esc(item.format.toUpperCase())}</td><td>${item.lastSentAt ? esc(PP.formatDateTime(item.lastSentAt)) : "—"}${item.lastError ? `<br><small class="feedback">${esc(item.lastError)}</small>` : ""}</td><td><span class="table-status ${item.active ? "green" : "red"}">${item.active ? "Ativo" : "Pausado"}</span></td><td><div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-send-schedule="${esc(item.id)}">Enviar agora</button><button class="button button-secondary compact-button" type="button" data-toggle-schedule="${esc(item.id)}" data-active="${!item.active}">${item.active ? "Pausar" : "Retomar"}</button><button class="button button-secondary compact-button" type="button" data-delete-schedule="${esc(item.id)}">Excluir</button></div></td></tr>`);
+		host.innerHTML = section("Automático", "Envios agendados", `<p class="muted">O relatório chega no seu e-mail como anexo. Cada envio traz o período desde o envio anterior (1 dia, 7 dias ou 1 mês), com as suas permissões atuais.</p><form id="schedule-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" maxlength="80" placeholder="Ex.: Garantias da semana" required /></label><label>Formato<select name="format"><option value="xlsx">Excel (XLSX)</option><option value="pdf">PDF</option><option value="csv">CSV</option></select></label><label>Frequência<select name="frequency"><option value="daily">Diário</option><option value="weekly" selected>Semanal</option><option value="monthly">Mensal (dia 1º)</option></select></label><label data-weekday>Dia da semana<select name="weekday">${weekdays.map((day, index) => `<option value="${index}" ${index === 1 ? "selected" : ""}>${day}</option>`).join("")}</select></label><label>Horário<select name="hour">${hours}</select></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label></div><div class="form-actions"><p id="schedule-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Agendar envio</button></div></form>${table(["Nome", "Quando", "Formato", "Último envio", "Situação", "Ação"], rows, "Nenhum envio agendado.")}`);
+		const form = host.querySelector("#schedule-form");
+		const syncWeekday = () => { host.querySelector("[data-weekday]").hidden = form.frequency.value !== "weekly"; };
+		form.frequency.addEventListener("change", syncWeekday);
+		syncWeekday();
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const feedback = host.querySelector("#schedule-feedback");
+			if (!form.name.value.trim()) { feedback.textContent = "Informe um nome."; return; }
+			try {
+				await api.post("/api/reports/schedules", { name: form.name.value, format: form.format.value, frequency: form.frequency.value, weekday: Number(form.weekday.value), hour: Number(form.hour.value), filters: form.type.value ? { type: form.type.value } : {} });
+				PP.toast("Envio agendado.", "success");
+				await renderSchedules(host);
+			} catch (error) { feedback.textContent = error.message; }
+		});
+		host.querySelectorAll("[data-send-schedule]").forEach((button) => button.addEventListener("click", async () => {
+			button.disabled = true;
+			try { const result = await api.post(`/api/reports/schedules/${button.dataset.sendSchedule}/send`, {}); PP.toast(`Relatório enviado (${result.rows} processo(s)).`, "success"); } catch (error) { PP.toast(error.message, "error"); }
+			await renderSchedules(host);
+		}));
+		host.querySelectorAll("[data-toggle-schedule]").forEach((button) => button.addEventListener("click", async () => {
+			try { await api.patch(`/api/reports/schedules/${button.dataset.toggleSchedule}`, { active: button.dataset.active === "true" }); await renderSchedules(host); } catch (error) { PP.toast(error.message, "error"); }
+		}));
+		host.querySelectorAll("[data-delete-schedule]").forEach((button) => button.addEventListener("click", async () => {
+			if (!(await PP.confirmAction("Excluir envio agendado", "O relatório deixa de ser enviado. Continuar?", "Excluir", true))) return;
+			try { await api.delete(`/api/reports/schedules/${button.dataset.deleteSchedule}`); await renderSchedules(host); } catch (error) { PP.toast(error.message, "error"); }
+		}));
+	}
+
 	// ---------------------------------------------------------------- Relatorios
 	async function reports() {
 		const meta = await PP.meta();
@@ -28,22 +63,26 @@ document.head.appendChild(sharedShellScript);
 			actions.querySelectorAll("a.button").forEach((link) => link.remove());
 			if (exportable) actions.insertAdjacentHTML("afterbegin", '<button class="button button-secondary compact-button" data-export="xlsx" type="button">Excel (XLSX)</button><button class="button button-secondary compact-button" data-export="pdf" type="button">PDF</button><button class="button button-secondary compact-button" data-export="csv" type="button">CSV</button>');
 		}
-		set(`<form id="report-filters" class="history-filters panel"><label>De<input name="from" type="date" /></label><label>Até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label><div class="filter-actions"><button class="button button-primary" type="submit">Aplicar</button></div></form><nav class="tabs" role="tablist" aria-label="Visões do relatório"><button class="active" role="tab" data-view="summary">Resumo</button><button role="tab" data-view="customer">Por cliente</button><button role="tab" data-view="product">Por produto (reincidência)</button><button role="tab" data-view="case">Por processo</button></nav><div id="report-view" aria-live="polite"></div>`);
+		const defaultFrom = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+		set(`<form id="report-filters" class="history-filters panel"><label>De<input name="from" type="date" value="${defaultFrom}" aria-describedby="report-period-hint" /></label><label>Até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label><div class="filter-actions"><button class="button button-primary" type="submit">Aplicar</button></div><p id="report-period-hint" class="muted filter-hint">Por padrão, os últimos 90 dias. Apague as datas para ver todo o período.</p></form><nav class="tabs" role="tablist" aria-label="Visões do relatório"><button class="active" role="tab" data-view="summary">Resumo</button><button role="tab" data-view="customer">Por cliente</button><button role="tab" data-view="product">Por produto (reincidência)</button><button role="tab" data-view="case">Por processo</button>${exportable ? '<button role="tab" data-view="schedules">Envios agendados</button>' : ""}</nav><div id="report-view" aria-live="polite"></div>`);
 		const form = document.querySelector("#report-filters");
+		const reportQuery = () => { const query = filterQuery(form); return form.from.value || form.to.value ? query : `${query}${query ? "&" : ""}period=all`; };
 		let view = "summary";
 		const renderView = async () => {
 			const host = document.querySelector("#report-view");
 			host.innerHTML = PP.skeleton(4);
 			try {
 				if (view === "summary") {
-					const data = await api.get(`/api/reports/summary?${filterQuery(form)}`);
+					const data = await api.get(`/api/reports/summary?${reportQuery()}`);
 					host.innerHTML = `<section class="indicator-grid report-cards">${card("Total de casos", data.totals.total)}${card("Aguardando documento", data.totals.pending, "orange")}${card("Garantias em análise", data.totals.guarantees_in_analysis, "red")}${card("Concluídos", data.totals.completed, "green")}</section>
 					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Casos por tipo</h2></div></div><div class="report-bars">${data.byType.map((item) => `<div class="report-bar"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i style="width:${Math.max(10, item.value / Math.max(data.totals.total, 1) * 100)}%"></i></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
 					<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Prazo</p><h2>Processos vencidos</h2></div><span class="process-status">${data.stalled.length}</span></div>${table(["Processo", "Cliente", "Status", "Vencimento"], data.stalled.slice(0, 10).map((item) => `<tr><td><a class="table-link" href="/caso.html?id=${encodeURIComponent(item.id)}">${esc(item.id)}</a></td><td>${esc(item.client)}</td><td>${esc(PP.statusLabel(item.status))}</td><td>${esc(PP.formatDateTime(item.dueAt))}</td></tr>`), "Nenhum processo vencido.")}</article></section>
 					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Produtividade</p><h2>Por responsável</h2></div></div>${table(["Responsável", "Processos", "Concluídos"], data.productivity.map((item) => `<tr><td>${esc(item.user)}</td><td>${esc(item.total)}</td><td>${esc(item.completed)}</td></tr>`))}</article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Rastreabilidade</p><h2>Eventos recentes</h2></div></div><div class="event-list">${data.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.id)} · ${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small></div></div>`).join("") || '<p class="muted">Sem eventos.</p>'}</div></article></section>`;
 				} else if (view === "customer" || view === "product") {
-					const data = await api.get(`/api/reports/by-${view}?${filterQuery(form)}`);
+					const data = await api.get(`/api/reports/by-${view}?${reportQuery()}`);
 					host.innerHTML = section(view === "customer" ? "Clientes" : "Produtos", view === "customer" ? "Ocorrências por cliente" : "Reincidência por produto", table([view === "customer" ? "Cliente" : "Produto", "Total", "Garantias", "Trocas", "Pedidos", "Peças", "Último movimento"], data.rows.map((row) => `<tr><td><strong>${esc(row.label)}</strong>${view === "product" ? `<br><small class="muted">${esc(row.key)}</small>` : ""}</td><td>${esc(row.total)}</td><td>${row.warranties > 1 && view === "product" ? `<span class="table-status red">${esc(row.warranties)} (reincidente)</span>` : esc(row.warranties)}</td><td>${esc(row.exchanges)}</td><td>${esc(row.orders)}</td><td>${esc(row.quantity)}</td><td>${esc(PP.formatDateTime(row.lastAt))}</td></tr>`)));
+				} else if (view === "schedules") {
+					await renderSchedules(host);
 				} else {
 					host.innerHTML = section("Processo", "Relatório de um processo", '<form id="case-report-form" class="inline-form"><label>Número do processo<input name="id" placeholder="Ex.: GAR-2026-0045" required /></label><button class="button button-primary compact-button" type="submit">Gerar</button></form><div id="case-report" style="margin-top:16px"></div>');
 					host.querySelector("#case-report-form").addEventListener("submit", async (event) => {
@@ -97,13 +136,16 @@ document.head.appendChild(sharedShellScript);
 		}));
 	}
 
-	async function accountPage(user) {
-		set(`<section class="panel account-panel"><p class="eyebrow">Meu acesso</p><h2>Configurações da conta</h2><p class="muted">Atualize seus dados pessoais. O perfil de acesso (${esc(PP.roleLabel(user.role))}) é administrado pelo sistema.</p><form id="account-form" class="form account-form" novalidate><label>Nome<input name="name" value="${esc(user.name)}" required /></label><label>E-mail<input value="${esc(user.email)}" disabled /></label><label>Nova senha<input name="password" type="password" autocomplete="new-password" placeholder="Deixe em branco para manter a atual" /></label><button class="button button-primary" type="submit">Salvar alterações <span>→</span></button><p id="account-feedback" class="feedback" role="alert"></p></form></section>`);
+	async function accountPage() {
+		const { user, channels } = await api.get("/api/account");
+		const toggle = (name, title, hint, checked, enabled) => `<label class="setting-row"><span><strong>${esc(title)}</strong><small>${esc(hint)}</small></span><input type="checkbox" name="${name}" ${checked ? "checked" : ""} ${enabled ? "" : "disabled"} /></label>`;
+		set(`<section class="panel account-panel"><p class="eyebrow">Meu acesso</p><h2>Configurações da conta</h2><p class="muted">Atualize seus dados pessoais. O perfil de acesso (${esc(PP.roleLabel(user.role))}) é administrado pelo sistema.</p><form id="account-form" class="form account-form" novalidate><label>Nome<input name="name" value="${esc(user.name)}" required /></label><label>E-mail<input value="${esc(user.email)}" disabled /></label><label>Celular (WhatsApp)<input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="${esc(user.phone || "")}" placeholder="(19) 99999-0000" /></label><label>Nova senha<input name="password" type="password" autocomplete="new-password" placeholder="Deixe em branco para manter a atual" /></label><fieldset class="account-channels"><legend>Onde receber os avisos</legend><p class="muted">Os avisos sempre aparecem no sino do sistema. Marque também os canais externos que quiser.</p>${toggle("notifyEmail", "E-mail", channels.email ? "Prazos, atribuições e menções no seu e-mail." : "Indisponível: o envio de e-mail ainda não foi configurado no servidor.", user.notifyEmail, channels.email)}${toggle("notifyWhatsapp", "WhatsApp", channels.whatsapp ? "Exige o celular preenchido acima. Você pode desligar quando quiser." : "Indisponível: o WhatsApp ainda não foi configurado no servidor.", user.notifyWhatsapp, channels.whatsapp)}</fieldset><button class="button button-primary" type="submit">Salvar alterações <span>→</span></button><p id="account-feedback" class="feedback" role="alert"></p></form></section>`);
 		document.querySelector("#account-form").addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
 			const feedback = document.querySelector("#account-feedback");
-			try { const result = await api.patch("/api/account", { name: form.name.value, password: form.password.value }); PP.fillProfile(result.user); form.password.value = ""; feedback.textContent = ""; PP.toast("Dados atualizados.", "success"); } catch (error) { feedback.textContent = error.message; }
+			if (form.notifyWhatsapp.checked && !form.phone.value.trim()) { feedback.textContent = "Preencha o celular para receber avisos pelo WhatsApp."; return; }
+			try { const result = await api.patch("/api/account", { name: form.name.value, password: form.password.value, phone: form.phone.value, notifyEmail: form.notifyEmail.checked, notifyWhatsapp: form.notifyWhatsapp.checked }); PP.fillProfile(result.user); form.password.value = ""; feedback.textContent = ""; PP.toast("Dados atualizados.", "success"); } catch (error) { feedback.textContent = error.message; }
 		});
 	}
 
@@ -114,7 +156,7 @@ document.head.appendChild(sharedShellScript);
 		const roleOptions = (isAdmin ? Object.keys(data.roles).filter((role) => role !== "admin") : ["operator"]).map((role) => `<option value="${esc(role)}">${esc(data.roles[role])}</option>`).join("");
 		const managers = data.users.filter((user) => user.role === "manager" && user.active);
 		const managerOptions = (current) => `<option value="">Sem time</option>${managers.map((manager) => `<option value="${esc(manager.id)}" ${manager.id === current ? "selected" : ""}>${esc(manager.name)}</option>`).join("")}`;
-		set(section("Acessos", "Usuários e perfis", `<form id="create-user-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required /></label><label>E-mail<input name="email" type="email" required /></label><label>Senha inicial<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label><label>Perfil<select name="role">${roleOptions}</select></label>${isAdmin ? `<label>Time<select name="managerId">${managerOptions(null)}</select></label>` : ""}</div><div class="form-actions"><p id="create-user-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar conta <span>+</span></button></div></form>${table(["Nome", "E-mail", "Perfil", "Time", "Status", "Ação"], data.users.map((user) => `<tr><td><strong>${esc(user.name)}</strong></td><td>${esc(user.email)}</td><td>${esc(data.roles[user.role] || user.role)}</td><td>${isAdmin && user.role === "operator" ? `<select data-transfer-user-id="${esc(user.id)}" aria-label="Time de ${esc(user.name)}">${managerOptions(user.managerId)}</select>` : esc(user.managerName || (user.role === "manager" ? "—" : "Sem time"))}</td><td><span class="table-status ${user.active ? "green" : "red"}">${user.active ? "Ativo" : "Bloqueado"}</span></td><td>${user.id === me.id ? "Conta atual" : `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-status-user="${esc(user.id)}" data-active="${!user.active}" data-name="${esc(user.name)}">${user.active ? "Bloquear" : "Ativar"}</button>${isAdmin ? `<button class="button button-secondary compact-button" type="button" data-edit-user="${esc(user.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-reset-user="${esc(user.id)}" data-name="${esc(user.name)}">Redefinir senha</button>` : ""}</div>`}</td></tr>`))}`, `<span class="process-status">${data.users.length} usuários</span>`));
+		set(section("Acessos", "Usuários e perfis", `<form id="create-user-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required /></label><label>E-mail<input name="email" type="email" required /></label><label>Senha inicial<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="Ou envie um convite" /></label><label>Perfil<select name="role">${roleOptions}</select></label>${isAdmin ? `<label>Time<select name="managerId">${managerOptions(null)}</select></label>` : ""}</div><label class="inline-check"><input type="checkbox" name="invite" checked /> Enviar convite por e-mail (a pessoa cria a própria senha; o link vale 72 h)</label><div class="form-actions"><p id="create-user-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar conta <span>+</span></button></div></form>${table(["Nome", "E-mail", "Perfil", "Time", "Status", "Ação"], data.users.map((user) => `<tr><td><strong>${esc(user.name)}</strong></td><td>${esc(user.email)}</td><td>${esc(data.roles[user.role] || user.role)}</td><td>${isAdmin && user.role === "operator" ? `<select data-transfer-user-id="${esc(user.id)}" aria-label="Time de ${esc(user.name)}">${managerOptions(user.managerId)}</select>` : esc(user.managerName || (user.role === "manager" ? "—" : "Sem time"))}</td><td><span class="table-status ${user.active ? "green" : "red"}">${user.active ? "Ativo" : "Bloqueado"}</span></td><td>${user.id === me.id ? "Conta atual" : `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-status-user="${esc(user.id)}" data-active="${!user.active}" data-name="${esc(user.name)}">${user.active ? "Bloquear" : "Ativar"}</button>${isAdmin ? `<button class="button button-secondary compact-button" type="button" data-edit-user="${esc(user.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-reset-user="${esc(user.id)}" data-name="${esc(user.name)}">Redefinir senha</button>` : ""}${user.active ? `<button class="button button-secondary compact-button" type="button" data-invite-user="${esc(user.id)}" data-name="${esc(user.name)}">Reenviar convite</button>` : ""}</div>`}</td></tr>`))}`, `<span class="process-status">${data.users.length} usuários</span>`));
 		const feedback = () => document.querySelector("#create-user-feedback");
 		content().querySelectorAll("[data-status-user]").forEach((button) => button.addEventListener("click", async () => {
 			const active = button.dataset.active === "true";
@@ -135,13 +177,23 @@ document.head.appendChild(sharedShellScript);
 			if (!answer) return;
 			try { await api.post(`/api/users/${button.dataset.resetUser}/reset-password`, { password: answer.password }); PP.toast("Senha redefinida.", "success"); } catch (error) { PP.toast(error.message, "error"); }
 		}));
+		content().querySelectorAll("[data-invite-user]").forEach((button) => button.addEventListener("click", async () => {
+			if (!(await PP.confirmAction("Reenviar convite", `Enviar a ${button.dataset.name} um link para criar a senha? Links anteriores deixam de valer.`, "Enviar"))) return;
+			try { const result = await api.post(`/api/users/${button.dataset.inviteUser}/invite`, {}); PP.toast(result.mailConfigured === false ? "E-mail não configurado no servidor." : "Convite enviado.", result.mailConfigured === false ? "info" : "success"); } catch (error) { PP.toast(error.message, "error"); }
+		}));
 		document.querySelector("#create-user-form").addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
 			const button = form.querySelector("button[type=submit]");
 			button.disabled = true;
 			feedback().textContent = "";
-			try { await api.post("/api/users", { name: form.name.value, email: form.email.value, password: form.password.value, role: form.role.value, managerId: form.managerId ? form.managerId.value || undefined : undefined }); PP.toast("Conta criada.", "success"); await usersPage(); }
+			try {
+				const invite = form.invite.checked;
+				if (!invite && form.password.value.length < 8) throw new Error("Defina uma senha inicial com 8 caracteres ou marque o envio de convite.");
+				const result = await api.post("/api/users", { name: form.name.value, email: form.email.value, password: invite ? undefined : form.password.value, invite, role: form.role.value, managerId: form.managerId ? form.managerId.value || undefined : undefined });
+				PP.toast(result.invited ? (result.mailConfigured ? "Conta criada e convite enviado." : "Conta criada. O e-mail não está configurado: o convite não foi enviado.") : "Conta criada.", result.invited && !result.mailConfigured ? "info" : "success");
+				await usersPage();
+			}
 			catch (error) { feedback().textContent = error.message; } finally { button.disabled = false; }
 		});
 	}
@@ -277,7 +329,82 @@ document.head.appendChild(sharedShellScript);
 		});
 	}
 
-	const pages = { reports, "reports-team": teamPerformance, "reports-managers": managerPerformance, settings: settingsPage, account: () => accountPage(me), users: usersPage, notifications: notificationsPage, audit: auditPage, integrations: integrationsPage, registry: registryPage, import: importPage };
+	// ------------------------------------------------- Pedidos e NF-e do Omie
+	// Nada e criado sozinho: a pessoa escolhe os registros e o tipo de processo.
+	async function omiePage() {
+		const status = await api.get("/api/omie/sync").catch(() => ({ configured: false }));
+		if (!status.configured) { set(section("ERP", "Omie", '<p class="feedback">Integração não configurada: defina OMIE_APP_KEY e OMIE_APP_SECRET no servidor.</p>')); return; }
+		const today = new Date();
+		const iso = (date) => date.toISOString().slice(0, 10);
+		const monthAgo = new Date(today.getTime() - 30 * 86400000);
+		const state = { kind: "orders", page: null, selected: new Map(), rows: [] };
+		set(`<nav class="tabs" role="tablist" aria-label="Origem no Omie"><button class="active" role="tab" aria-selected="true" data-kind="orders">Pedidos de venda</button><button role="tab" aria-selected="false" data-kind="invoices">Notas fiscais (NF-e)</button></nav>
+		<form id="omie-filters" class="history-filters panel"><label>De<input name="from" type="date" value="${iso(monthAgo)}" /></label><label>Até<input name="to" type="date" value="${iso(today)}" /></label><label data-invoice-only hidden>Notas<select name="type"><option value="todas">Entrada e saída</option><option value="saida">Saída</option><option value="entrada">Entrada (devoluções)</option></select></label><div class="filter-actions"><button class="button button-primary" type="submit">Buscar no Omie</button></div></form>
+		<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Seleção</p><h2 id="omie-list-title">Pedidos de venda</h2></div><div class="actions-cell"><label>Abrir como<select id="omie-case-type"><option>Pedido de venda</option><option>Base de troca</option><option>Garantia</option></select></label><button class="button button-primary compact-button" type="button" id="omie-import" disabled>Abrir processos</button></div></div><p class="muted">Os mais recentes aparecem primeiro. Marque até 20 registros por vez; o que já virou processo aparece com o número e não pode ser marcado de novo.</p><div id="omie-list" aria-live="polite"></div><div id="omie-pager" class="form-actions"></div><div id="omie-result"></div></section>`);
+		const form = document.querySelector("#omie-filters");
+		const importButton = document.querySelector("#omie-import");
+		const refreshButton = () => { importButton.disabled = !state.selected.size; importButton.textContent = state.selected.size ? `Abrir ${state.selected.size} processo(s)` : "Abrir processos"; };
+		const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+		const render = (data) => {
+			const list = document.querySelector("#omie-list");
+			const rows = state.kind === "orders" ? data.orders : data.invoices;
+			state.rows = rows;
+			const statusOf = (row) => {
+				if (row.cases.length) return `<span class="table-status green">${row.cases.map((number) => `<a class="table-link" href="/caso.html?id=${encodeURIComponent(number)}">${esc(number)}</a>`).join(", ")}</span>`;
+				if (row.cancelled) return '<span class="table-status red">Cancelado</span>';
+				if (row.isReturn) return '<span class="table-status orange">Devolução</span>';
+				if (state.kind === "orders") return `<span class="table-status">${row.invoiced ? "Faturado" : "Em aberto"}</span>`;
+				return `<span class="table-status">${row.type === "entrada" ? "Entrada" : "Saída"}</span>`;
+			};
+			list.innerHTML = table(["", state.kind === "orders" ? "Pedido" : "Nota", "Data", "Cliente", "Itens", "Total", "Situação"], rows.map((row) => {
+				const blocked = row.cases.length > 0 || row.cancelled;
+				const label = state.kind === "orders" ? `Pedido ${row.number}` : `NF ${row.number}${row.series ? `/${row.series}` : ""}`;
+				return `<tr${row.isReturn ? ' class="row-highlight"' : ""}><td><input type="checkbox" data-ref="${esc(row.ref)}" aria-label="Selecionar ${esc(label)}" ${blocked ? "disabled" : ""} ${state.selected.has(row.ref) ? "checked" : ""} /></td><td><strong>${esc(label)}</strong></td><td>${esc(row.date)}</td><td>${esc(row.customerName || "—")}${row.customerName ? "" : '<br><small class="muted">Cliente não sincronizado</small>'}</td><td>${esc(row.items.length)}<br><small class="muted">${esc(row.items.slice(0, 2).map((item) => item.description).join("; "))}${row.items.length > 2 ? "…" : ""}</small></td><td>${esc(brl(row.total))}</td><td>${statusOf(row)}</td></tr>`;
+			}), "Nada encontrado no período.");
+			list.querySelectorAll("[data-ref]").forEach((box) => box.addEventListener("change", () => {
+				if (box.checked && state.selected.size >= 20) { box.checked = false; PP.toast("No máximo 20 por vez.", "info"); return; }
+				if (box.checked) state.selected.set(box.dataset.ref, true); else state.selected.delete(box.dataset.ref);
+				refreshButton();
+			}));
+			const pager = document.querySelector("#omie-pager");
+			pager.innerHTML = data.totalPages > 1 ? `<span class="muted">Página ${data.totalPages - data.page + 1} de ${data.totalPages} · ${data.total} registro(s)</span><button class="button button-secondary compact-button" type="button" data-page="${data.page + 1}" ${data.page >= data.totalPages ? "disabled" : ""}>Mais recentes</button><button class="button button-secondary compact-button" type="button" data-page="${data.page - 1}" ${data.page <= 1 ? "disabled" : ""}>Mais antigos</button>` : `<span class="muted">${data.total} registro(s)</span>`;
+			pager.querySelectorAll("[data-page]").forEach((button) => button.addEventListener("click", () => { state.page = Number(button.dataset.page); load(); }));
+		};
+		const load = async () => {
+			const list = document.querySelector("#omie-list");
+			list.innerHTML = PP.skeleton(4);
+			const params = new URLSearchParams({ from: form.from.value, to: form.to.value });
+			if (state.page) params.set("page", state.page);
+			if (state.kind === "invoices") params.set("type", form.type.value);
+			try { render(await api.get(`/api/omie/${state.kind}?${params}`)); } catch (error) { list.innerHTML = PP.errorState(error.message); list.querySelector("[data-retry]")?.addEventListener("click", load); }
+		};
+		content().querySelectorAll("[data-kind]").forEach((tab) => tab.addEventListener("click", () => {
+			state.kind = tab.dataset.kind; state.page = null; state.selected.clear(); refreshButton();
+			content().querySelectorAll("[data-kind]").forEach((other) => { other.classList.toggle("active", other === tab); other.setAttribute("aria-selected", String(other === tab)); });
+			content().querySelector("[data-invoice-only]").hidden = state.kind !== "invoices";
+			document.querySelector("#omie-list-title").textContent = state.kind === "orders" ? "Pedidos de venda" : "Notas fiscais";
+			document.querySelector("#omie-case-type").value = state.kind === "orders" ? "Pedido de venda" : "Base de troca";
+			load();
+		}));
+		form.addEventListener("submit", (event) => { event.preventDefault(); state.page = null; load(); });
+		importButton.addEventListener("click", async () => {
+			const type = document.querySelector("#omie-case-type").value;
+			const refs = [...state.selected.keys()];
+			const confirmed = await PP.dialog({ title: "Abrir processos a partir do Omie", body: `<p>Serão abertos <strong>${refs.length}</strong> processo(s) do tipo <strong>${esc(type)}</strong>, já validados, com cliente, produto e documento de origem preenchidos.</p>`, confirmLabel: "Abrir processos" });
+			if (!confirmed) return;
+			importButton.disabled = true;
+			const result = document.querySelector("#omie-result");
+			try {
+				const data = await api.post("/api/omie/import", { kind: state.kind, type, refs });
+				result.innerHTML = table(["Registro", "Resultado"], data.results.map((entry) => `<tr><td>${esc(entry.ref)}</td><td>${entry.status === "created" ? `<span class="table-status green">Criado</span> <a class="table-link" href="/caso.html?id=${encodeURIComponent(entry.caseNumber)}">${esc(entry.caseNumber)}</a>` : `<span class="table-status ${entry.status === "skipped" ? "orange" : "red"}">${entry.status === "skipped" ? "Já existia" : "Erro"}</span> ${esc(entry.message)}`}</td></tr>`));
+				PP.toast(`${data.created} processo(s) aberto(s).`, data.created === refs.length ? "success" : "info");
+				state.selected.clear(); refreshButton(); await load();
+			} catch (error) { result.innerHTML = `<p class="feedback">${esc(error.message)}</p>`; refreshButton(); }
+		});
+		await load();
+	}
+
+	const pages = { omie: omiePage, reports,"reports-team": teamPerformance, "reports-managers": managerPerformance, settings: settingsPage, account: accountPage, users: usersPage, notifications: notificationsPage, audit: auditPage, integrations: integrationsPage, registry: registryPage, import: importPage };
 	try {
 		me = await PP.requireUser();
 		if (!me) return;

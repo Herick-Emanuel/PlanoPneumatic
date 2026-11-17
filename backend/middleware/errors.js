@@ -64,6 +64,8 @@ function errorHandler(error, request, response, next) {
 		return response.status(409).json({ message: "Ja existe um registro com estes dados.", code: "DUPLICATE", requestId: request.id });
 	}
 	logEvent("http_error", { requestId: request.id, method: request.method, path: request.path, error: error.message, stack: process.env.NODE_ENV === "production" ? undefined : error.stack });
+	// Carregado sob demanda para evitar dependencia circular (observability usa logEvent daqui).
+	require("../services/observability").captureServerError(error, { requestId: request.id, method: request.method, path: request.path, userId: request.user?.id });
 	return response.status(500).json({ message: "Erro interno do servidor.", code: "INTERNAL", requestId: request.id });
 }
 

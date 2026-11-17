@@ -26,7 +26,7 @@
     --brand-strong: #071f3d;
     --brand-hover: #123f75;
     --brand-contrast: #ffffff;
-    --accent: #1d6fd6;
+    --accent: #1a62c4;
     --accent-soft: #e8f1fd;
     --focus: #2b7fd1;
 
@@ -48,7 +48,7 @@
     --chart-track: #e7edf4;
 
     /* Menu lateral (escuro nos dois temas) */
-    --sidebar-bg: linear-gradient(180deg, #0b2f5b 0%, #071f3d 100%);
+    --sidebar-bg: #0b2f5b;
     --sidebar-text: #c9d6e6;
     --sidebar-muted: #8aa0bb;
     --sidebar-hover: rgba(255, 255, 255, .07);
@@ -107,7 +107,7 @@
         --chart-1: #5a9cf0;
         --chart-2: #3cc79a;
         --chart-track: #1f2d45;
-        --sidebar-bg: linear-gradient(180deg, #0c1a2e 0%, #08121f 100%);
+        --sidebar-bg: #0c1a2e;
         --shadow-xs: 0 1px 2px rgba(0, 0, 0, .3);
         --shadow-sm: 0 1px 3px rgba(0, 0, 0, .35);
         --shadow: 0 12px 32px rgba(0, 0, 0, .4);
@@ -146,7 +146,7 @@
     --chart-1: #5a9cf0;
     --chart-2: #3cc79a;
     --chart-track: #1f2d45;
-    --sidebar-bg: linear-gradient(180deg, #0c1a2e 0%, #08121f 100%);
+    --sidebar-bg: #0c1a2e;
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, .3);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, .35);
     --shadow: 0 12px 32px rgba(0, 0, 0, .4);
@@ -177,7 +177,7 @@ code { background: var(--surface-3); border-radius: 4px; font-size: 12px; paddin
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 
-.hidden { display: none !important; }
+.hidden, [hidden] { display: none !important; }
 .muted, small { color: var(--text-3); }
 .eyebrow {
     color: var(--accent);
@@ -389,7 +389,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; cursor: poi
 .profile-mini { align-items: center; display: flex; gap: 10px; min-width: 0; padding: 4px; }
 .profile-mini > span {
     align-items: center;
-    background: linear-gradient(135deg, #3d85dc, #1f5ca8);
+    background: #1f5ca8;
     border-radius: 10px;
     color: #fff;
     display: inline-flex;
@@ -746,3 +746,8 @@ td .table-link, td:has(> .table-link) { white-space: nowrap; }
 @media (max-width: 680px) {
     .topbar > .breadcrumb { display: none; }
 }
+
+/* Botao com aparencia de link (esqueci a senha, voltar) */
+.link-button { background: none; border: 0; padding: 4px 0; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; justify-self: start; }
+.link-button:hover { text-decoration-thickness: 2px; }
+.link-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }

@@ -23,7 +23,7 @@
 .report-bar > div { align-items: baseline; display: flex; justify-content: space-between; }
 .report-bar strong { font-size: 13.5px; font-weight: 600; }
 .report-bar span { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 700; }
-.report-bar i { background: linear-gradient(90deg, var(--chart-1), var(--chart-2)); border-radius: 99px; display: block; height: 8px; min-width: 6%; }
+.report-bar i { background: var(--chart-1); border-radius: 99px; display: block; height: 8px; min-width: 6%; }
 .event-list { display: grid; }
 .team-performance-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
 .team-performance-grid .inline-form { margin-bottom: 14px; }
@@ -76,3 +76,16 @@
     #report-filters .filter-actions { grid-column: 1 / -1; }
     #report-filters .filter-actions .button { flex: 1; }
 }
+
+/* Selecao Omie: notas de devolucao ganham destaque discreto */
+tr.row-highlight td { background: color-mix(in srgb, var(--warning, #b45309) 8%, transparent); }
+
+.inline-check { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 12px 0 4px; }
+.inline-check input { width: auto; }
+.account-channels { border: 1px solid var(--line, #d8e0ea); border-radius: 12px; padding: 12px 16px; margin: 4px 0; display: grid; gap: 8px; }
+.account-channels legend { font-weight: 700; padding: 0 6px; }
+
+.filter-hint { grid-column: 1 / -1; margin: 0; font-size: 12.5px; }
+
+/* Filtros de relatorios e da selecao Omie (mesmo desenho do historico) */
+.admin-page-content .history-filters { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }

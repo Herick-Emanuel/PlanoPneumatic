@@ -86,7 +86,7 @@ document.head.appendChild(sharedShellScript);
 		const logisticsPanel = data.type === "Base de troca" ? `<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Logística reversa</p><h2>Retorno do item</h2></div><span class="table-status blue">${esc(data.logisticsStatus || "Sem status")}</span></div>${permissions.logistics && permissions.edit ? `<form id="logistics-form" class="inline-form"><label>Rastreio<input name="trackingCode" value="${esc(data.trackingCode)}" maxlength="80" /></label><label>Status<select name="logisticsStatus">${options(meta.logisticsStatuses, data.logisticsStatus)}</select></label><button class="button button-primary compact-button" type="submit">Salvar</button></form>` : `<p class="muted">Rastreio: ${esc(data.trackingCode || "—")}</p>`}</article>` : "";
 		const assigneePanel = permissions.assign && !data.archived ? `<label>Responsável<select id="assignee-select">${assignees.map((user) => `<option value="${esc(user.id)}" ${user.id === data.assignedTo ? "selected" : ""}>${esc(user.name)} (${esc(PP.roleLabel(user.role))})</option>`).join("")}${assignees.some((user) => user.id === data.assignedTo) ? "" : `<option value="" selected>${esc(data.responsible)}</option>`}</select></label>` : `<div><small>Responsável</small><strong>${esc(data.responsible)}</strong></div>`;
 		const kinds = meta.attachmentKinds.filter((kind) => kind !== "laudo" || permissions.technical);
-		const attachments = data.attachments.map((item) => `<div class="attachment-row"><div><strong>${esc(item.fileName)}</strong><small>${esc(item.kind)}${item.stage ? ` · ${esc(PP.statusLabel(item.stage))}` : ""}${item.sizeBytes ? ` · ${esc(PP.fileSize(item.sizeBytes))}` : ""} · ${esc(item.uploadedBy || "")} ${esc(PP.formatDateTime(item.createdAt))}</small></div><div class="actions-cell">${item.hasFile ? `<button class="button button-secondary compact-button" type="button" data-open-attachment="${esc(item.id)}">Abrir</button>` : /^https:\/\//i.test(item.fileUrl || "") ? `<a class="button button-secondary compact-button" href="${esc(item.fileUrl)}" target="_blank" rel="noopener noreferrer">Link</a>` : ""}${permissions.edit ? `<button class="button button-secondary compact-button" type="button" data-remove-attachment="${esc(item.id)}" aria-label="Remover ${esc(item.fileName)}">Remover</button>` : ""}</div></div>`).join("") || PP.emptyState("Nenhum documento anexado", "Anexe fotos, laudos ou comprovantes.");
+		const attachments = data.attachments.map((item) => `<div class="attachment-row"><div><strong>${esc(item.fileName)}</strong><small>${esc(item.kind)}${item.stage ? ` · ${esc(PP.statusLabel(item.stage))}` : ""}${item.sizeBytes ? ` · ${esc(PP.fileSize(item.sizeBytes))}` : ""} · ${esc(item.uploadedBy || "")} ${esc(PP.formatDateTime(item.createdAt))}</small>${item.scanStatus === "clean" ? '<span class="scan-badge clean">Verificado pelo antivírus</span>' : item.scanStatus === "error" ? '<span class="scan-badge warn" title="O antivírus estava indisponível no envio">Não verificado</span>' : ""}</div><div class="actions-cell">${item.hasFile ? `<button class="button button-secondary compact-button" type="button" data-open-attachment="${esc(item.id)}">Abrir</button>` : /^https:\/\//i.test(item.fileUrl || "") ? `<a class="button button-secondary compact-button" href="${esc(item.fileUrl)}" target="_blank" rel="noopener noreferrer">Link</a>` : ""}${permissions.edit ? `<button class="button button-secondary compact-button" type="button" data-remove-attachment="${esc(item.id)}" aria-label="Remover ${esc(item.fileName)}">Remover</button>` : ""}</div></div>`).join("") || PP.emptyState("Nenhum documento anexado", "Anexe fotos, laudos ou comprovantes.");
 		const timeline = data.events.map((event) => {
 			const changes = event.details?.changes ? `<details><summary>Ver alterações</summary><ul>${Object.entries(event.details.changes).map(([column, change]) => `<li><strong>${esc(COLUMN_LABELS[column] || column)}:</strong> ${esc(change.before ?? "—")} → ${esc(change.after ?? "—")}</li>`).join("")}</ul></details>` : "";
 			return `<div class="timeline-entry"><strong>${esc(EVENT_LABELS[event.type] || event.type)} · ${esc(event.description)}</strong><small>${esc(event.actorName || event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small>${changes}</div>`;
@@ -156,7 +156,10 @@ document.head.appendChild(sharedShellScript);
 			PP.toast(`Status alterado para ${PP.statusLabel(status)}.`, "success", canUndo ? "Desfazer" : undefined, canUndo ? async () => {
 				try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}/status`, { status: previous }); await reload(); PP.toast("Alteração desfeita."); } catch (error) { PP.toast(error.message, "error"); }
 			} : undefined);
-		} catch (error) { PP.toast(error.message, "error"); }
+		} catch (error) {
+			if (PP.outbox.queueIfOffline(error, { method: "PATCH", url: `/api/cases/${encodeURIComponent(caseId)}/status`, body: { status, reason: answer.reason || undefined, destination: answer.destination || undefined }, label: `${caseId}: status ${PP.statusLabel(status)}` })) return;
+			PP.toast(error.message, "error");
+		}
 	}
 
 	function editFieldHtml([key, label, kind]) {
@@ -225,16 +228,25 @@ document.head.appendChild(sharedShellScript);
 			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}/assignee`, { assignedTo: Number(event.target.value) }); await reload(); PP.toast("Responsável atualizado.", "success"); } catch (error) { PP.toast(error.message, "error"); await reload(); }
 		});
 		root.querySelectorAll("[data-checklist]").forEach((input) => input.addEventListener("change", async () => {
-			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}/checklist/${input.dataset.checklist}`, { completed: input.checked }); await reload(); } catch (error) { input.checked = !input.checked; PP.toast(error.message, "error"); }
+			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}/checklist/${input.dataset.checklist}`, { completed: input.checked }); await reload(); } catch (error) {
+				if (PP.outbox.queueIfOffline(error, { method: "PATCH", url: `/api/cases/${encodeURIComponent(caseId)}/checklist/${input.dataset.checklist}`, body: { completed: input.checked }, label: `${caseId}: checklist` })) return;
+				input.checked = !input.checked; PP.toast(error.message, "error");
+			}
 		}));
 		root.querySelector("#comment-form")?.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
-			try { await api.post(`/api/cases/${encodeURIComponent(caseId)}/comments`, { body: form.body.value }); form.reset(); await loadComments(); } catch (error) { PP.toast(error.message, "error"); }
+			try { await api.post(`/api/cases/${encodeURIComponent(caseId)}/comments`, { body: form.body.value }); form.reset(); await loadComments(); } catch (error) {
+				if (PP.outbox.queueIfOffline(error, { method: "POST", url: `/api/cases/${encodeURIComponent(caseId)}/comments`, body: { body: form.body.value }, label: `${caseId}: comentário` })) { form.reset(); return; }
+				PP.toast(error.message, "error");
+			}
 		});
 		root.querySelector("#report-form")?.addEventListener("submit", async (event) => {
 			event.preventDefault();
-			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}`, { technicalReport: event.currentTarget.technicalReport.value }); await reload(); PP.toast("Laudo salvo.", "success"); } catch (error) { PP.toast(error.message, "error"); }
+			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}`, { technicalReport: event.currentTarget.technicalReport.value }); await reload(); PP.toast("Laudo salvo.", "success"); } catch (error) {
+				if (PP.outbox.queueIfOffline(error, { method: "PATCH", url: `/api/cases/${encodeURIComponent(caseId)}`, body: { technicalReport: event.target.technicalReport.value }, label: `${caseId}: laudo` })) return;
+				PP.toast(error.message, "error");
+			}
 		});
 		root.querySelector("#take-ownership")?.addEventListener("click", async () => {
 			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}`, { technicalOwnerId: me.id }); await reload(); PP.toast("Você é o responsável técnico.", "success"); } catch (error) { PP.toast(error.message, "error"); }
@@ -242,7 +254,10 @@ document.head.appendChild(sharedShellScript);
 		root.querySelector("#logistics-form")?.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
-			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}`, { trackingCode: form.trackingCode.value, logisticsStatus: form.logisticsStatus.value }); await reload(); PP.toast("Logística atualizada.", "success"); } catch (error) { PP.toast(error.message, "error"); }
+			try { await api.patch(`/api/cases/${encodeURIComponent(caseId)}`, { trackingCode: form.trackingCode.value, logisticsStatus: form.logisticsStatus.value }); await reload(); PP.toast("Logística atualizada.", "success"); } catch (error) {
+				if (PP.outbox.queueIfOffline(error, { method: "PATCH", url: `/api/cases/${encodeURIComponent(caseId)}`, body: { trackingCode: form.trackingCode.value, logisticsStatus: form.logisticsStatus.value }, label: `${caseId}: logística` })) return;
+				PP.toast(error.message, "error");
+			}
 		});
 		root.querySelectorAll("[data-open-attachment]").forEach((button) => button.addEventListener("click", () => PP.openFile(`/api/cases/${encodeURIComponent(caseId)}/attachments/${button.dataset.openAttachment}/file`).catch((error) => PP.toast(error.message, "error"))));
 		root.querySelectorAll("[data-remove-attachment]").forEach((button) => button.addEventListener("click", async () => {

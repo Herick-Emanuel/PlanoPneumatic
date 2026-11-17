@@ -7,6 +7,7 @@ const { wrap, forbidden } = require("../middleware/errors");
 const { buildCaseFilters } = require("../services/caseFilters");
 const reports = require("../services/reports");
 const exportsService = require("../services/exports");
+const reportSchedules = require("../services/reportSchedules");
 const { listQuerySchema } = require("../validators/cases");
 
 const router = express.Router();
@@ -15,14 +16,21 @@ router.use(requireAuth);
 // Relatorios usam os mesmos filtros da lista, sem paginacao.
 const filterQuery = listQuerySchema.omit({ sort: true, direction: true, page: true, pageSize: true });
 const parseFilters = (request) => filterQuery.parse(request.query);
+// Telas de relatorio: sem periodo informado, valem os ultimos 90 dias (period=all desliga o padrao).
+const DEFAULT_REPORT_DAYS = 90;
+function reportFilters(request) {
+	const filters = parseFilters(request);
+	if (!filters.from && !filters.to && request.query.period !== "all") filters.from = new Date(Date.now() - DEFAULT_REPORT_DAYS * 86400000).toISOString().slice(0, 10);
+	return filters;
+}
 
 function htmlCell(value) {
 	return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
 }
 
-router.get("/summary", wrap(async (request, response) => response.json(await reports.reportsSummary(request.user, parseFilters(request)))));
-router.get("/by-customer", wrap(async (request, response) => response.json({ rows: await reports.groupedReport(request.user, parseFilters(request), "customer") })));
-router.get("/by-product", wrap(async (request, response) => response.json({ rows: await reports.groupedReport(request.user, parseFilters(request), "product") })));
+router.get("/summary", wrap(async (request, response) => response.json(await reports.reportsSummary(request.user, reportFilters(request)))));
+router.get("/by-customer", wrap(async (request, response) => response.json({ rows: await reports.groupedReport(request.user, reportFilters(request), "customer") })));
+router.get("/by-product", wrap(async (request, response) => response.json({ rows: await reports.groupedReport(request.user, reportFilters(request), "product") })));
 
 router.get("/by-case/:caseNumber", wrap(async (request, response) => {
 	const cases = require("../services/cases");
@@ -72,6 +80,39 @@ router.get("/export.html", requireExport, wrap(async (request, response) => {
 	response.setHeader("Content-Type", "text/html; charset=utf-8");
 	response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
 	return response.send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatorio de processos</title><style>body{font:14px Arial;color:#17283a}h1{color:#092d57}table{border-collapse:collapse;width:100%}th,td{border:1px solid #dfe7ef;padding:8px;text-align:left}th{background:#f1f5f8}@media print{button{display:none}}</style></head><body><button onclick="print()">Imprimir / salvar PDF</button><h1>Relatorio de processos</h1><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Responsavel</th><th>Atualizado</th></tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`);
+}));
+
+// F11: envios agendados por e-mail (cada pessoa gerencia os proprios).
+const scheduleSchema = z.object({
+	name: z.string().trim().min(1, "Informe um nome.").max(80),
+	format: z.enum(["xlsx", "pdf", "csv"]),
+	frequency: z.enum(["daily", "weekly", "monthly"]),
+	weekday: z.coerce.number().int().min(0).max(6).optional(),
+	hour: z.coerce.number().int().min(0).max(23).default(7),
+	filters: filterQuery.omit({ from: true, to: true }).default({})
+});
+const withLabel = (schedule) => ({ ...schedule, description: reportSchedules.describe(schedule) });
+router.get("/schedules", requireExport, wrap(async (request, response) => response.json({ schedules: (await reportSchedules.list(request.user.id)).map(withLabel) })));
+router.post("/schedules", requireExport, wrap(async (request, response) => {
+	const data = scheduleSchema.parse(request.body);
+	if ((await reportSchedules.list(request.user.id)).length >= 10) throw forbidden("Limite de 10 envios agendados por pessoa.");
+	return response.status(201).json({ schedule: withLabel(await reportSchedules.create(request.user.id, data)) });
+}));
+router.patch("/schedules/:id", requireExport, wrap(async (request, response) => {
+	const { active } = z.object({ active: z.boolean() }).parse(request.body);
+	const schedule = await reportSchedules.update(request.user.id, Number(request.params.id), { active });
+	if (!schedule) return response.status(404).json({ message: "Agendamento nao encontrado.", code: "NOT_FOUND" });
+	return response.json({ schedule: withLabel(schedule) });
+}));
+router.delete("/schedules/:id", requireExport, wrap(async (request, response) => {
+	if (!(await reportSchedules.remove(request.user.id, Number(request.params.id)))) return response.status(404).json({ message: "Agendamento nao encontrado.", code: "NOT_FOUND" });
+	return response.status(204).send();
+}));
+router.post("/schedules/:id/send", requireExport, wrap(async (request, response) => {
+	const owned = (await reportSchedules.list(request.user.id)).some((schedule) => schedule.id === Number(request.params.id));
+	if (!owned) return response.status(404).json({ message: "Agendamento nao encontrado.", code: "NOT_FOUND" });
+	const result = await reportSchedules.deliver(Number(request.params.id));
+	return response.status(result.sent ? 200 : 422).json(result.sent ? result : { message: result.error, code: "SEND_FAILED" });
 }));
 
 module.exports = { router, buildCaseFilters };

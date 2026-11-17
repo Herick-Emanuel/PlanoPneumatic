@@ -232,31 +232,61 @@
 		window.open(URL.createObjectURL(blob), "_blank", "noopener");
 	}
 
-	// Fila offline: processos preenchidos sem conexao sao reenviados quando a internet volta.
+	// Fila offline: processos novos e alteracoes feitas sem conexao (status, checklist, comentario, laudo,
+	// logistica) sao reenviados na ordem quando a internet volta.
 	const OUTBOX_KEY = "pp-outbox";
 	const outbox = {
 		list() { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || []; } catch { return []; } },
 		save(list) { try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list)); } catch { /* sem armazenamento */ } },
 		add(payload) { this.save([...this.list(), { payload, queuedAt: new Date().toISOString() }]); },
+		// Guarda a requisicao quando o erro e de conexao; devolve true se guardou.
+		queueIfOffline(error, { method, url, body, label }) {
+			if (error?.status !== 0) return false;
+			this.save([...this.list(), { request: { method, url, body, label }, queuedAt: new Date().toISOString() }]);
+			toast(`Sem conexão: "${label}" foi guardado e será enviado quando a internet voltar.`, "info");
+			window.dispatchEvent(new CustomEvent("pp-outbox-changed"));
+			return true;
+		},
 		async flush() {
 			if (!getSession()?.token || outbox.flushing) return;
 			outbox.flushing = true;
 			try {
 				let pending = outbox.list();
 				while (pending.length) {
+					const entry = pending[0];
 					try {
-						const result = await api.post("/api/cases", pending[0].payload);
-						toast(`Processo ${result.case.id} enviado (estava na fila offline).`, "success");
+						if (entry.request) {
+							await request(entry.request.url, { method: entry.request.method, json: entry.request.body });
+							toast(`"${entry.request.label}" enviado (estava na fila offline).`, "success");
+						} else {
+							const result = await api.post("/api/cases", entry.payload);
+							toast(`Processo ${result.case.id} enviado (estava na fila offline).`, "success");
+						}
 					} catch (error) {
 						if (error.status === 0 || error.status === 401) break;
-						toast(`Um processo da fila offline foi recusado: ${error.message}`, "error");
+						toast(`Um item da fila offline foi recusado (${entry.request?.label || "processo novo"}): ${error.message}`, "error");
 					}
 					pending = pending.slice(1);
 					outbox.save(pending);
 				}
-			} finally { outbox.flushing = false; }
+			} finally { outbox.flushing = false; window.dispatchEvent(new CustomEvent("pp-outbox-changed")); }
 		}
 	};
+
+	// Erros do navegador vao para o servidor (log e Sentry). Limite: 5 por pagina, sem repetir a mesma mensagem.
+	const reportedErrors = new Set();
+	function reportClientError(message, extra = {}) {
+		const text = String(message || "Erro desconhecido").slice(0, 500);
+		if (!getSession()?.token || reportedErrors.has(text) || reportedErrors.size >= 5) return;
+		reportedErrors.add(text);
+		request("/api/client-errors", { method: "POST", json: { message: text, page: window.location.pathname, ...extra } }).catch(() => {});
+	}
+	window.addEventListener("error", (event) => reportClientError(event.message, { source: String(event.filename || "").slice(0, 300) || undefined, line: event.lineno || undefined, stack: event.error?.stack?.slice(0, 4000) }));
+	window.addEventListener("unhandledrejection", (event) => {
+		const reason = event.reason;
+		if (reason && typeof reason.status === "number") return; // erros de API ja tratados na tela
+		reportClientError(reason?.message || String(reason), { stack: reason?.stack?.slice(0, 4000) });
+	});
 	window.addEventListener("online", () => outbox.flush());
 	window.addEventListener("load", () => outbox.flush());
 

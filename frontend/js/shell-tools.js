@@ -104,7 +104,7 @@
 		}
 		const tools = document.createElement("div");
 		tools.className = "shell-tools";
-		tools.innerHTML = `<button type="button" class="tool-button search-trigger" data-open-search aria-label="Buscar processos (Ctrl+K)">${icon("search")}<span class="label">Buscar processo…</span><kbd>Ctrl K</kbd></button><button type="button" class="tool-button icon-only" data-theme-toggle></button><button type="button" class="tool-button icon-only" data-bell aria-label="Notificações" aria-haspopup="dialog" aria-expanded="false">${icon("bell")}<span class="bell-badge hidden"></span></button>`;
+		tools.innerHTML = `<button type="button" class="tool-button search-trigger" data-open-search aria-keyshortcuts="Control+K" title="Buscar processo (Ctrl+K)">${icon("search")}<span class="label">Buscar processo…</span><kbd>Ctrl K</kbd></button><button type="button" class="tool-button icon-only" data-theme-toggle></button><button type="button" class="tool-button icon-only" data-bell aria-label="Notificações" aria-haspopup="dialog" aria-expanded="false">${icon("bell")}<span class="bell-badge hidden"></span></button>`;
 		topbar.appendChild(tools);
 		tools.querySelector("[data-open-search]").addEventListener("click", openPalette);
 		const themeButton = tools.querySelector("[data-theme-toggle]");

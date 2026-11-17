@@ -10,6 +10,8 @@ const bcrypt = require("bcryptjs");
 const { database, initializeDatabase } = require("../db");
 const { createSession } = require("../middleware/auth");
 const { app } = require("../app");
+const notifications = require("../services/notifications");
+const mailer = require("../services/mailer");
 
 if (!/test/i.test(new URL(process.env.DATABASE_URL).pathname)) throw new Error("Recusando rodar testes em um banco cujo nome nao contem 'test'.");
 
@@ -30,6 +32,9 @@ async function teardown() {
 }
 
 async function resetDatabase() {
+	// Espera os envios de e-mail/WhatsApp pendentes antes de limpar as tabelas.
+	await notifications.idle();
+	mailer.outbox.length = 0;
 	await database.query("TRUNCATE users, cases, customers, products, case_sequences, webhooks, case_sla_config, app_settings RESTART IDENTITY CASCADE");
 	await database.query("INSERT INTO case_sla_config (type, days) VALUES ('Pedido de venda', 3), ('Base de troca', 5), ('Garantia', 7)");
 	await database.query("INSERT INTO app_settings (key, value) VALUES ('alerts_enabled', 'true'), ('auto_refresh', 'true'), ('require_documents', 'true')");

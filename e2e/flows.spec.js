@@ -6,9 +6,10 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 async function login(page, role) {
 	await page.goto("/");
 	await page.waitForLoadState("networkidle");
-	await page.getByLabel("E-mail").fill(users[role][0]);
-	await page.getByLabel("Senha").fill(users[role][1]);
-	await page.getByRole("button", { name: /Entrar/ }).click();
+	const form = page.locator("#login-form");
+	await form.getByLabel("E-mail").fill(users[role][0]);
+	await form.getByLabel("Senha").fill(users[role][1]);
+	await form.getByRole("button", { name: /Entrar/ }).click();
 	await expect(page.getByRole("heading", { name: "Dashboard operacional" })).toBeVisible();
 }
 

@@ -7,13 +7,17 @@ const { logEvent } = require("./middleware/errors");
 const { startRateLimitCleanup } = require("./middleware/security");
 const { startSlaScheduler } = require("./services/sla");
 const { startOmieScheduler } = require("./services/omie");
+const { startReportScheduler } = require("./services/reportSchedules");
+const observability = require("./services/observability");
 
 async function start() {
+	observability.init({ release: config.buildId });
 	for (const warning of validateConfig()) logEvent("config_warning", { warning });
 	await initializeDatabase();
 	startRateLimitCleanup();
 	startSlaScheduler(config.slaCheckIntervalMs);
 	startOmieScheduler();
+	startReportScheduler();
 	const server = app.listen(config.port, config.host, () => logEvent("server_started", { host: config.host, port: config.port }));
 
 	let shuttingDown = false;
@@ -24,6 +28,7 @@ async function start() {
 		const force = setTimeout(() => process.exit(1), 10000);
 		force.unref();
 		server.close(async () => {
+			await observability.flush();
 			await database.end().catch(() => {});
 			process.exit(0);
 		});

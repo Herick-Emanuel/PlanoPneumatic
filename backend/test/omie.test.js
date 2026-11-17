@@ -152,3 +152,51 @@ test("Omie pedindo para aguardar muito tempo nao trava a consulta de tela", asyn
 	assert.equal(response.body.code, "OMIE_RATE_LIMIT");
 	assert.match(response.body.message, /35 segundos/);
 });
+
+test("selecao Omie: lista os pedidos mais recentes primeiro, abre so os escolhidos e nao duplica", async () => {
+	const manager = await h.createUser("manager");
+	const operator = await h.createUser("operator");
+	await h.database.query("INSERT INTO customers (name, document, omie_code) VALUES ('Oficina Central', '11222333000181', 77)");
+	const order = (code, number, extra = {}) => ({ cabecalho: { codigo_pedido: code, numero_pedido: number, codigo_cliente: 77 }, infoCadastro: { dInc: "10/11/2026", faturado: "N", cancelado: "N" }, total_pedido: { valor_total_pedido: 301 }, det: [{ produto: { codigo: "VL-52", descricao: "Valvula 5/2", quantidade: 2, valor_unitario: 150.5 } }], ...extra });
+	handlers.ListarPedidos = (param) => jsonResponse(param.pagina === 1
+		? { pagina: 1, total_de_paginas: 2, total_de_registros: 3, pedido_venda_produto: [order(1, "1001")] }
+		: { pagina: 2, total_de_paginas: 2, total_de_registros: 3, pedido_venda_produto: [order(2, "1002"), order(3, "1003")] });
+	handlers.ConsultarPedido = (param) => jsonResponse({ pedido_venda_produto: order(param.codigo_pedido, `100${param.codigo_pedido}`) });
+
+	const list = await h.api("GET", "/api/omie/orders?from=2026-11-01&to=2026-11-15", { token: manager.token });
+	assert.equal(list.status, 200);
+	assert.equal(list.body.page, 2, "abre a ultima pagina (mais recentes)");
+	assert.deepEqual(list.body.orders.map((row) => row.number), ["1003", "1002"]);
+	assert.equal(list.body.orders[0].customerName, "Oficina Central");
+	const listCall = calls.find((call) => call.call === "ListarPedidos");
+	assert.equal(listCall.param[0].filtrar_por_data_de, "01/11/2026");
+
+	assert.equal((await h.api("GET", "/api/omie/orders", { token: operator.token })).status, 403, "operador nao importa");
+	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
+	assert.equal(imported.status, 200);
+	assert.equal(imported.body.created, 1);
+	const caseNumber = imported.body.results[0].caseNumber;
+	const { rows } = await h.database.query("SELECT status, client, omie_order_code, document_reference FROM cases WHERE case_number = $1", [caseNumber]);
+	assert.equal(rows[0].client, "Oficina Central");
+	assert.equal(Number(rows[0].omie_order_code), 3);
+	assert.equal(rows[0].document_reference, "Pedido Omie 1003");
+
+	const again = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
+	assert.equal(again.body.results[0].status, "skipped");
+	const relisted = await h.api("GET", "/api/omie/orders?page=2", { token: manager.token });
+	assert.deepEqual(relisted.body.orders[0].cases, [caseNumber]);
+	assert.equal((await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: Array.from({ length: 21 }, (_, index) => String(index)) } })).status, 400);
+});
+
+test("selecao Omie: notas de devolucao aparecem marcadas e viram base de troca", async () => {
+	const manager = await h.createUser("manager");
+	const nf = { ide: { nNF: "000456", serie: "1", dEmi: "12/11/2026", tpNF: "0", finNFe: "4" }, nfDestInt: { nCodCli: 77, cRazao: "Oficina Central", cnpj_cpf: "11.222.333/0001-81" }, total: { ICMSTot: { vNF: 150 } }, det: [{ prod: { cProd: "VL-52", xProd: "Valvula 5/2", qCom: 1, vUnCom: 150 } }] };
+	handlers.ListarNF = () => jsonResponse({ pagina: 1, total_de_paginas: 1, total_de_registros: 1, nfCadastro: [nf] });
+	const list = await h.api("GET", "/api/omie/invoices?type=entrada", { token: manager.token });
+	assert.equal(list.status, 200);
+	assert.equal(list.body.invoices[0].isReturn, true);
+	assert.equal(list.body.invoices[0].type, "entrada");
+	assert.equal(calls.find((call) => call.call === "ListarNF").param[0].tpNF, "0");
+	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "invoices", type: "Base de troca", refs: ["456"] } });
+	assert.equal(imported.body.created, 1, JSON.stringify(imported.body));
+});
