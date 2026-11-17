@@ -10,6 +10,8 @@ const bcrypt = require("bcryptjs");
 const { database, initializeDatabase } = require("../db");
 const { createSession } = require("../middleware/auth");
 const { app } = require("../app");
+const notifications = require("../services/notifications");
+const mailer = require("../services/mailer");
 
 if (!/test/i.test(new URL(process.env.DATABASE_URL).pathname)) throw new Error("Recusando rodar testes em um banco cujo nome nao contem 'test'.");
 
@@ -30,6 +32,9 @@ async function teardown() {
 }
 
 async function resetDatabase() {
+	// Espera os envios de e-mail/WhatsApp pendentes antes de limpar as tabelas.
+	await notifications.idle();
+	mailer.outbox.length = 0;
 	await database.query("TRUNCATE users, cases, customers, products, case_sequences, webhooks, case_sla_config, app_settings RESTART IDENTITY CASCADE");
 	await database.query("INSERT INTO case_sla_config (type, days) VALUES ('Pedido de venda', 3), ('Base de troca', 5), ('Garantia', 7)");
 	await database.query("INSERT INTO app_settings (key, value) VALUES ('alerts_enabled', 'true'), ('auto_refresh', 'true'), ('require_documents', 'true')");
@@ -49,7 +54,11 @@ async function createUser(role = "operator", overrides = {}) {
 async function api(method, path, { body, token, headers = {}, raw } = {}) {
 	const response = await fetch(`${baseUrl}${path}`, {
 		method,
-		headers: { ...(raw ? {} : body !== undefined ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
+		headers: {
+			...(raw ? {} : body !== undefined ? { "Content-Type": "application/json" } : {}),
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...headers
+		},
 		body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined)
 	});
 	const contentType = response.headers.get("content-type") || "";
@@ -61,7 +70,11 @@ async function api(method, path, { body, token, headers = {}, raw } = {}) {
 }
 
 const basePayload = (type = "Garantia", extra = {}) => ({
-	type, client: "Cliente Teste", product: "Compressor", productCode: "CP-01", quantity: 1,
+	type,
+	client: "Cliente Teste",
+	product: "Compressor",
+	productCode: "CP-01",
+	quantity: 1,
 	...(type === "Base de troca" ? { exchangeReason: "Erro de pedido", itemCondition: "Perfeito estado" } : {}),
 	...extra
 });
@@ -72,6 +85,9 @@ async function createCase(token, type = "Garantia", extra = {}) {
 	return response.body.case.id;
 }
 
-const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082", "hex");
+const PNG = Buffer.from(
+	"89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082",
+	"hex"
+);
 
 module.exports = { setup, teardown, resetDatabase, createUser, api, basePayload, createCase, database, PNG };

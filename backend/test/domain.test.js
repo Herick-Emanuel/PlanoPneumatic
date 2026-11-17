@@ -25,7 +25,11 @@ test("every type has a path from Criado to a final status", () => {
 		const queue = ["Criado"];
 		while (queue.length) {
 			const current = queue.shift();
-			for (const next of require("../domain/workflow").nextStatuses(type, current)) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+			for (const next of require("../domain/workflow").nextStatuses(type, current))
+				if (!seen.has(next)) {
+					seen.add(next);
+					queue.push(next);
+				}
 		}
 		assert.ok(seen.has("Encerrado"), `${type} deve poder ser encerrado`);
 		assert.ok(seen.has("Cancelado"));

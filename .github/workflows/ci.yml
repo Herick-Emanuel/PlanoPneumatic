@@ -35,6 +35,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run format
       - name: Auditoria de dependencias
         run: npm audit --omit=dev --audit-level=high
       - name: Varredura de segredos

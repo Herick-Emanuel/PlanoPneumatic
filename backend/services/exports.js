@@ -30,7 +30,10 @@ const safeCell = (value) => (typeof value === "string" && /^[=+\-@\t\r]/.test(va
 
 function toCsv(rows) {
 	const quote = (value) => `"${String(safeCell(value) ?? "").replace(/"/g, '""')}"`;
-	const lines = [COLUMNS.map((column) => quote(column.header)).join(";"), ...rows.map((row) => COLUMNS.map((column) => quote(cellValue(row, column.key))).join(";"))];
+	const lines = [
+		COLUMNS.map((column) => quote(column.header)).join(";"),
+		...rows.map((row) => COLUMNS.map((column) => quote(cellValue(row, column.key))).join(";"))
+	];
 	return `\ufeff${lines.join("\n")}`;
 }
 
@@ -53,11 +56,25 @@ function toPdf(rows, title = "Relatorio de processos") {
 		document.on("end", () => resolve(Buffer.concat(chunks)));
 		document.on("error", reject);
 		document.fontSize(16).text(title);
-		document.fontSize(9).fillColor("#555").text(`Gerado em ${formatDateTime(new Date())} - ${rows.length} processo(s)`).fillColor("#000").moveDown();
-		const columns = [["case_number", 90], ["client", 190], ["type", 90], ["status", 100], ["responsible", 110], ["updated_at", 110]];
+		document
+			.fontSize(9)
+			.fillColor("#555")
+			.text(`Gerado em ${formatDateTime(new Date())} - ${rows.length} processo(s)`)
+			.fillColor("#000")
+			.moveDown();
+		const columns = [
+			["case_number", 90],
+			["client", 190],
+			["type", 90],
+			["status", 100],
+			["responsible", 110],
+			["updated_at", 110]
+		];
 		const drawRow = (values, bold = false) => {
 			const y = document.y;
-			if (y > document.page.height - 50) { document.addPage(); }
+			if (y > document.page.height - 50) {
+				document.addPage();
+			}
 			let x = 30;
 			const top = document.y;
 			document.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8);

@@ -1,48 +1,169 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="/js/theme.js"></script>
-    <title>Plano Pneumatic | Nova triagem</title>
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#092d57" />
-    <link rel="icon" href="/icons/favicon-32.png" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/css/base.css" />
-    <link rel="stylesheet" href="/css/ui.css" />
-    <link rel="stylesheet" href="/css/triagem.css" />
-  </head>
-  <body>
-    <main class="dashboard-layout" data-triage-page>
-      <aside class="sidebar">
-        <div class="brand brand-sidebar"><img src="/logo.png" alt="Plano Pneumatic" /><span>OPERAÇÃO</span></div>
-        <nav class="nav" aria-label="Navegação principal">
-          <a class="nav-link" href="/"><span>▦</span> Dashboard</a>
-          <a class="nav-link active" href="/triagem.html"><span>◎</span> Triagem</a>
-          <a class="nav-link" href="/pedido-venda.html"><span>▤</span> Pedidos de venda</a>
-          <a class="nav-link" href="/base-troca.html"><span>↻</span> Base de troca</a>
-          <a class="nav-link" href="/garantia.html"><span>✓</span> Garantias</a>
-          <a class="nav-link" href="/historico.html"><span>!</span> Pendências</a>
-          <a class="nav-link" href="/relatorios.html"><span>◷</span> Relatórios</a>
-          <a class="nav-link" href="/configuracoes.html"><span>⚙</span> Configurações</a>
-          <a class="nav-link" href="/historico.html"><span>◷</span> Histórico</a>
-        </nav>
-        <div class="sidebar-bottom"><div class="profile-mini"><span id="profile-initials">--</span><div><strong id="profile-name">Carregando</strong><small id="profile-role">Perfil</small></div></div><button id="logout-button" class="logout-button" type="button">Sair <span>↗</span></button></div>
-      </aside>
-      <div class="dashboard-content triage-content">
-        <header class="topbar"><div><p class="eyebrow">Etapa 1 · Entrada do processo</p><h1>Nova triagem</h1></div><a class="back-link" href="/">← Voltar ao dashboard</a></header>
-        <section class="flow-steps"><div class="flow-step active" data-flow-step="1"><span>1</span><div><strong>Triagem</strong><small>Dados básicos</small></div></div><div class="flow-line"></div><div class="flow-step" data-flow-step="2"><span>2</span><div><strong>Validação</strong><small>Conferência</small></div></div><div class="flow-line"></div><div class="flow-step" data-flow-step="3"><span>3</span><div><strong>Encaminhamento</strong><small>Próxima área</small></div></div></section>
-        <div class="triage-workspace"><form id="triage-form" class="triage-form" novalidate>
-          <section class="triage-section" data-triage-stage="1"><div class="section-heading"><div><p class="eyebrow">01 · Classificação</p><h2>Qual é o tipo da demanda?</h2></div><span class="required-note">* Campos obrigatórios</span></div><div class="type-grid"><label class="type-option"><input type="radio" name="type" value="Pedido de venda" required /><span><strong>Pedido de venda</strong><small>Registrar uma nova venda</small></span></label><label class="type-option"><input type="radio" name="type" value="Base de troca" /><span><strong>Base de troca</strong><small>Registrar retorno de produto</small></span></label><label class="type-option"><input type="radio" name="type" value="Garantia" /><span><strong>Garantia</strong><small>Registrar peça recebida</small></span></label></div></section>
-          <div class="triage-columns" data-triage-stage="2"><section class="triage-section"><div class="section-heading"><div><p class="eyebrow">02 · Cliente</p><h2>Dados do cliente</h2></div></div><div class="field-grid"><label>Nome ou razão social *<input name="client" type="text" placeholder="Ex.: Auto Viação ABC Ltda." required /></label><label>CPF ou CNPJ<input name="clientDocument" type="text" placeholder="Documento do cliente" /></label></div></section><section class="triage-section"><div class="section-heading"><div><p class="eyebrow">03 · Produto</p><h2>Dados da peça</h2></div></div><div class="field-grid"><label>Produto *<input name="product" type="text" placeholder="Ex.: Compressor 85mm" required /></label><label>Código do produto *<input name="productCode" type="text" placeholder="Ex.: 411.141.03.00" required /></label><label>Quantidade *<input name="quantity" type="number" min="1" value="1" required /></label><label>Documento de referência<input name="documentReference" type="text" placeholder="Nota fiscal ou pedido" /></label></div></section></div>
-          <section class="triage-section" data-triage-stage="3"><div class="section-heading"><div><p class="eyebrow">04 · Contexto</p><h2>Observações iniciais</h2></div></div><label>Descreva brevemente a solicitação<textarea name="notes" rows="4" placeholder="Inclua informações importantes para a próxima etapa"></textarea></label></section>
-          <div class="form-actions"><p id="triage-feedback" class="feedback" role="alert"></p><a class="button button-secondary" href="/">Cancelar</a><button id="triage-back" class="button button-secondary" type="button">← Voltar</button><button id="triage-next" class="button button-primary" type="button">Continuar <span>→</span></button><button id="triage-submit" class="button button-primary hidden" type="submit">Salvar e encaminhar <span>→</span></button></div>
-        </form><aside class="triage-summary"><div class="summary-sticky"><p class="eyebrow">Resumo do cadastro</p><h2 id="summary-type">Tipo não definido</h2><div class="summary-status"><span class="summary-dot"></span><span id="summary-stage">Triagem em andamento</span></div><dl><div><dt>Cliente</dt><dd id="summary-client">Aguardando preenchimento</dd></div><div><dt>Produto</dt><dd id="summary-product">Aguardando preenchimento</dd></div><div><dt>Código</dt><dd id="summary-code">Aguardando preenchimento</dd></div><div><dt>Quantidade</dt><dd id="summary-quantity">1 unidade</dd></div></dl><div class="summary-next"><strong>Próximo passo</strong><p id="summary-next-text">Selecione o tipo da demanda para iniciar.</p></div></div></aside></div>
-      </div>
-    </main>
-    <script src="/js/api.js" defer></script>
-    <script src="/js/pwa.js" defer></script>
-    <script src="/js/triagem.js" defer></script>
-  </body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<script src="/js/theme.js"></script>
+		<title>Plano Pneumatic | Nova triagem</title>
+		<link rel="manifest" href="/manifest.json" />
+		<meta name="theme-color" content="#092d57" />
+		<link rel="icon" href="/icons/favicon-32.png" />
+		<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+		<link rel="stylesheet" href="/css/base.css" />
+		<link rel="stylesheet" href="/css/ui.css" />
+		<link rel="stylesheet" href="/css/triagem.css" />
+	</head>
+	<body>
+		<main class="dashboard-layout" data-triage-page>
+			<aside class="sidebar">
+				<div class="brand brand-sidebar"><img src="/logo.png" alt="Plano Pneumatic" /><span>OPERAÇÃO</span></div>
+				<nav class="nav" aria-label="Navegação principal">
+					<a class="nav-link" href="/"><span>▦</span> Dashboard</a>
+					<a class="nav-link active" href="/triagem.html"><span>◎</span> Triagem</a>
+					<a class="nav-link" href="/pedido-venda.html"><span>▤</span> Pedidos de venda</a>
+					<a class="nav-link" href="/base-troca.html"><span>↻</span> Base de troca</a>
+					<a class="nav-link" href="/garantia.html"><span>✓</span> Garantias</a>
+					<a class="nav-link" href="/historico.html"><span>!</span> Pendências</a>
+					<a class="nav-link" href="/relatorios.html"><span>◷</span> Relatórios</a>
+					<a class="nav-link" href="/configuracoes.html"><span>⚙</span> Configurações</a>
+					<a class="nav-link" href="/historico.html"><span>◷</span> Histórico</a>
+				</nav>
+				<div class="sidebar-bottom">
+					<div class="profile-mini">
+						<span id="profile-initials">--</span>
+						<div><strong id="profile-name">Carregando</strong><small id="profile-role">Perfil</small></div>
+					</div>
+					<button id="logout-button" class="logout-button" type="button">Sair <span>↗</span></button>
+				</div>
+			</aside>
+			<div class="dashboard-content triage-content">
+				<header class="topbar">
+					<div>
+						<p class="eyebrow">Etapa 1 · Entrada do processo</p>
+						<h1>Nova triagem</h1>
+					</div>
+					<a class="back-link" href="/">← Voltar ao dashboard</a>
+				</header>
+				<section class="flow-steps">
+					<div class="flow-step active" data-flow-step="1">
+						<span>1</span>
+						<div><strong>Triagem</strong><small>Dados básicos</small></div>
+					</div>
+					<div class="flow-line"></div>
+					<div class="flow-step" data-flow-step="2">
+						<span>2</span>
+						<div><strong>Validação</strong><small>Conferência</small></div>
+					</div>
+					<div class="flow-line"></div>
+					<div class="flow-step" data-flow-step="3">
+						<span>3</span>
+						<div><strong>Encaminhamento</strong><small>Próxima área</small></div>
+					</div>
+				</section>
+				<div class="triage-workspace">
+					<form id="triage-form" class="triage-form" novalidate>
+						<section class="triage-section" data-triage-stage="1">
+							<div class="section-heading">
+								<div>
+									<p class="eyebrow">01 · Classificação</p>
+									<h2>Qual é o tipo da demanda?</h2>
+								</div>
+								<span class="required-note">* Campos obrigatórios</span>
+							</div>
+							<div class="type-grid">
+								<label class="type-option"
+									><input type="radio" name="type" value="Pedido de venda" required /><span
+										><strong>Pedido de venda</strong><small>Registrar uma nova venda</small></span
+									></label
+								><label class="type-option"
+									><input type="radio" name="type" value="Base de troca" /><span
+										><strong>Base de troca</strong><small>Registrar retorno de produto</small></span
+									></label
+								><label class="type-option"
+									><input type="radio" name="type" value="Garantia" /><span><strong>Garantia</strong><small>Registrar peça recebida</small></span></label
+								>
+							</div>
+						</section>
+						<div class="triage-columns" data-triage-stage="2">
+							<section class="triage-section">
+								<div class="section-heading">
+									<div>
+										<p class="eyebrow">02 · Cliente</p>
+										<h2>Dados do cliente</h2>
+									</div>
+								</div>
+								<div class="field-grid">
+									<label>Nome ou razão social *<input name="client" type="text" placeholder="Ex.: Auto Viação ABC Ltda." required /></label
+									><label>CPF ou CNPJ<input name="clientDocument" type="text" placeholder="Documento do cliente" /></label>
+								</div>
+							</section>
+							<section class="triage-section">
+								<div class="section-heading">
+									<div>
+										<p class="eyebrow">03 · Produto</p>
+										<h2>Dados da peça</h2>
+									</div>
+								</div>
+								<div class="field-grid">
+									<label>Produto *<input name="product" type="text" placeholder="Ex.: Compressor 85mm" required /></label
+									><label>Código do produto *<input name="productCode" type="text" placeholder="Ex.: 411.141.03.00" required /></label
+									><label>Quantidade *<input name="quantity" type="number" min="1" value="1" required /></label
+									><label>Documento de referência<input name="documentReference" type="text" placeholder="Nota fiscal ou pedido" /></label>
+								</div>
+							</section>
+						</div>
+						<section class="triage-section" data-triage-stage="3">
+							<div class="section-heading">
+								<div>
+									<p class="eyebrow">04 · Contexto</p>
+									<h2>Observações iniciais</h2>
+								</div>
+							</div>
+							<label
+								>Descreva brevemente a solicitação<textarea name="notes" rows="4" placeholder="Inclua informações importantes para a próxima etapa"></textarea>
+							</label>
+						</section>
+						<div class="form-actions">
+							<p id="triage-feedback" class="feedback" role="alert"></p>
+							<a class="button button-secondary" href="/">Cancelar</a><button id="triage-back" class="button button-secondary" type="button">← Voltar</button
+							><button id="triage-next" class="button button-primary" type="button">Continuar <span>→</span></button
+							><button id="triage-submit" class="button button-primary hidden" type="submit">Salvar e encaminhar <span>→</span></button>
+						</div>
+					</form>
+					<aside class="triage-summary">
+						<div class="summary-sticky">
+							<p class="eyebrow">Resumo do cadastro</p>
+							<h2 id="summary-type">Tipo não definido</h2>
+							<div class="summary-status"><span class="summary-dot"></span><span id="summary-stage">Triagem em andamento</span></div>
+							<dl>
+								<div>
+									<dt>Cliente</dt>
+									<dd id="summary-client">Aguardando preenchimento</dd>
+								</div>
+								<div>
+									<dt>Produto</dt>
+									<dd id="summary-product">Aguardando preenchimento</dd>
+								</div>
+								<div>
+									<dt>Código</dt>
+									<dd id="summary-code">Aguardando preenchimento</dd>
+								</div>
+								<div>
+									<dt>Quantidade</dt>
+									<dd id="summary-quantity">1 unidade</dd>
+								</div>
+							</dl>
+							<div class="summary-next">
+								<strong>Próximo passo</strong>
+								<p id="summary-next-text">Selecione o tipo da demanda para iniciar.</p>
+							</div>
+						</div>
+					</aside>
+				</div>
+			</div>
+		</main>
+		<script src="/js/api.js" defer></script>
+		<script src="/js/pwa.js" defer></script>
+		<script src="/js/triagem.js" defer></script>
+	</body>
 </html>

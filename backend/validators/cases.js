@@ -1,18 +1,49 @@
 const { z } = require("zod");
-const { CASE_TYPES, STATUSES, ATTACHMENT_KINDS, EXCHANGE_REASONS, ITEM_CONDITIONS, RISK_LEVELS, LOGISTICS_STATUSES, WARRANTY_DESTINATIONS } = require("../domain/constants");
+const {
+	CASE_TYPES,
+	STATUSES,
+	ATTACHMENT_KINDS,
+	EXCHANGE_REASONS,
+	ITEM_CONDITIONS,
+	RISK_LEVELS,
+	LOGISTICS_STATUSES,
+	WARRANTY_DESTINATIONS
+} = require("../domain/constants");
 const { isValidDocument, onlyDigits } = require("./document");
 
 // Texto opcional: vazio vira undefined; espacos nas pontas sao removidos.
-const optionalText = (max) => z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.string().trim().max(max, `Maximo de ${max} caracteres.`).optional());
-const requiredText = (label, max) => z.string({ error: `Informe ${label}.` }).trim().min(1, `Informe ${label}.`).max(max, `Maximo de ${max} caracteres.`);
-const optionalEnum = (values, label) => z.preprocess((value) => (value === "" || value === null ? undefined : value), z.enum(values, { error: `${label} invalido.` }).optional());
-const money = z.preprocess((value) => {
-	if (value === "" || value === null || value === undefined) return undefined;
-	if (typeof value === "string") return Number(value.includes(",") ? value.replace(/\./g, "").replace(",", ".") : value);
-	return value;
-}, z.number({ error: "Valor invalido." }).min(0, "O valor nao pode ser negativo.").max(99999999.99, "Valor acima do limite.").optional());
-const optionalDate = z.preprocess((value) => (value === "" || value === null ? undefined : value), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data invalida (use AAAA-MM-DD).").optional());
-const optionalDocument = z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.string().refine(isValidDocument, "CPF ou CNPJ invalido.").transform(onlyDigits).optional());
+const optionalText = (max) =>
+	z.preprocess(
+		(value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+		z.string().trim().max(max, `Maximo de ${max} caracteres.`).optional()
+	);
+const requiredText = (label, max) =>
+	z
+		.string({ error: `Informe ${label}.` })
+		.trim()
+		.min(1, `Informe ${label}.`)
+		.max(max, `Maximo de ${max} caracteres.`);
+const optionalEnum = (values, label) =>
+	z.preprocess((value) => (value === "" || value === null ? undefined : value), z.enum(values, { error: `${label} invalido.` }).optional());
+const money = z.preprocess(
+	(value) => {
+		if (value === "" || value === null || value === undefined) return undefined;
+		if (typeof value === "string") return Number(value.includes(",") ? value.replace(/\./g, "").replace(",", ".") : value);
+		return value;
+	},
+	z.number({ error: "Valor invalido." }).min(0, "O valor nao pode ser negativo.").max(99999999.99, "Valor acima do limite.").optional()
+);
+const optionalDate = z.preprocess(
+	(value) => (value === "" || value === null ? undefined : value),
+	z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "Data invalida (use AAAA-MM-DD).")
+		.optional()
+);
+const optionalDocument = z.preprocess(
+	(value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+	z.string().refine(isValidDocument, "CPF ou CNPJ invalido.").transform(onlyDigits).optional()
+);
 
 const itemSchema = z.object({
 	productCode: requiredText("o codigo do produto", 80),
@@ -28,7 +59,11 @@ const baseFields = {
 	clientDocument: optionalDocument,
 	product: requiredText("o produto", 180),
 	productCode: requiredText("o codigo do produto", 80),
-	quantity: z.coerce.number({ error: "Informe uma quantidade valida." }).int("Informe uma quantidade valida.").min(1, "Informe uma quantidade valida.").max(1000000),
+	quantity: z.coerce
+		.number({ error: "Informe uma quantidade valida." })
+		.int("Informe uma quantidade valida.")
+		.min(1, "Informe uma quantidade valida.")
+		.max(1000000),
 	documentReference: optionalText(120),
 	notes: optionalText(4000),
 	customerId: z.coerce.number().int().positive().optional(),
@@ -63,13 +98,15 @@ function requireByType(data, context) {
 const createCaseSchema = z.object({ type: z.enum(CASE_TYPES, { error: "Tipo de processo invalido." }), ...baseFields }).superRefine(requireByType);
 
 // Na edicao todos os campos sao opcionais (so os enviados mudam); o tipo nao muda.
-const updateCaseSchema = z.object({
-	...baseFields,
-	technicalReport: optionalText(8000),
-	technicalOwnerId: z.coerce.number().int().positive().optional(),
-	warrantyDestination: optionalEnum(Object.keys(WARRANTY_DESTINATIONS), "Destino"),
-	logisticsStatus: optionalEnum(LOGISTICS_STATUSES, "Status de logistica")
-}).partial();
+const updateCaseSchema = z
+	.object({
+		...baseFields,
+		technicalReport: optionalText(8000),
+		technicalOwnerId: z.coerce.number().int().positive().optional(),
+		warrantyDestination: optionalEnum(Object.keys(WARRANTY_DESTINATIONS), "Destino"),
+		logisticsStatus: optionalEnum(LOGISTICS_STATUSES, "Status de logistica")
+	})
+	.partial();
 
 const statusSchema = z.object({
 	status: z.enum(STATUSES, { error: "Status invalido para o processo." }),
@@ -105,4 +142,16 @@ const attachmentMetaSchema = z.object({
 	stage: optionalText(60)
 });
 
-module.exports = { createCaseSchema, updateCaseSchema, statusSchema, listQuerySchema, attachmentMetaSchema, itemSchema, optionalText, requiredText, optionalDocument, money, optionalDate };
+module.exports = {
+	createCaseSchema,
+	updateCaseSchema,
+	statusSchema,
+	listQuerySchema,
+	attachmentMetaSchema,
+	itemSchema,
+	optionalText,
+	requiredText,
+	optionalDocument,
+	money,
+	optionalDate
+};

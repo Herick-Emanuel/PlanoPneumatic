@@ -29,16 +29,35 @@ beforeEach(async () => {
 	process.env.OMIE_APP_KEY = "key";
 	process.env.OMIE_APP_SECRET = "secret";
 });
-afterEach(() => { delete process.env.OMIE_APP_KEY; delete process.env.OMIE_APP_SECRET; });
+afterEach(() => {
+	delete process.env.OMIE_APP_KEY;
+	delete process.env.OMIE_APP_SECRET;
+});
 
-const client = (code, name, document, extra = {}) => ({ codigo_cliente_omie: code, razao_social: name, cnpj_cpf: document, email: `c${code}@x.com;outro@x.com`, telefone1_ddd: "11", telefone1_numero: "99999-0000", inativo: "N", ...extra });
+const client = (code, name, document, extra = {}) => ({
+	codigo_cliente_omie: code,
+	razao_social: name,
+	cnpj_cpf: document,
+	email: `c${code}@x.com;outro@x.com`,
+	telefone1_ddd: "11",
+	telefone1_numero: "99999-0000",
+	inativo: "N",
+	...extra
+});
 
 test("customer sync paginates, links by document, ignores invalid documents and is idempotent", async () => {
 	const manager = await h.createUser("manager");
 	await h.api("POST", "/api/customers", { token: manager.token, body: { name: "Local ABC", document: "11222333000181" } });
-	handlers.ListarClientes = (param) => jsonResponse(param.pagina === 1
-		? { pagina: 1, total_de_paginas: 2, clientes_cadastro: [client(10, "Auto Viacao ABC", "11.222.333/0001-81"), client(11, "Sem Documento", ""), client(12, "Doc Invalido", "123")] }
-		: { pagina: 2, total_de_paginas: 2, clientes_cadastro: [client(13, "Inativo", "529.982.247-25", { inativo: "S" })] });
+	handlers.ListarClientes = (param) =>
+		jsonResponse(
+			param.pagina === 1
+				? {
+						pagina: 1,
+						total_de_paginas: 2,
+						clientes_cadastro: [client(10, "Auto Viacao ABC", "11.222.333/0001-81"), client(11, "Sem Documento", ""), client(12, "Doc Invalido", "123")]
+					}
+				: { pagina: 2, total_de_paginas: 2, clientes_cadastro: [client(13, "Inativo", "529.982.247-25", { inativo: "S" })] }
+		);
 	const first = await h.api("POST", "/api/omie/sync", { token: manager.token, body: { kind: "customers" } });
 	assert.equal(first.status, 200);
 	assert.deepEqual([first.body.results[0].created, first.body.results[0].updated], [3, 1]);
@@ -61,12 +80,26 @@ test("customer sync paginates, links by document, ignores invalid documents and 
 test("product sync matches by code, creates new ones and skips incomplete records", async () => {
 	const manager = await h.createUser("manager");
 	await h.api("POST", "/api/products", { token: manager.token, body: { code: "CP-01", description: "Antigo" } });
-	handlers.ListarProdutos = () => jsonResponse({ total_de_paginas: 1, produto_servico_cadastro: [{ codigo_produto: 1, codigo: "cp-01", descricao: "Compressor" }, { codigo_produto: 2, codigo: "VL-9", descricao: "Valvula", inativo: "S" }, { codigo_produto: 3, codigo: "", descricao: "Sem codigo" }] });
+	handlers.ListarProdutos = () =>
+		jsonResponse({
+			total_de_paginas: 1,
+			produto_servico_cadastro: [
+				{ codigo_produto: 1, codigo: "cp-01", descricao: "Compressor" },
+				{ codigo_produto: 2, codigo: "VL-9", descricao: "Valvula", inativo: "S" },
+				{ codigo_produto: 3, codigo: "", descricao: "Sem codigo" }
+			]
+		});
 	const result = await h.api("POST", "/api/omie/sync", { token: manager.token, body: { kind: "products" } });
 	assert.deepEqual([result.body.results[0].created, result.body.results[0].updated, result.body.results[0].skipped], [1, 1, 1]);
 	assert.equal(calls[0].param[0].filtrar_apenas_omiepdv, "N", "sem esse filtro explicito o Omie devolve 0 produtos");
 	const { rows } = await h.database.query("SELECT code, description, omie_code, active FROM products ORDER BY omie_code");
-	assert.deepEqual(rows.map((row) => [row.code, row.description, row.active]), [["CP-01", "Compressor", true], ["VL-9", "Valvula", false]]);
+	assert.deepEqual(
+		rows.map((row) => [row.code, row.description, row.active]),
+		[
+			["CP-01", "Compressor", true],
+			["VL-9", "Valvula", false]
+		]
+	);
 });
 
 test("sync needs permission and configured credentials; failures are recorded", async () => {
@@ -90,7 +123,8 @@ test("sync needs permission and configured credentials; failures are recorded", 
 test("rate limit responses are retried", async () => {
 	const manager = await h.createUser("manager");
 	let attempts = 0;
-	handlers.ListarProdutos = () => (++attempts < 3 ? jsonResponse({ faultstring: "Consumo redundante detectado" }, 500) : jsonResponse({ total_de_paginas: 1, produto_servico_cadastro: [] }));
+	handlers.ListarProdutos = () =>
+		++attempts < 3 ? jsonResponse({ faultstring: "Consumo redundante detectado" }, 500) : jsonResponse({ total_de_paginas: 1, produto_servico_cadastro: [] });
 	assert.equal((await h.api("POST", "/api/omie/sync", { token: manager.token, body: { kind: "products" } })).status, 200);
 	assert.equal(attempts, 3);
 });
@@ -98,16 +132,31 @@ test("rate limit responses are retried", async () => {
 test("order lookup returns customer and items; invoice lookup validates the document", async () => {
 	const operator = await h.createUser("operator");
 	await h.database.query("INSERT INTO customers (name, document, omie_code) VALUES ('Oficina Central', '11222333000181', 77)");
-	handlers.ConsultarPedido = (param) => (param.numero_pedido === "1001"
-		? jsonResponse({ pedido_venda_produto: { cabecalho: { codigo_pedido: 555, numero_pedido: "1001", codigo_cliente: 77 }, det: [{ produto: { codigo: "VL-52", descricao: "Valvula 5/2", quantidade: 2, valor_unitario: 150.5 } }, { produto: { codigo: "", descricao: "x" } }] } })
-		: jsonResponse({ faultstring: "Pedido nao encontrado" }, 500));
+	handlers.ConsultarPedido = (param) =>
+		param.numero_pedido === "1001"
+			? jsonResponse({
+					pedido_venda_produto: {
+						cabecalho: { codigo_pedido: 555, numero_pedido: "1001", codigo_cliente: 77 },
+						det: [{ produto: { codigo: "VL-52", descricao: "Valvula 5/2", quantidade: 2, valor_unitario: 150.5 } }, { produto: { codigo: "", descricao: "x" } }]
+					}
+				})
+			: jsonResponse({ faultstring: "Pedido nao encontrado" }, 500);
 	const order = await h.api("GET", "/api/omie/orders/1001", { token: operator.token });
 	assert.equal(order.status, 200);
 	assert.equal(order.body.order.customer.name, "Oficina Central");
 	assert.deepEqual(order.body.order.items, [{ productCode: "VL-52", description: "Valvula 5/2", quantity: 2, unitPrice: 150.5 }]);
 	assert.equal((await h.api("GET", "/api/omie/orders/9", { token: operator.token })).status, 404);
 
-	handlers.ListarNF = () => jsonResponse({ nfCadastro: [{ ide: { nNF: "000123", dEmi: "02/11/2026" }, compl: { nIdPedido: 555 }, nfDestInt: { nCodCli: 77, cRazao: "Oficina Central", cnpj_cpf: "11.222.333/0001-81" } }] });
+	handlers.ListarNF = () =>
+		jsonResponse({
+			nfCadastro: [
+				{
+					ide: { nNF: "000123", dEmi: "02/11/2026" },
+					compl: { nIdPedido: 555 },
+					nfDestInt: { nCodCli: 77, cRazao: "Oficina Central", cnpj_cpf: "11.222.333/0001-81" }
+				}
+			]
+		});
 	const invoice = await h.api("GET", "/api/omie/invoices/123", { token: operator.token });
 	assert.equal(invoice.status, 200);
 	assert.equal(invoice.body.invoice.customer.document, "11222333000181");
@@ -120,19 +169,55 @@ test("order lookup returns customer and items; invoice lookup validates the docu
 test("F6: pedido que diverge do Omie e sinalizado e avisa os gerentes; pedido que confere nao", async () => {
 	const operator = await h.createUser("operator");
 	const manager = await h.createUser("manager");
-	handlers.ConsultarPedido = () => jsonResponse({ pedido_venda_produto: { cabecalho: { codigo_pedido: 9, numero_pedido: "2002", codigo_cliente: 0 }, det: [{ produto: { codigo: "VL-52", descricao: "Valvula", quantidade: 2, valor_unitario: 150 } }, { produto: { codigo: "CP-1", descricao: "Compressor", quantidade: 1, valor_unitario: 900 } }] } });
-	const body = (extra) => ({ token: operator.token, body: { type: "Pedido de venda", client: "Oficina", product: "Valvula", productCode: "VL-52", quantity: 2, unitPrice: 150, documentReference: "2002", omieOrderNumber: "2002", ...extra } });
+	handlers.ConsultarPedido = () =>
+		jsonResponse({
+			pedido_venda_produto: {
+				cabecalho: { codigo_pedido: 9, numero_pedido: "2002", codigo_cliente: 0 },
+				det: [
+					{ produto: { codigo: "VL-52", descricao: "Valvula", quantidade: 2, valor_unitario: 150 } },
+					{ produto: { codigo: "CP-1", descricao: "Compressor", quantidade: 1, valor_unitario: 900 } }
+				]
+			}
+		});
+	const body = (extra) => ({
+		token: operator.token,
+		body: {
+			type: "Pedido de venda",
+			client: "Oficina",
+			product: "Valvula",
+			productCode: "VL-52",
+			quantity: 2,
+			unitPrice: 150,
+			documentReference: "2002",
+			omieOrderNumber: "2002",
+			...extra
+		}
+	});
 	const diverging = await h.api("POST", "/api/cases", body({ quantity: 3, unitPrice: 140 }));
 	assert.equal(diverging.status, 201);
 	await require("../services/cases").idle();
 	const detail = (await h.api("GET", `/api/cases/${diverging.body.case.id}`, { token: manager.token })).body.case;
-	assert.deepEqual(detail.commercialDivergence.issues.map((issue) => `${issue.code}:${issue.kind}`).sort(), ["CP-1:item_ausente", "VL-52:preco", "VL-52:quantidade"]);
+	assert.deepEqual(detail.commercialDivergence.issues.map((issue) => `${issue.code}:${issue.kind}`).sort(), [
+		"CP-1:item_ausente",
+		"VL-52:preco",
+		"VL-52:quantidade"
+	]);
 	assert.equal(detail.omieOrderNumber, "2002");
 	assert.ok(detail.events.some((event) => event.type === "DIVERGENCIA"));
 	const notes = (await h.api("GET", "/api/notifications", { token: manager.token })).body.notifications;
 	assert.equal(notes[0].kind, "COMMERCIAL_DIVERGENCE");
 
-	const matching = await h.api("POST", "/api/cases", body({ documentReference: "2002-B", items: [{ productCode: "VL-52", description: "Valvula", quantity: 2, unitPrice: 150 }, { productCode: "CP-1", description: "Compressor", quantity: 1, unitPrice: 900 }] }));
+	const matching = await h.api(
+		"POST",
+		"/api/cases",
+		body({
+			documentReference: "2002-B",
+			items: [
+				{ productCode: "VL-52", description: "Valvula", quantity: 2, unitPrice: 150 },
+				{ productCode: "CP-1", description: "Compressor", quantity: 1, unitPrice: 900 }
+			]
+		})
+	);
 	await require("../services/cases").idle();
 	const ok = (await h.api("GET", `/api/cases/${matching.body.case.id}`, { token: manager.token })).body.case;
 	assert.equal(ok.commercialDivergence, null);
@@ -151,4 +236,77 @@ test("Omie pedindo para aguardar muito tempo nao trava a consulta de tela", asyn
 	assert.equal(response.status, 429);
 	assert.equal(response.body.code, "OMIE_RATE_LIMIT");
 	assert.match(response.body.message, /35 segundos/);
+});
+
+test("selecao Omie: lista os pedidos mais recentes primeiro, abre so os escolhidos e nao duplica", async () => {
+	const manager = await h.createUser("manager");
+	const operator = await h.createUser("operator");
+	await h.database.query("INSERT INTO customers (name, document, omie_code) VALUES ('Oficina Central', '11222333000181', 77)");
+	const order = (code, number, extra = {}) => ({
+		cabecalho: { codigo_pedido: code, numero_pedido: number, codigo_cliente: 77 },
+		infoCadastro: { dInc: "10/11/2026", faturado: "N", cancelado: "N" },
+		total_pedido: { valor_total_pedido: 301 },
+		det: [{ produto: { codigo: "VL-52", descricao: "Valvula 5/2", quantidade: 2, valor_unitario: 150.5 } }],
+		...extra
+	});
+	handlers.ListarPedidos = (param) =>
+		jsonResponse(
+			param.pagina === 1
+				? { pagina: 1, total_de_paginas: 2, total_de_registros: 3, pedido_venda_produto: [order(1, "1001")] }
+				: { pagina: 2, total_de_paginas: 2, total_de_registros: 3, pedido_venda_produto: [order(2, "1002"), order(3, "1003")] }
+		);
+	handlers.ConsultarPedido = (param) => jsonResponse({ pedido_venda_produto: order(param.codigo_pedido, `100${param.codigo_pedido}`) });
+
+	const list = await h.api("GET", "/api/omie/orders?from=2026-11-01&to=2026-11-15", { token: manager.token });
+	assert.equal(list.status, 200);
+	assert.equal(list.body.page, 2, "abre a ultima pagina (mais recentes)");
+	assert.deepEqual(
+		list.body.orders.map((row) => row.number),
+		["1003", "1002"]
+	);
+	assert.equal(list.body.orders[0].customerName, "Oficina Central");
+	const listCall = calls.find((call) => call.call === "ListarPedidos");
+	assert.equal(listCall.param[0].filtrar_por_data_de, "01/11/2026");
+
+	assert.equal((await h.api("GET", "/api/omie/orders", { token: operator.token })).status, 403, "operador nao importa");
+	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
+	assert.equal(imported.status, 200);
+	assert.equal(imported.body.created, 1);
+	const caseNumber = imported.body.results[0].caseNumber;
+	const { rows } = await h.database.query("SELECT status, client, omie_order_code, document_reference FROM cases WHERE case_number = $1", [caseNumber]);
+	assert.equal(rows[0].client, "Oficina Central");
+	assert.equal(Number(rows[0].omie_order_code), 3);
+	assert.equal(rows[0].document_reference, "Pedido Omie 1003");
+
+	const again = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
+	assert.equal(again.body.results[0].status, "skipped");
+	const relisted = await h.api("GET", "/api/omie/orders?page=2", { token: manager.token });
+	assert.deepEqual(relisted.body.orders[0].cases, [caseNumber]);
+	assert.equal(
+		(
+			await h.api("POST", "/api/omie/import", {
+				token: manager.token,
+				body: { kind: "orders", type: "Pedido de venda", refs: Array.from({ length: 21 }, (_, index) => String(index)) }
+			})
+		).status,
+		400
+	);
+});
+
+test("selecao Omie: notas de devolucao aparecem marcadas e viram base de troca", async () => {
+	const manager = await h.createUser("manager");
+	const nf = {
+		ide: { nNF: "000456", serie: "1", dEmi: "12/11/2026", tpNF: "0", finNFe: "4" },
+		nfDestInt: { nCodCli: 77, cRazao: "Oficina Central", cnpj_cpf: "11.222.333/0001-81" },
+		total: { ICMSTot: { vNF: 150 } },
+		det: [{ prod: { cProd: "VL-52", xProd: "Valvula 5/2", qCom: 1, vUnCom: 150 } }]
+	};
+	handlers.ListarNF = () => jsonResponse({ pagina: 1, total_de_paginas: 1, total_de_registros: 1, nfCadastro: [nf] });
+	const list = await h.api("GET", "/api/omie/invoices?type=entrada", { token: manager.token });
+	assert.equal(list.status, 200);
+	assert.equal(list.body.invoices[0].isReturn, true);
+	assert.equal(list.body.invoices[0].type, "entrada");
+	assert.equal(calls.find((call) => call.call === "ListarNF").param[0].tpNF, "0");
+	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "invoices", type: "Base de troca", refs: ["456"] } });
+	assert.equal(imported.body.created, 1, JSON.stringify(imported.body));
 });

@@ -13,6 +13,21 @@
   - "bearerAuth": []
 "paths":
   "/api/account":
+    "get":
+      "tags":
+        - "Sistema"
+      "summary": "GET /api/account"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
     "patch":
       "tags":
         - "Sistema"
@@ -116,6 +131,29 @@
         - "Autenticacao"
       "summary": "POST /api/auth/reset-password"
       "security": []
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/auth/token/{token}":
+    "get":
+      "tags":
+        - "Autenticacao"
+      "summary": "GET /api/auth/token/{token}"
+      "security": []
+      "parameters":
+        - "name": "token"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
       "responses":
         "200":
           "description": "Sucesso"
@@ -1029,6 +1067,22 @@
           "description": "Perfil sem permissao"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/client-errors":
+    "post":
+      "tags":
+        - "Sistema"
+      "summary": "POST /api/client-errors"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
   "/api/customers":
     "get":
       "tags":
@@ -1313,6 +1367,38 @@
           "description": "Perfil sem permissao"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/import":
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/import"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/invoices":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/invoices"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
   "/api/omie/invoices/{number}":
     "get":
       "tags":
@@ -1324,6 +1410,22 @@
           "required": true
           "schema":
             "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/omie/orders":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/orders"
       "responses":
         "200":
           "description": "Sucesso"
@@ -1623,6 +1725,102 @@
           "description": "Perfil sem permissao"
         "422":
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/reports/schedules":
+    "get":
+      "tags":
+        - "Relatorios"
+      "summary": "GET /api/reports/schedules"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/schedules"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/reports/schedules/{id}":
+    "delete":
+      "tags":
+        - "Relatorios"
+      "summary": "DELETE /api/reports/schedules/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+    "patch":
+      "tags":
+        - "Relatorios"
+      "summary": "PATCH /api/reports/schedules/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/reports/schedules/{id}/send":
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/schedules/{id}/send"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
   "/api/reports/summary":
     "get":
       "tags":
@@ -1805,6 +2003,28 @@
       "tags":
         - "Usuarios"
       "summary": "PATCH /api/users/{userId}"
+      "parameters":
+        - "name": "userId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+  "/api/users/{userId}/invite":
+    "post":
+      "tags":
+        - "Usuarios"
+      "summary": "POST /api/users/{userId}/invite"
       "parameters":
         - "name": "userId"
           "in": "path"
