@@ -14,6 +14,8 @@ const { createSession, SESSION_COOKIE, CSRF_COOKIE } = require("../middleware/au
 const { resetRateLimits } = require("../middleware/security");
 const settings = require("../services/settings");
 const { app } = require("../app");
+const notifications = require("../services/notifications");
+const mailer = require("../services/mailer");
 
 if (!/test/i.test(new URL(process.env.DATABASE_URL).pathname)) throw new Error("Recusando rodar testes em um banco cujo nome nao contem 'test'.");
 
@@ -36,6 +38,9 @@ async function teardown() {
 }
 
 async function resetDatabase() {
+	// Espera os envios de e-mail/WhatsApp pendentes antes de limpar as tabelas.
+	await notifications.idle();
+	mailer.outbox.length = 0;
 	await database.query(
 		"TRUNCATE users, cases, customers, products, case_sequences, webhooks, case_sla_config, app_settings, login_throttle, audit_log RESTART IDENTITY CASCADE"
 	);

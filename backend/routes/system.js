@@ -17,6 +17,9 @@ const { audit, AUDIT_ACTIONS } = require("../services/audit");
 const accounts = require("../services/accounts");
 const { encrypt } = require("../security/crypto");
 const reports = require("../services/reports");
+const mailer = require("../services/mailer");
+const whatsapp = require("../services/whatsapp");
+const observability = require("../services/observability");
 
 const router = express.Router();
 
@@ -239,6 +242,17 @@ router.post(
 	})
 );
 
+const ACCOUNT_FIELDS = 'id, name, email, role, phone, notify_email AS "notifyEmail", notify_whatsapp AS "notifyWhatsapp"';
+
+// Conta: dados do proprio usuario e os canais em que quer receber avisos.
+router.get(
+	"/account",
+	wrap(async (request, response) => {
+		const { rows } = await database.query(`SELECT ${ACCOUNT_FIELDS} FROM users WHERE id = $1`, [request.user.id]);
+		return response.json({ user: rows[0], channels: { email: mailer.isConfigured(), whatsapp: whatsapp.isConfigured() } });
+	})
+);
+
 router.patch(
 	"/account",
 	rateLimit({ windowMs: 15 * 60 * 1000, max: 15, name: "account-sensitive" }),
@@ -246,11 +260,42 @@ router.patch(
 		const name = String(request.body.name || "").trim();
 		const password = String(request.body.password || "");
 		if (!name || name.length > 120) throw badRequest("Informe seu nome.");
+		const phoneRaw = request.body.phone === undefined ? undefined : String(request.body.phone || "").trim();
+		if (phoneRaw && !whatsapp.normalizePhone(phoneRaw)) throw badRequest("Informe o celular com DDD, por exemplo (19) 99999-0000.", "VALIDATION_ERROR");
 		// P1: troca de senha por aqui tambem exige a senha atual e encerra as outras sessoes.
 		if (password) await accounts.changePassword(request.user, request.session.id, { currentPassword: request.body.currentPassword, newPassword: password });
-		await database.query("UPDATE users SET name = $1 WHERE id = $2", [name, request.user.id]);
-		const { rows } = await database.query("SELECT id, name, email, role FROM users WHERE id = $1", [request.user.id]);
+		const sets = ["name = $1"];
+		const values = [name];
+		const push = (sql, value) => {
+			values.push(value);
+			sets.push(`${sql} = $${values.length}`);
+		};
+		if (phoneRaw !== undefined) push("phone", phoneRaw ? phoneRaw.replace(/\D/g, "") : null);
+		if (typeof request.body.notifyEmail === "boolean") push("notify_email", request.body.notifyEmail);
+		if (typeof request.body.notifyWhatsapp === "boolean") push("notify_whatsapp", request.body.notifyWhatsapp);
+		values.push(request.user.id);
+		await database.query(`UPDATE users SET ${sets.join(", ")} WHERE id = $${values.length}`, values);
+		const { rows } = await database.query(`SELECT ${ACCOUNT_FIELDS} FROM users WHERE id = $1`, [request.user.id]);
 		return response.json({ user: rows[0] });
+	})
+);
+
+// Erros do navegador (registrados no log e no Sentry, quando configurado).
+router.post(
+	"/client-errors",
+	rateLimit({ windowMs: 15 * 60 * 1000, max: 30, name: "client-errors" }),
+	wrap(async (request, response) => {
+		const data = z
+			.object({
+				message: z.string().max(500),
+				source: z.string().max(300).optional(),
+				line: z.coerce.number().int().optional(),
+				page: z.string().max(300).optional(),
+				stack: z.string().max(4000).optional()
+			})
+			.parse(request.body);
+		observability.captureClientError({ ...data, userId: request.user.id, requestId: request.id });
+		return response.status(204).send();
 	})
 );
 

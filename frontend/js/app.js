@@ -22,7 +22,9 @@ const AUTH_STEPS = {
 		"Crie sua senha pessoal",
 		"Sua senha atual é provisória (definida pelo administrador ou na instalação). Troque-a para continuar."
 	],
-	enroll: [mfaEnroll, "Ative a verificação em duas etapas", "Para o seu perfil, o acesso exige um código do celular além da senha."]
+	enroll: [mfaEnroll, "Ative a verificação em duas etapas", "Para o seu perfil, o acesso exige um código do celular além da senha."],
+	forgot: [document.querySelector("#forgot-form"), "Recuperar acesso", "Enviaremos um link para criar uma nova senha."],
+	reset: [document.querySelector("#reset-form"), "Criar nova senha", "Escolha a senha que você vai usar daqui para frente."]
 };
 let mfaChallenge = null;
 
@@ -368,7 +370,83 @@ pwaInstallButton?.addEventListener("click", async () => {
 	refreshInstallBlock();
 });
 
+// Esqueci a senha, redefinicao (?reset=) e primeiro acesso por convite (?convite=).
+const authForms = { forgot: AUTH_STEPS.forgot[0], reset: AUTH_STEPS.reset[0] };
+function showAuthView(name, title) {
+	showAuthStep(name);
+	if (title) document.querySelector("#login-title").textContent = title;
+}
+document.querySelectorAll("[data-auth-view]").forEach((button) =>
+	button.addEventListener("click", () => {
+		if (button.dataset.authView === "login") window.history.replaceState(null, "", "/");
+		showAuthView(button.dataset.authView);
+	})
+);
+authForms.forgot?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	const form = event.currentTarget;
+	const note = document.querySelector("#forgot-feedback");
+	if (!form.email.value.trim()) {
+		note.textContent = "Informe seu e-mail.";
+		return;
+	}
+	form.querySelector("button[type=submit]").disabled = true;
+	try {
+		await apiRequest("/api/auth/forgot-password", { method: "POST", json: { email: form.email.value } });
+		note.textContent = "Pronto. Se o e-mail estiver cadastrado, o link chega em alguns minutos (confira também o spam).";
+	} catch (error) {
+		note.textContent = error.message;
+	} finally {
+		form.querySelector("button[type=submit]").disabled = false;
+	}
+});
+let resetToken = "";
+authForms.reset?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	const form = event.currentTarget;
+	const note = document.querySelector("#reset-feedback");
+	if (form.password.value.length < 12) {
+		note.textContent = "A senha precisa ter pelo menos 12 caracteres.";
+		return;
+	}
+	if (form.password.value !== form.confirm.value) {
+		note.textContent = "As senhas não conferem.";
+		return;
+	}
+	form.querySelector("button[type=submit]").disabled = true;
+	try {
+		await apiRequest("/api/auth/reset-password", { method: "POST", json: { token: resetToken, password: form.password.value } });
+		window.history.replaceState(null, "", "/");
+		showAuthView("login");
+		PP.toast("Senha salva. Entre com a nova senha.", "success");
+	} catch (error) {
+		note.textContent = error.message;
+	} finally {
+		form.querySelector("button[type=submit]").disabled = false;
+	}
+});
+async function openTokenFlow() {
+	const params = new URLSearchParams(window.location.search);
+	resetToken = params.get("reset") || params.get("convite") || "";
+	if (!resetToken) return false;
+	showLogin();
+	try {
+		const info = await apiRequest(`/api/auth/token/${encodeURIComponent(resetToken)}`);
+		const first = esc(info.name.split(" ")[0]);
+		showAuthView("reset", info.purpose === "invite" ? "Bem-vindo ao sistema" : "Criar nova senha");
+		document.querySelector("#reset-intro").innerHTML =
+			info.purpose === "invite"
+				? `Olá, ${first}. Defina a senha do seu primeiro acesso (${esc(info.email)}).`
+				: `Olá, ${first}. Escolha a nova senha para ${esc(info.email)}.`;
+	} catch (error) {
+		showAuthView("forgot", "Link expirado");
+		document.querySelector("#forgot-feedback").textContent = error.message;
+	}
+	return true;
+}
+
 (async function bootstrap() {
+	if (await openTokenFlow()) return;
 	const session = PP.getSession();
 	if (!session?.user) return showLogin();
 	try {

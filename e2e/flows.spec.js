@@ -163,7 +163,8 @@ test("usuario criado pelo administrador troca a senha provisoria no primeiro ace
 	const form = page.locator("#create-user-form");
 	await form.getByLabel("Nome").fill("Pessoa Nova E2E");
 	const email = `pessoa.nova.${Date.now()}@e2e.local`;
-	await form.getByLabel("E-mail").fill(email);
+	await form.getByLabel("E-mail", { exact: true }).fill(email);
+	await form.getByLabel(/Enviar convite/).uncheck();
 	await form.getByLabel(/Senha inicial/).fill("Inicial-Provisoria-Laranja-3");
 	await form.getByRole("button", { name: /Criar conta/ }).click();
 	await expect(page.getByText(email)).toBeVisible();

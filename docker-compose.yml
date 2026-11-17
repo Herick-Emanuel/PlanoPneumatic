@@ -35,6 +35,9 @@ services:
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
       PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
       TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
+      # Antivirus opcional: suba com `docker compose --profile antivirus up` e defina CLAMAV_HOST=clamav.
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,8 +66,18 @@ services:
         condition: service_healthy
     networks: [app]
 
+  # F4: ClamAV para verificar anexos (opcional; primeira subida baixa as assinaturas, ~2 min).
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: [antivirus]
+    expose: ["3310"]
+    volumes:
+      - clamav_data:/var/lib/clamav
+    networks: [app]
+
 volumes:
   postgres_data:
+  clamav_data:
 
 networks:
   app:

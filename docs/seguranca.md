@@ -33,7 +33,7 @@ deploy e o que ainda depende de decisão. Os testes ficam em `backend/test/secur
 | CSRF | Toda requisição que altera dados com cookie exige o cabeçalho `X-CSRF-Token` (valor do cookie `pp_csrf`, derivado do token da sessão por HMAC). Além disso, requisições com `Origin` de outro site são recusadas (`ORIGIN_NOT_ALLOWED`), o que também bloqueia login CSRF. |
 | Login sem limite real | Limite no banco, para qualquer e-mail digitado (existindo ou não, para não revelar contas): por **e-mail + IP**, 4 tentativas livres e a 5ª errada bloqueia por 1 min, depois 2, 4, 8, 16, 32 e no máximo 60 min; e por **e-mail em qualquer IP** (ataque distribuído), a mesma progressão a partir de 20 falhas. Cada tentativa é reservada de forma atômica antes de conferir a senha, então requisições em paralelo não passam do limite. O navegador onde a pessoa já entrou recebe um cookie de "aparelho conhecido" e não passa pelo bloqueio só por e-mail: um atacante não consegue deixar o dono da conta trancado do lado de fora. O administrador (ou o gerente, no time dele) desbloqueia em Usuários > Desbloquear login, ou `npm run unlock-login -- email`. A tabela guarda só hashes. Continua o limite de 20 tentativas por IP em 15 min, com o IP real (veja "IP do cliente"). |
 | Senhas padrão | `Admin123!` e `Operador123!` saíram do `docker-compose.yml` e do `.env.example` (o Compose agora exige `SEED_ADMIN_PASSWORD` no `.env`). A API recusa subir com senha de seed fraca, de exemplo ou de placeholder. Usuários criados por seed, pelo administrador ou com senha provisória precisam trocar a senha no primeiro acesso (`PASSWORD_CHANGE_REQUIRED`): até lá, só conseguem trocar a senha ou sair. |
-| Recuperação de senha | Por decisão, **sem e-mail**: o administrador define uma senha provisória (Usuários > Redefinir senha) e a pessoa cria a própria senha no próximo acesso. Os endpoints antigos de "esqueci a senha", que nunca entregavam o link, foram removidos. |
+| Recuperação de senha | Dois caminhos. **Pelo administrador:** senha provisória (Usuários > Redefinir senha) e a pessoa cria a própria no próximo acesso. **Pelo e-mail** (só com SMTP configurado): "Esqueci minha senha" no login envia um link de uso único que vale 30 minutos; convites de conta nova usam o mesmo mecanismo com 72 horas. O banco guarda só o hash do token; a resposta é igual exista ou não a conta; o pedido tem limite de tentativas; a nova senha segue a política abaixo; ao trocar, todas as sessões são encerradas, o bloqueio por tentativas do e-mail é liberado e tudo fica na auditoria (`PASSWORD_RESET_REQUESTED`, `PASSWORD_RESET_BY_LINK`, `INVITE_SENT`, `INVITE_ACCEPTED`). Sem SMTP, nenhum link é gerado. |
 
 ## P1
 
@@ -91,11 +91,11 @@ consegue forjar o IP mandando cabeçalhos.
 | `SEED_FORCE_PASSWORD_CHANGE` | API | `true` | `false` só em testes automatizados |
 | `NODE_ENV` | Compose local | `development` | O `docker compose` sobe em modo desenvolvimento (sem exigir a chave nem cookie `Secure`) |
 | `REAL_IP_FROM` | frontend | `0.0.0.0/0` | Quem pode informar o IP do cliente ao Nginx (`127.0.0.1` local) |
-| `NGINX_RESOLVER` | frontend | `8.8.8.8 1.1.1.1` | DNS do Nginx (`auto` usa o do container) |
+| `NGINX_RESOLVER` | frontend | DNS do container (`/etc/resolv.conf`) | DNS do Nginx; sem valor (ou `auto`) usa o da plataforma e cai em `8.8.8.8 1.1.1.1` se não houver |
 
 ## Decisões que continuam com vocês
 
 - Ligar "Gerente vê só o próprio time" (depois de montar os times) e se o supervisor também deve ser limitado.
 - Ligar "Verificação em duas etapas obrigatória" para administradores e gerentes.
 - Política de retenção e exclusão de dados de clientes (LGPD): hoje só o registro de navegação tem prazo.
-- Se, no futuro, a recuperação de senha passar a ser por e-mail, é preciso escolher um provedor com SMTP.
+- Cadastrar o SMTP (liga a recuperação de senha e os convites por e-mail).

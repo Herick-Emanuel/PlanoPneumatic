@@ -185,7 +185,7 @@ document.head.appendChild(sharedShellScript);
 			data.attachments
 				.map(
 					(item) =>
-						`<div class="attachment-row"><div><strong>${esc(item.fileName)}</strong><small>${esc(item.kind)}${item.stage ? ` · ${esc(PP.statusLabel(item.stage))}` : ""}${item.sizeBytes ? ` · ${esc(PP.fileSize(item.sizeBytes))}` : ""} · ${esc(item.uploadedBy || "")} ${esc(PP.formatDateTime(item.createdAt))}</small></div><div class="actions-cell">${item.hasFile ? `<button class="button button-secondary compact-button" type="button" data-open-attachment="${esc(item.id)}">Abrir</button>` : /^https:\/\//i.test(item.fileUrl || "") ? `<a class="button button-secondary compact-button" href="${esc(item.fileUrl)}" target="_blank" rel="noopener noreferrer">Link</a>` : ""}${permissions.edit ? `<button class="button button-secondary compact-button" type="button" data-remove-attachment="${esc(item.id)}" aria-label="Remover ${esc(item.fileName)}">Remover</button>` : ""}</div></div>`
+						`<div class="attachment-row"><div><strong>${esc(item.fileName)}</strong><small>${esc(item.kind)}${item.stage ? ` · ${esc(PP.statusLabel(item.stage))}` : ""}${item.sizeBytes ? ` · ${esc(PP.fileSize(item.sizeBytes))}` : ""} · ${esc(item.uploadedBy || "")} ${esc(PP.formatDateTime(item.createdAt))}</small>${item.scanStatus === "clean" ? '<span class="scan-badge clean">Verificado pelo antivírus</span>' : item.scanStatus === "error" ? '<span class="scan-badge warn" title="O antivírus estava indisponível no envio">Não verificado</span>' : ""}</div><div class="actions-cell">${item.hasFile ? `<button class="button button-secondary compact-button" type="button" data-open-attachment="${esc(item.id)}">Abrir</button>` : /^https:\/\//i.test(item.fileUrl || "") ? `<a class="button button-secondary compact-button" href="${esc(item.fileUrl)}" target="_blank" rel="noopener noreferrer">Link</a>` : ""}${permissions.edit ? `<button class="button button-secondary compact-button" type="button" data-remove-attachment="${esc(item.id)}" aria-label="Remover ${esc(item.fileName)}">Remover</button>` : ""}</div></div>`
 				)
 				.join("") || PP.emptyState("Nenhum documento anexado", "Anexe fotos, laudos ou comprovantes.");
 		const timeline = data.events
@@ -296,6 +296,15 @@ document.head.appendChild(sharedShellScript);
 					: undefined
 			);
 		} catch (error) {
+			if (
+				PP.outbox.queueIfOffline(error, {
+					method: "PATCH",
+					url: `/api/cases/${encodeURIComponent(caseId)}/status`,
+					body: { status, reason: answer.reason || undefined, destination: answer.destination || undefined },
+					label: `${caseId}: status ${PP.statusLabel(status)}`
+				})
+			)
+				return;
 			PP.toast(error.message, "error");
 		}
 	}
@@ -413,6 +422,15 @@ document.head.appendChild(sharedShellScript);
 					await api.patch(`/api/cases/${encodeURIComponent(caseId)}/checklist/${input.dataset.checklist}`, { completed: input.checked });
 					await reload();
 				} catch (error) {
+					if (
+						PP.outbox.queueIfOffline(error, {
+							method: "PATCH",
+							url: `/api/cases/${encodeURIComponent(caseId)}/checklist/${input.dataset.checklist}`,
+							body: { completed: input.checked },
+							label: `${caseId}: checklist`
+						})
+					)
+						return;
 					input.checked = !input.checked;
 					PP.toast(error.message, "error");
 				}
@@ -426,6 +444,17 @@ document.head.appendChild(sharedShellScript);
 				form.reset();
 				await loadComments();
 			} catch (error) {
+				if (
+					PP.outbox.queueIfOffline(error, {
+						method: "POST",
+						url: `/api/cases/${encodeURIComponent(caseId)}/comments`,
+						body: { body: form.body.value },
+						label: `${caseId}: comentário`
+					})
+				) {
+					form.reset();
+					return;
+				}
 				PP.toast(error.message, "error");
 			}
 		});
@@ -436,6 +465,15 @@ document.head.appendChild(sharedShellScript);
 				await reload();
 				PP.toast("Laudo salvo.", "success");
 			} catch (error) {
+				if (
+					PP.outbox.queueIfOffline(error, {
+						method: "PATCH",
+						url: `/api/cases/${encodeURIComponent(caseId)}`,
+						body: { technicalReport: event.target.technicalReport.value },
+						label: `${caseId}: laudo`
+					})
+				)
+					return;
 				PP.toast(error.message, "error");
 			}
 		});
@@ -456,6 +494,15 @@ document.head.appendChild(sharedShellScript);
 				await reload();
 				PP.toast("Logística atualizada.", "success");
 			} catch (error) {
+				if (
+					PP.outbox.queueIfOffline(error, {
+						method: "PATCH",
+						url: `/api/cases/${encodeURIComponent(caseId)}`,
+						body: { trackingCode: form.trackingCode.value, logisticsStatus: form.logisticsStatus.value },
+						label: `${caseId}: logística`
+					})
+				)
+					return;
 				PP.toast(error.message, "error");
 			}
 		});

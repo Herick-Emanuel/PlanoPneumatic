@@ -9,9 +9,7 @@
 	min-height: 100vh;
 }
 .login-visual {
-	background:
-		radial-gradient(1200px 600px at 110% 110%, rgba(61, 133, 220, 0.35), transparent 60%),
-		radial-gradient(700px 500px at -10% -20%, rgba(29, 111, 214, 0.25), transparent 60%), linear-gradient(160deg, #0b2f5b 0%, #071f3d 70%);
+	background: #0b2f5b;
 	color: #fff;
 	display: flex;
 	flex-direction: column;
@@ -19,14 +17,6 @@
 	overflow: hidden;
 	padding: 48px 56px;
 	position: relative;
-}
-.login-visual::after {
-	background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-	background-size: 44px 44px;
-	content: "";
-	inset: 0;
-	mask-image: radial-gradient(circle at 70% 60%, #000 0%, transparent 70%);
-	position: absolute;
 }
 .login-visual > * {
 	position: relative;
@@ -106,7 +96,7 @@
 /* ------------------------------------------------------------------ boas-vindas */
 .welcome-row {
 	align-items: center;
-	background: radial-gradient(500px 220px at 100% 0%, rgba(61, 133, 220, 0.28), transparent 70%), linear-gradient(120deg, #0b2f5b, #123f75);
+	background: #0b2f5b;
 	border-radius: var(--radius-lg);
 	box-shadow: var(--shadow-sm);
 	color: #fff;
@@ -213,7 +203,7 @@
 	position: relative;
 }
 .chart-column span {
-	background: linear-gradient(180deg, var(--chart-1), color-mix(in srgb, var(--chart-1) 70%, #0b2f5b));
+	background: var(--chart-1);
 	border-radius: 6px 6px 2px 2px;
 	min-height: 4px;
 	transition: filter 0.15s;
@@ -255,7 +245,7 @@
 	font-weight: 700;
 }
 .distribution-row i {
-	background: linear-gradient(90deg, var(--chart-1), var(--chart-2));
+	background: var(--chart-1);
 	border-radius: 99px;
 	display: block;
 	height: 8px;

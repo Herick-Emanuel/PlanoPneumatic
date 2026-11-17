@@ -2,11 +2,12 @@ const { database, withTransaction } = require("../db");
 const { config } = require("../config");
 const { can, capabilities } = require("../domain/permissions");
 const { roles } = require("../domain/constants");
-const { AppError, badRequest, forbidden, notFound } = require("../middleware/errors");
+const { AppError, badRequest, forbidden, notFound, logEvent } = require("../middleware/errors");
+const antivirus = require("./antivirus");
 const { findCase, addEvent } = require("./cases");
 
 const ATTACHMENT_FIELDS =
-	'a.id, a.file_name AS "fileName", a.file_url AS "fileUrl", a.mime_type AS "mimeType", a.size_bytes AS "sizeBytes", a.kind, a.stage, a.created_at AS "createdAt", (a.content IS NOT NULL) AS "hasFile"';
+	'a.id, a.file_name AS "fileName", a.file_url AS "fileUrl", a.mime_type AS "mimeType", a.size_bytes AS "sizeBytes", a.kind, a.stage, a.created_at AS "createdAt", (a.content IS NOT NULL) AS "hasFile", a.scan_status AS "scanStatus"';
 
 // Tipo real do arquivo pelos primeiros bytes (nao confia no Content-Type enviado pelo cliente).
 function detectMime(buffer) {
@@ -18,8 +19,8 @@ function detectMime(buffer) {
 }
 
 function sanitizeFileName(name) {
-	// eslint-disable-next-line no-control-regex
 	const cleaned = String(name || "arquivo")
+		// eslint-disable-next-line no-control-regex
 		.replace(/[\\/\0-\x1f"<>|?*:]/g, "_")
 		.trim()
 		.slice(-170);
@@ -47,12 +48,17 @@ async function addUpload(user, caseNumber, { buffer, fileName, kind, stage }) {
 		throw new AppError(413, `O arquivo excede o limite de ${Math.round(config.maxAttachmentBytes / 1024 / 1024)} MB.`, "FILE_TOO_LARGE");
 	const mimeType = detectMime(buffer);
 	if (!mimeType) throw new AppError(415, "Tipo de arquivo nao permitido. Envie JPG, PNG, WEBP ou PDF.", "UNSUPPORTED_FILE_TYPE");
+	const verdict = await antivirus.scan(buffer);
+	if (verdict.status === "infected") {
+		logEvent("attachment_infected", { userId: user.id, caseNumber, signature: verdict.signature });
+		throw new AppError(422, `O arquivo foi bloqueado pelo antivirus (${verdict.signature}).`, "FILE_INFECTED");
+	}
 	return withTransaction(async (db) => {
 		const item = await findCase(caseNumber, user, { db, lock: true, includeArchived: false });
 		const safeName = sanitizeFileName(fileName);
 		const { rows } = await db.query(
-			'INSERT INTO case_attachments (case_id, uploaded_by, file_name, content, mime_type, size_bytes, kind, stage) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, file_name AS "fileName", mime_type AS "mimeType", size_bytes AS "sizeBytes", kind, stage, created_at AS "createdAt"',
-			[item.id, user.id, safeName, buffer, mimeType, buffer.length, kind, stage || item.status]
+			'INSERT INTO case_attachments (case_id, uploaded_by, file_name, content, mime_type, size_bytes, kind, stage, scan_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, file_name AS "fileName", mime_type AS "mimeType", size_bytes AS "sizeBytes", kind, stage, scan_status AS "scanStatus", created_at AS "createdAt"',
+			[item.id, user.id, safeName, buffer, mimeType, buffer.length, kind, stage || item.status, verdict.status]
 		);
 		await db.query("UPDATE cases SET updated_at = NOW() WHERE id = $1", [item.id]);
 		await addEvent(db, item.id, "ANEXO", `Anexo adicionado (${kind}): ${safeName}`, user, { attachmentId: rows[0].id, kind });

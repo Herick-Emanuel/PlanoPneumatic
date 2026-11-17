@@ -2,8 +2,8 @@ const path = require("node:path");
 
 const isProduction = process.env.NODE_ENV === "production";
 const isTest = process.env.NODE_ENV === "test";
-const DEFAULT_FRONTEND_ORIGIN = "https://planopneumatic-production.up.railway.app";
-const DEFAULT_API_ORIGIN = "https://planopneumaticapi-production.up.railway.app";
+// Sem enderecos de producao embutidos: em producao FRONTEND_ORIGIN e API_PUBLIC_URL sao obrigatorias.
+const DEV_ORIGIN = "http://localhost:3000";
 
 const bool = (value, fallback) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(String(value).toLowerCase()));
 const list = (value) =>
@@ -21,7 +21,7 @@ function parseTrustProxy(value) {
 	return list(value);
 }
 
-const frontendOrigins = list(process.env.FRONTEND_ORIGIN || DEFAULT_FRONTEND_ORIGIN);
+const frontendOrigins = list(process.env.FRONTEND_ORIGIN || (isProduction ? "" : DEV_ORIGIN));
 
 const config = {
 	isProduction,
@@ -29,9 +29,9 @@ const config = {
 	port: Number(process.env.PORT || 3000),
 	host: process.env.HOST || "0.0.0.0",
 	frontendDirectory: path.join(__dirname, "..", "frontend"),
-	frontendOrigin: frontendOrigins[0],
+	frontendOrigin: frontendOrigins[0] || "",
 	frontendOrigins,
-	apiOrigin: (process.env.API_PUBLIC_URL || DEFAULT_API_ORIGIN).replace(/\/$/, ""),
+	apiOrigin: (process.env.API_PUBLIC_URL || "").replace(/\/$/, ""),
 	sessionDurationInDays: Number(process.env.SESSION_DURATION_DAYS || 1),
 	// Sessao sem uso por este tempo expira, mesmo dentro da validade total.
 	sessionIdleMinutes: Number(process.env.SESSION_IDLE_MINUTES || 120),
@@ -59,14 +59,24 @@ function validateConfig() {
 	}
 	if (isProduction) {
 		if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL e obrigatoria em producao.");
-		if (!process.env.FRONTEND_ORIGIN) warnings.push("FRONTEND_ORIGIN nao definida; usando o valor padrao embutido.");
-		if (!process.env.API_PUBLIC_URL) warnings.push("API_PUBLIC_URL nao definida; usando o valor padrao embutido.");
+		const missing = ["FRONTEND_ORIGIN", "API_PUBLIC_URL"].filter((name) => !process.env[name]);
+		if (missing.length)
+			throw new Error(
+				`${missing.join(" e ")} ${missing.length > 1 ? "sao obrigatorias" : "e obrigatoria"} em producao (endereco publico do frontend e da API).`
+			);
+		// FRONTEND_ORIGIN aceita varios enderecos separados por virgula.
+		for (const value of [...list(process.env.FRONTEND_ORIGIN), process.env.API_PUBLIC_URL])
+			if (!/^https:\/\/[^/]+$/.test(value)) throw new Error(`${value} deve ser uma URL https sem barra no final, por exemplo https://app.empresa.com.br.`);
 		if (!config.cookieSecure) warnings.push("COOKIE_SECURE=false em producao: o cookie de sessao pode trafegar sem HTTPS.");
 		if (!config.proxySharedSecret)
 			warnings.push(
 				"PROXY_SHARED_SECRET nao definida: acessos que passam pelo Nginx do frontend chegam todos com o IP dele, e o limite de 20 tentativas por IP vale para a empresa inteira. Defina o mesmo segredo na API e no frontend."
 			);
 	}
+	if (process.env.SMTP_HOST && !process.env.MAIL_FROM) warnings.push("SMTP_HOST definido sem MAIL_FROM; usando o remetente padrao.");
+	if (Boolean(process.env.WHATSAPP_TOKEN) !== Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID))
+		warnings.push("WhatsApp precisa de WHATSAPP_TOKEN e WHATSAPP_PHONE_NUMBER_ID juntos; canal desligado.");
+	if (isProduction && !process.env.SMTP_HOST) warnings.push("SMTP_HOST nao definido: convites, avisos e relatorios por e-mail ficam desligados.");
 	if (config.encryptionKey) {
 		const { decodeKey } = require("./security/crypto");
 		decodeKey(config.encryptionKey);

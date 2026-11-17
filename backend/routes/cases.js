@@ -53,14 +53,12 @@ router.post(
 				results.push({ line: index + 1, status: "error", message: error.message });
 			}
 		}
-		return response
-			.status(201)
-			.json({
-				total: items.length,
-				created: results.filter((entry) => entry.status === "created").length,
-				errors: results.filter((entry) => entry.status === "error").length,
-				results
-			});
+		return response.status(201).json({
+			total: items.length,
+			created: results.filter((entry) => entry.status === "created").length,
+			errors: results.filter((entry) => entry.status === "error").length,
+			results
+		});
 	})
 );
 

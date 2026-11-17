@@ -10,6 +10,12 @@ Toda resposta da API traz `X-Request-Id`; peça esse ID ao usuário e procure-o 
 | Lentidão | `GET /api/metrics` (com `METRICS_TOKEN`): `pp_http_request_duration_ms`, `pp_db_pool_connections{state="waiting"}` |
 | Usuários não veem prazos/alertas | Configuração "Alertas de prazo"; job de SLA (`sla_alerts_sent` nos logs a cada 15 min) |
 | Webhook não chega | Integrações → Entregas (tentativas e erro); `pp_webhook_deliveries_24h{result="failed"}` |
+| API não sobe após deploy | Log `startup_error`: confira `FRONTEND_ORIGIN` e `API_PUBLIC_URL` (obrigatórias em produção, https, sem barra final) |
+| E-mail não chega (senha, convite, aviso, relatório) | Logs `mail_not_configured` (falta `SMTP_HOST`) ou `password_reset_mail_error`; tabela `notification_deliveries` (status e erro por envio); confira a caixa de spam |
+| WhatsApp não chega | Log `whatsapp_error` (token vencido ou modelo não aprovado na Meta); a pessoa precisa de celular e opção ligada em Minha conta |
+| Relatório agendado não enviado | Relatórios → Envios agendados (coluna "Último envio" mostra o erro); logs `report_schedule_error` |
+| Anexo recusado ou "Não verificado" | Logs `attachment_infected` (bloqueado pelo ClamAV) e `antivirus_unreachable` (ClamAV fora do ar; o envio segue) |
+| Erros no navegador | Logs `client_error` (e o Sentry, se `SENTRY_DSN` estiver definido) |
 | Tela antiga após deploy | O PWA avisa "Nova versão disponível"; confira que `BUILD_ID` mudou no deploy |
 
 ## Banco indisponível

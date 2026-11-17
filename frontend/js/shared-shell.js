@@ -17,6 +17,7 @@
 		"/cadastros.html": "Usuários",
 		"/cadastro-base.html": "Clientes e produtos",
 		"/importar.html": "Importar pedidos",
+		"/omie.html": "Pedidos e notas do Omie",
 		"/auditoria.html": "Auditoria",
 		"/integracoes.html": "Integrações",
 		"/notificacoes.html": "Notificações",
@@ -196,7 +197,8 @@
 			"Cadastros",
 			[
 				["/cadastro-base.html", "registry", "Clientes e produtos", "registro", "cases.create"],
-				["/importar.html", "import", "Importar pedidos", "importar", "cases.import"]
+				["/importar.html", "import", "Importar pedidos", "importar", "cases.import"],
+				["/omie.html", "integrations", "Pedidos e notas do Omie", "omie", "cases.import"]
 			]
 		],
 		[

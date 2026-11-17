@@ -29,7 +29,15 @@ function listRoutes() {
 	return routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 }
 
-const PUBLIC = new Set(["post /api/auth/login", "post /api/auth/mfa/verify", "post /api/auth/logout", "get /api/meta"]);
+const PUBLIC = new Set([
+	"post /api/auth/login",
+	"post /api/auth/mfa/verify",
+	"post /api/auth/logout",
+	"post /api/auth/forgot-password",
+	"post /api/auth/reset-password",
+	"get /api/auth/token/{token}",
+	"get /api/meta"
+]);
 
 function schemaOf(schema) {
 	const json = z.toJSONSchema(schema, { unrepresentable: "any", io: "input" });

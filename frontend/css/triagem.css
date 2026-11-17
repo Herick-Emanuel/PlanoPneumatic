@@ -124,7 +124,7 @@
 	top: 20px;
 }
 .summary-sticky {
-	background: radial-gradient(400px 200px at 100% 0%, rgba(61, 133, 220, 0.3), transparent 70%), linear-gradient(160deg, #0b2f5b, #071f3d);
+	background: #0b2f5b;
 	border-radius: var(--radius-lg);
 	box-shadow: var(--shadow);
 	color: #dbe6f4;

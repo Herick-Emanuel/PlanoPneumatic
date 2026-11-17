@@ -10,6 +10,26 @@ const { addEvent } = require("../services/cases");
 const { audit } = require("../services/audit");
 const accounts = require("../services/accounts");
 const throttle = require("../services/loginThrottle");
+const crypto = require("node:crypto");
+const mailer = require("../services/mailer");
+const { issueToken } = require("./auth");
+
+// F13: convite com link de primeiro acesso (72 h). A senha e escolhida pela propria pessoa.
+async function sendInvite(user, invitedBy) {
+	const token = await issueToken(user.id, "invite");
+	await mailer.send({
+		to: user.email,
+		subject: "Convite para o PlanoPneumatic",
+		title: "Você foi convidado para o PlanoPneumatic",
+		lines: [
+			`Olá, ${user.name.split(" ")[0]}.`,
+			`${invitedBy} criou o seu acesso ao sistema de pedidos, trocas e garantias.`,
+			"Defina a sua senha pelo link abaixo. Ele vale por 72 horas e só pode ser usado uma vez."
+		],
+		action: { label: "Criar minha senha", url: mailer.appUrl(`/?convite=${token}`) }
+	});
+	return token;
+}
 
 const router = express.Router();
 router.use(requireAuth);
@@ -78,12 +98,15 @@ router.post(
 		const email = String(request.body.email || "")
 			.trim()
 			.toLowerCase();
-		const password = String(request.body.password || "");
+		// Convite: senha aleatoria que ninguem conhece; a pessoa cria a propria pelo link do e-mail (72 h).
+		const invite = request.body.invite === true;
+		const password = invite ? crypto.randomBytes(24).toString("base64url") : String(request.body.password || "");
 		const role = String(request.body.role || "operator").trim();
 		const allowedRoles = can(request.user, capabilities.CREATE_ANY_ROLE) ? ALL_ROLES.filter((value) => value !== roles.ADMIN) : [roles.OPERATOR];
-		if (!name || !email || !allowedRoles.includes(role)) throw badRequest("Informe nome, e-mail, senha inicial e um perfil permitido.");
+		if (!name || !email || !allowedRoles.includes(role))
+			throw badRequest(invite ? "Informe nome, e-mail e um perfil permitido." : "Informe nome, e-mail, senha inicial e um perfil permitido.");
 		if (name.length > 120 || email.length > 180 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Nome ou e-mail invalido.");
-		accounts.assertPasswordPolicy(password, { email, name });
+		if (!invite) accounts.assertPasswordPolicy(password, { email, name });
 		let managerId = null;
 		if (request.user.role === roles.MANAGER) {
 			managerId = role === roles.OPERATOR ? request.user.id : null;
@@ -101,10 +124,11 @@ router.post(
 					`INSERT INTO users (name, email, password_hash, role, manager_id, must_change_password) VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING ${USER_FIELDS}`,
 					[name, email, await accounts.hashPassword(password), role, managerId]
 				);
-				await auditUserChange(db, request.user.id, rows[0].id, "USER_CREATED", { role, managerId });
+				await auditUserChange(db, request.user.id, rows[0].id, "USER_CREATED", { role, managerId, invite });
 				return rows[0];
 			});
-			return response.status(201).json({ user: created });
+			if (invite) await sendInvite(created, request.user.name);
+			return response.status(201).json({ user: created, invited: invite, mailConfigured: mailer.isConfigured() });
 		} catch (error) {
 			if (error.code === "23505") throw conflict("Ja existe uma conta com este e-mail.", "DUPLICATE_EMAIL");
 			throw error;
@@ -302,6 +326,21 @@ router.post(
 			await db.query("DELETE FROM sessions WHERE user_id = $1", [targetUserId]);
 		});
 		return response.status(204).send();
+	})
+);
+// Reenvia o convite (por exemplo, quando o link expirou).
+router.post(
+	"/:userId/invite",
+	requireCapability(capabilities.CREATE_OPERATOR),
+	wrap(async (request, response) => {
+		const targetUserId = Number(request.params.userId);
+		if (!Number.isInteger(targetUserId)) throw badRequest("Usuario alvo invalido.");
+		await assertManageable(request.user, targetUserId);
+		const { rows } = await database.query(`SELECT ${USER_FIELDS} FROM users WHERE id = $1 AND active = TRUE`, [targetUserId]);
+		if (!rows[0]) throw notFound("Usuario nao encontrado.");
+		await sendInvite(rows[0], request.user.name);
+		await auditUserChange(database, request.user.id, rows[0].id, "INVITE_SENT", {});
+		return response.json({ invited: true, mailConfigured: mailer.isConfigured() });
 	})
 );
 

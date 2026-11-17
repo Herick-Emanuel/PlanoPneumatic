@@ -45,11 +45,21 @@ Variaveis recomendadas:
 | `APP_ENCRYPTION_KEY` | **Obrigatoria.** 32 bytes em base64 (ver [seguranca.md](seguranca.md)) |
 | `PROXY_SHARED_SECRET` | Mesmo valor do servico do frontend |
 | `TRUST_PROXY` | `1` |
-| `FRONTEND_ORIGIN` | Dominio publico do frontend, com `https://` |
-| `API_PUBLIC_URL` | Dominio publico da API, com `https://` |
 | `SEED_ADMIN_EMAIL` | E-mail administrativo definido pela equipe (so na primeira subida) |
 | `SEED_ADMIN_PASSWORD` | Senha forte (12+ caracteres) como secret; remova depois da primeira subida |
 | `SEED_ADMIN_NAME` | Nome do administrador inicial |
+| `SEED_OPERATOR_EMAIL` | E-mail operacional inicial |
+| `SEED_OPERATOR_PASSWORD` | Senha forte definida como secret |
+| `SEED_OPERATOR_NAME` | Nome do operador inicial |
+| `FRONTEND_ORIGIN` | **Obrigatoria.** Endereco publico do site, https e sem barra final (ex.: `https://planopneumatic-production.up.railway.app`) |
+| `API_PUBLIC_URL` | **Obrigatoria.** Endereco publico da API, https e sem barra final |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | E-mail (recuperacao de senha, convites, avisos e relatorios agendados). Sem `SMTP_HOST`, nada e enviado |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE` | WhatsApp Cloud API da Meta (opcional; o modelo precisa estar aprovado) |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Rastreamento de erros (opcional) |
+| `CLAMAV_HOST`, `CLAMAV_PORT` | Antivirus dos anexos (opcional; servico ClamAV separado) |
+| `OMIE_APP_KEY`, `OMIE_APP_SECRET` | Integracao Omie (secrets) |
+
+A partir desta versao a API **nao sobe em producao** sem `FRONTEND_ORIGIN` e `API_PUBLIC_URL`: cadastre as duas antes do deploy.
 
 Nao copie valores do `.env.example` para producao. As senhas devem ser configuradas como secrets no Railway.
 A API recusa subir com senha de seed fraca e o administrador inicial troca a senha no primeiro login.
@@ -78,6 +88,8 @@ de tentativas e a auditoria).
 O Railway fornece automaticamente a variavel `PORT`; o Nginx do frontend deve usa-la para escutar a porta publicada. Nao defina uma porta manual diferente no servico.
 
 No ambiente local do Compose, o valor e `http://api:3000`. No Railway, use o dominio privado entre servicos quando estiver disponivel; caso contrario, use o dominio publico da API com `https://`.
+
+O Nginx resolve o endereco da API com o DNS da propria plataforma (lido de `/etc/resolv.conf`). Para forcar outro, defina `NGINX_RESOLVER` (ex.: `8.8.8.8 1.1.1.1 ipv6=off`).
 
 Health check:
 

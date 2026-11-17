@@ -21,6 +21,7 @@ const { audit, currentContext } = require("../services/audit");
 const throttle = require("../services/loginThrottle");
 const settings = require("../services/settings");
 const accounts = require("../services/accounts");
+const mailer = require("../services/mailer");
 
 const router = express.Router();
 
@@ -222,6 +223,100 @@ router.get("/me", requireAuth.allowPending, (request, response) => {
 	return response.json({ user: publicUser({ id, name, email, role }, { mustChangePassword, mfaEnabled, mfaEnrollmentRequired }) });
 });
 
+// ------------------------------------------------------------------ Link por e-mail (senha e convite)
+// Token de uso unico: "reset" vale 30 minutos; "invite" (primeiro acesso) vale 72 horas. So o hash fica no banco.
+async function issueToken(userId, purpose, executor = database) {
+	const token = require("node:crypto").randomBytes(32).toString("hex");
+	await executor.query("DELETE FROM password_reset_tokens WHERE user_id = $1 OR expires_at <= NOW()", [userId]);
+	await executor.query(
+		`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, purpose) VALUES ($1, $2, NOW() + INTERVAL '${purpose === "invite" ? "72 hours" : "30 minutes"}', $3)`,
+		[userId, hashToken(token), purpose]
+	);
+	return token;
+}
+
+// Resposta igual exista ou nao a conta (nao revela quem esta cadastrado). Sem SMTP, nada sai.
+router.post(
+	"/forgot-password",
+	sensitiveLimit,
+	wrap(async (request, response) => {
+		const email = String(request.body.email || "")
+			.trim()
+			.toLowerCase()
+			.slice(0, 254);
+		if (email && mailer.isConfigured()) {
+			const { rows } = await database.query("SELECT id, name, email FROM users WHERE email = $1 AND active = TRUE", [email]);
+			if (rows[0]) {
+				const token = await issueToken(rows[0].id, "reset");
+				await audit("PASSWORD_RESET_REQUESTED", { actorId: rows[0].id, entityType: "user", entityId: rows[0].id });
+				await mailer
+					.send({
+						to: rows[0].email,
+						subject: "PlanoPneumatic: redefinição de senha",
+						title: "Redefina sua senha",
+						lines: [
+							`Olá, ${rows[0].name.split(" ")[0]}.`,
+							"Recebemos um pedido para redefinir a sua senha. O link vale por 30 minutos e só pode ser usado uma vez.",
+							"Se não foi você, ignore este e-mail: sua senha continua a mesma."
+						],
+						action: { label: "Definir nova senha", url: mailer.appUrl(`/?reset=${token}`) }
+					})
+					.catch(() => {});
+			}
+		}
+		return response.json({ message: "Se o e-mail estiver cadastrado, enviaremos instrucoes para redefinir a senha.", mailConfigured: mailer.isConfigured() });
+	})
+);
+
+// Informa se o link ainda vale (a tela mostra o formulario certo ou avisa que expirou).
+router.get(
+	"/token/:token",
+	sensitiveLimit,
+	wrap(async (request, response) => {
+		const { rows } = await database.query(
+			"SELECT t.purpose, u.name, u.email FROM password_reset_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > NOW() AND u.active = TRUE",
+			[hashToken(String(request.params.token))]
+		);
+		if (!rows[0]) return response.status(404).json({ message: "Este link expirou ou já foi usado. Peça um novo.", code: "TOKEN_INVALID" });
+		return response.json({ purpose: rows[0].purpose, name: rows[0].name, email: rows[0].email });
+	})
+);
+
+// Define a senha pelo link: segue a politica, encerra todas as sessoes e libera o primeiro acesso.
+router.post(
+	"/reset-password",
+	sensitiveLimit,
+	wrap(async (request, response) => {
+		const token = String(request.body.token || "");
+		const password = String(request.body.password || "");
+		if (!token) throw badRequest("Link invalido ou expirado.", "TOKEN_INVALID");
+		const result = await withTransaction(async (db) => {
+			const { rows } = await db.query(
+				"SELECT t.user_id, t.purpose, u.name, u.email FROM password_reset_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > NOW() AND u.active = TRUE FOR UPDATE OF t",
+				[hashToken(token)]
+			);
+			if (!rows[0]) throw badRequest("Link invalido ou expirado.", "TOKEN_INVALID");
+			accounts.assertPasswordPolicy(password, rows[0]);
+			await db.query("UPDATE users SET password_hash = $1, must_change_password = FALSE, password_changed_at = NOW() WHERE id = $2", [
+				await accounts.hashPassword(password),
+				rows[0].user_id
+			]);
+			await db.query("UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = $1", [hashToken(token)]);
+			await db.query("DELETE FROM sessions WHERE user_id = $1", [rows[0].user_id]);
+			await audit(rows[0].purpose === "invite" ? "INVITE_ACCEPTED" : "PASSWORD_RESET_BY_LINK", {
+				actorId: rows[0].user_id,
+				entityType: "user",
+				entityId: rows[0].user_id,
+				executor: db
+			});
+			return rows[0];
+		});
+		// Quem provou ter acesso ao e-mail sai do bloqueio por tentativas.
+		await throttle.unlockEmail(result.email);
+		return response.json({ message: "Senha definida com sucesso." });
+	})
+);
+
 const changePasswordSchema = z.object({
 	currentPassword: z.string().min(1, "Informe a senha atual.").max(200),
 	newPassword: z.string().min(1, "Informe a nova senha.").max(200)
@@ -351,4 +446,4 @@ router.post(
 	})
 );
 
-module.exports = { router };
+module.exports = { router, issueToken };

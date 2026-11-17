@@ -78,6 +78,13 @@ function errorHandler(error, request, response, next) {
 		error: error.message,
 		stack: process.env.NODE_ENV === "production" ? undefined : error.stack
 	});
+	// Carregado sob demanda para evitar dependencia circular (observability usa logEvent daqui).
+	require("../services/observability").captureServerError(error, {
+		requestId: request.id,
+		method: request.method,
+		path: request.path,
+		userId: request.user?.id
+	});
 	return response.status(500).json({ message: "Erro interno do servidor.", code: "INTERNAL", requestId: request.id });
 }
 
