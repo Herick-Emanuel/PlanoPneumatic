@@ -5,7 +5,9 @@ const { logEvent } = require("../middleware/errors");
 
 const GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION || "v21.0";
 let fetchImplementation = (...args) => fetch(...args);
-function setTransport(next) { fetchImplementation = next; }
+function setTransport(next) {
+	fetchImplementation = next;
+}
 
 const isConfigured = () => Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
 

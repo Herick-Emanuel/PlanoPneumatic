@@ -47,7 +47,10 @@ test("esqueci a senha: e-mail com link, token consultavel, troca unica e encerra
 
 test("convite: conta criada sem senha, link de primeiro acesso (72 h) e reenvio pelo gerente do time", async () => {
 	const admin = await h.createUser("admin");
-	const created = await h.api("POST", "/api/users", { token: admin.token, body: { name: "Nova Pessoa", email: "nova@test.local", role: "operator", invite: true } });
+	const created = await h.api("POST", "/api/users", {
+		token: admin.token,
+		body: { name: "Nova Pessoa", email: "nova@test.local", role: "operator", invite: true }
+	});
 	assert.equal(created.status, 201);
 	assert.equal(created.body.invited, true);
 	assert.equal(mailer.outbox.length, 1);
@@ -60,7 +63,10 @@ test("convite: conta criada sem senha, link de primeiro acesso (72 h) e reenvio 
 	assert.equal((await h.api("POST", "/api/auth/login", { body: { email: "nova@test.local", password: "PrimeiroAcesso1" } })).status, 200);
 
 	// Sem convite, a senha inicial continua obrigatoria.
-	assert.equal((await h.api("POST", "/api/users", { token: admin.token, body: { name: "Sem Senha", email: "semsenha@test.local", role: "operator" } })).status, 400);
+	assert.equal(
+		(await h.api("POST", "/api/users", { token: admin.token, body: { name: "Sem Senha", email: "semsenha@test.local", role: "operator" } })).status,
+		400
+	);
 
 	const manager = await h.createUser("manager");
 	const own = await h.createUser("operator", { managerId: manager.id });
@@ -77,7 +83,10 @@ test("minha conta: celular validado e canais de aviso escolhidos pela pessoa", a
 	const operator = await h.createUser("operator");
 	const bad = await h.api("PATCH", "/api/account", { token: operator.token, body: { name: operator.name, phone: "123" } });
 	assert.equal(bad.status, 400);
-	const ok = await h.api("PATCH", "/api/account", { token: operator.token, body: { name: operator.name, phone: "(19) 99876-5432", notifyEmail: false, notifyWhatsapp: true } });
+	const ok = await h.api("PATCH", "/api/account", {
+		token: operator.token,
+		body: { name: operator.name, phone: "(19) 99876-5432", notifyEmail: false, notifyWhatsapp: true }
+	});
 	assert.equal(ok.status, 200);
 	assert.equal(ok.body.user.phone, "19998765432");
 	assert.equal(ok.body.user.notifyEmail, false);
@@ -91,7 +100,10 @@ test("avisos saem por e-mail e WhatsApp conforme a preferencia, e cada envio fic
 	process.env.WHATSAPP_TOKEN = "token";
 	process.env.WHATSAPP_PHONE_NUMBER_ID = "123";
 	const sent = [];
-	whatsapp.setTransport(async (url, options) => { sent.push({ url, body: JSON.parse(options.body) }); return { ok: true, status: 200, json: async () => ({}) }; });
+	whatsapp.setTransport(async (url, options) => {
+		sent.push({ url, body: JSON.parse(options.body) });
+		return { ok: true, status: 200, json: async () => ({}) };
+	});
 	const both = await h.createUser("operator");
 	const emailOnly = await h.createUser("operator");
 	await h.database.query("UPDATE users SET phone = '19998765432', notify_whatsapp = TRUE WHERE id = $1", [both.id]);
@@ -107,7 +119,11 @@ test("avisos saem por e-mail e WhatsApp conforme a preferencia, e cada envio fic
 	assert.equal(sent.length, 1, "WhatsApp so para quem ligou o canal");
 	assert.equal(sent[0].body.to, "5519998765432");
 	const deliveries = await h.database.query("SELECT user_id, channel, status FROM notification_deliveries ORDER BY id");
-	assert.deepEqual(deliveries.rows.map((row) => `${row.user_id === both.id ? "both" : "email"}:${row.channel}:${row.status}`).sort(), ["both:email:sent", "both:whatsapp:sent", "email:email:sent"]);
+	assert.deepEqual(deliveries.rows.map((row) => `${row.user_id === both.id ? "both" : "email"}:${row.channel}:${row.status}`).sort(), [
+		"both:email:sent",
+		"both:whatsapp:sent",
+		"email:email:sent"
+	]);
 	whatsapp.setTransport((...args) => fetch(...args));
 });
 
@@ -123,7 +139,10 @@ test("agendamentos: regra de horario, CRUD do proprio usuario e envio com anexo"
 
 	const manager = await h.createUser("manager");
 	await h.createCase(manager.token);
-	const created = await h.api("POST", "/api/reports/schedules", { token: manager.token, body: { name: "Semanal", format: "xlsx", frequency: "weekly", weekday: 1, hour: 7 } });
+	const created = await h.api("POST", "/api/reports/schedules", {
+		token: manager.token,
+		body: { name: "Semanal", format: "xlsx", frequency: "weekly", weekday: 1, hour: 7 }
+	});
 	assert.equal(created.status, 201);
 	assert.match(created.body.schedule.description, /semanal/);
 
@@ -139,15 +158,27 @@ test("agendamentos: regra de horario, CRUD do proprio usuario e envio com anexo"
 	assert.ok(message.attachments[0].content.length > 100);
 
 	const other = await h.createUser("manager");
-	assert.equal((await h.api("DELETE", `/api/reports/schedules/${created.body.schedule.id}`, { token: other.token })).status, 404, "nao mexe no agendamento de outra pessoa");
-	assert.equal((await h.api("PATCH", `/api/reports/schedules/${created.body.schedule.id}`, { token: manager.token, body: { active: false } })).body.schedule.active, false);
+	assert.equal(
+		(await h.api("DELETE", `/api/reports/schedules/${created.body.schedule.id}`, { token: other.token })).status,
+		404,
+		"nao mexe no agendamento de outra pessoa"
+	);
+	assert.equal(
+		(await h.api("PATCH", `/api/reports/schedules/${created.body.schedule.id}`, { token: manager.token, body: { active: false } })).body.schedule.active,
+		false
+	);
 	assert.equal((await h.api("DELETE", `/api/reports/schedules/${created.body.schedule.id}`, { token: manager.token })).status, 204);
 });
 
 test("antivirus: arquivo infectado e recusado; limpo, indisponivel e sem antivirus ficam marcados", async () => {
 	const operator = await h.createUser("operator");
 	const caseNumber = await h.createCase(operator.token);
-	const upload = () => h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=foto`, { token: operator.token, raw: h.PNG, headers: { "Content-Type": "application/octet-stream", "X-File-Name": "foto.png" } });
+	const upload = () =>
+		h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=foto`, {
+			token: operator.token,
+			raw: h.PNG,
+			headers: { "Content-Type": "application/octet-stream", "X-File-Name": "foto.png" }
+		});
 
 	assert.equal((await upload()).body.attachment.scanStatus, "skipped");
 	antivirus.setScanner(async () => "stream: Eicar-Signature FOUND");
@@ -156,10 +187,15 @@ test("antivirus: arquivo infectado e recusado; limpo, indisponivel e sem antivir
 	assert.equal(infected.body.code, "FILE_INFECTED");
 	antivirus.setScanner(async () => "stream: OK");
 	assert.equal((await upload()).status, 201);
-	antivirus.setScanner(async () => { throw new Error("connect ECONNREFUSED"); });
+	antivirus.setScanner(async () => {
+		throw new Error("connect ECONNREFUSED");
+	});
 	assert.equal((await upload()).status, 201, "antivirus fora do ar nao bloqueia o trabalho");
 	const { rows } = await h.database.query("SELECT scan_status FROM case_attachments ORDER BY id");
-	assert.deepEqual(rows.map((row) => row.scan_status), ["skipped", "clean", "error"]);
+	assert.deepEqual(
+		rows.map((row) => row.scan_status),
+		["skipped", "clean", "error"]
+	);
 	const listed = await h.api("GET", `/api/cases/${caseNumber}/attachments`, { token: operator.token });
 	assert.ok(listed.body.attachments.every((item) => "scanStatus" in item));
 });
@@ -167,7 +203,10 @@ test("antivirus: arquivo infectado e recusado; limpo, indisponivel e sem antivir
 test("erros do navegador exigem login e sao aceitos", async () => {
 	const operator = await h.createUser("operator");
 	assert.equal((await h.api("POST", "/api/client-errors", { body: { message: "x" } })).status, 401);
-	assert.equal((await h.api("POST", "/api/client-errors", { token: operator.token, body: { message: "TypeError: a is undefined", page: "/caso.html", line: 10 } })).status, 204);
+	assert.equal(
+		(await h.api("POST", "/api/client-errors", { token: operator.token, body: { message: "TypeError: a is undefined", page: "/caso.html", line: 10 } })).status,
+		204
+	);
 });
 
 test("relatorios valem os ultimos 90 dias por padrao; period=all mostra tudo", async () => {
@@ -184,9 +223,15 @@ test("relatorios valem os ultimos 90 dias por padrao; period=all mostra tudo", a
 test("producao exige FRONTEND_ORIGIN e API_PUBLIC_URL em https", () => {
 	const run = (env) => {
 		try {
-			execFileSync(process.execPath, ["-e", "require('./backend/config').validateConfig()"], { cwd: path.join(__dirname, "..", ".."), env: { PATH: process.env.PATH, NODE_ENV: "production", DATABASE_URL: "postgres://x", ...env }, stdio: "pipe" });
+			execFileSync(process.execPath, ["-e", "require('./backend/config').validateConfig()"], {
+				cwd: path.join(__dirname, "..", ".."),
+				env: { PATH: process.env.PATH, NODE_ENV: "production", DATABASE_URL: "postgres://x", ...env },
+				stdio: "pipe"
+			});
 			return "ok";
-		} catch (error) { return String(error.stderr); }
+		} catch (error) {
+			return String(error.stderr);
+		}
 	};
 	assert.match(run({}), /FRONTEND_ORIGIN e API_PUBLIC_URL sao obrigatorias/);
 	assert.match(run({ FRONTEND_ORIGIN: "http://app.test", API_PUBLIC_URL: "https://api.test" }), /URL https/);

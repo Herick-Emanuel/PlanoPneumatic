@@ -13,4 +13,10 @@ async function main() {
 	console.log(`Administrador ${email} pronto.`);
 }
 
-main().then(() => database.end()).catch(async (error) => { console.error(error.message); await database.end(); process.exitCode = 1; });
+main()
+	.then(() => database.end())
+	.catch(async (error) => {
+		console.error(error.message);
+		await database.end();
+		process.exitCode = 1;
+	});

@@ -36,7 +36,7 @@ const list = async (userId) => (await database.query(`SELECT ${FIELDS} FROM repo
 async function create(userId, data) {
 	const { rows } = await database.query(
 		`INSERT INTO report_schedules (user_id, name, filters, format, frequency, weekday, hour) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${FIELDS}`,
-		[userId, data.name, JSON.stringify(data.filters || {}), data.format, data.frequency, data.frequency === "weekly" ? data.weekday ?? 1 : null, data.hour]
+		[userId, data.name, JSON.stringify(data.filters || {}), data.format, data.frequency, data.frequency === "weekly" ? (data.weekday ?? 1) : null, data.hour]
 	);
 	return rows[0];
 }
@@ -67,13 +67,22 @@ async function deliver(scheduleId) {
 		const filters = { ...(schedule.filters || {}) };
 		if (!filters.from && !filters.to) filters.from = new Date(Date.now() - PERIOD_DAYS[schedule.frequency] * 86400000).toISOString().slice(0, 10);
 		const data = await reports.exportRows(user, filters);
-		const content = schedule.format === "xlsx" ? await exportsService.toXlsx(data) : schedule.format === "pdf" ? await exportsService.toPdf(data) : Buffer.from(exportsService.toCsv(data), "utf8");
+		const content =
+			schedule.format === "xlsx"
+				? await exportsService.toXlsx(data)
+				: schedule.format === "pdf"
+					? await exportsService.toPdf(data)
+					: Buffer.from(exportsService.toCsv(data), "utf8");
 		const filename = `${schedule.name.replace(/[^\w.-]+/g, "-").slice(0, 60) || "relatorio"}-${localDay(new Date())}.${schedule.format}`;
 		await mailer.send({
 			to: schedule.email,
 			subject: `PlanoPneumatic: ${schedule.name}`,
 			title: schedule.name,
-			lines: [`Olá, ${schedule.user_name.split(" ")[0]}.`, `Segue o relatório agendado (${describe(schedule)}) com ${data.length} processo(s), a partir de ${filters.from || "o início"}.`, "Para mudar ou cancelar o envio, abra Relatórios > Envios agendados."],
+			lines: [
+				`Olá, ${schedule.user_name.split(" ")[0]}.`,
+				`Segue o relatório agendado (${describe(schedule)}) com ${data.length} processo(s), a partir de ${filters.from || "o início"}.`,
+				"Para mudar ou cancelar o envio, abra Relatórios > Envios agendados."
+			],
 			action: { label: "Abrir relatórios", url: mailer.appUrl("/relatorios.html") },
 			attachments: [{ filename, content, contentType: MIME[schedule.format] }]
 		});

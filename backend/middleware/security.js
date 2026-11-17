@@ -27,7 +27,9 @@ function cors(request, response, next) {
 const rateBuckets = new Map();
 function rateLimit({ windowMs, max }) {
 	return (request, response, next) => {
-		const ip = String(request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || request.socket.remoteAddress || "").split(",")[0].trim();
+		const ip = String(request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || request.socket.remoteAddress || "")
+			.split(",")[0]
+			.trim();
 		const key = `${request.path}:${ip}`;
 		const now = Date.now();
 		const hits = (rateBuckets.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
@@ -45,7 +47,8 @@ function startRateLimitCleanup() {
 		const now = Date.now();
 		for (const [key, timestamps] of rateBuckets) {
 			const kept = timestamps.filter((timestamp) => now - timestamp < 3600000);
-			if (kept.length) rateBuckets.set(key, kept); else rateBuckets.delete(key);
+			if (kept.length) rateBuckets.set(key, kept);
+			else rateBuckets.delete(key);
 		}
 	}, 600000);
 	if (typeof timer.unref === "function") timer.unref();

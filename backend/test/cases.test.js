@@ -8,11 +8,25 @@ beforeEach(h.resetDatabase);
 
 test("each case type persists its specific fields (F1)", async () => {
 	const operator = await h.createUser("operator");
-	const venda = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda", { salesRepresentative: "Joana", unitPrice: "1.234,50", paymentTerms: "28 dias", salesChannel: "Balcao" }) });
+	const venda = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: h.basePayload("Pedido de venda", { salesRepresentative: "Joana", unitPrice: "1.234,50", paymentTerms: "28 dias", salesChannel: "Balcao" })
+	});
 	assert.equal(venda.status, 201);
-	const troca = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Base de troca", { originOrder: "PV-2026-0001", trackingCode: "BR123", itemCondition: "Dano leve", exchangeReason: "Dano no transporte" }) });
+	const troca = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: h.basePayload("Base de troca", {
+			originOrder: "PV-2026-0001",
+			trackingCode: "BR123",
+			itemCondition: "Dano leve",
+			exchangeReason: "Dano no transporte"
+		})
+	});
 	assert.equal(troca.status, 201);
-	const garantia = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Garantia", { receivedAt: "2026-05-02", defectDescription: "Vazamento", riskLevel: "Alto", serialNumber: "SN-1", lotNumber: "L-9" }) });
+	const garantia = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: h.basePayload("Garantia", { receivedAt: "2026-05-02", defectDescription: "Vazamento", riskLevel: "Alto", serialNumber: "SN-1", lotNumber: "L-9" })
+	});
 	assert.equal(garantia.status, 201);
 
 	const vendaDetail = (await h.api("GET", `/api/cases/${venda.body.case.id}`, { token: operator.token })).body.case;
@@ -39,9 +53,15 @@ test("server-side validation: document check digit, exchange fields, quantity", 
 	assert.match(invalidDocument.body.message, /CPF ou CNPJ/);
 	const validCpf = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Garantia", { clientDocument: "529.982.247-25" }) });
 	assert.equal(validCpf.status, 201);
-	const missingExchange = await h.api("POST", "/api/cases", { token: operator.token, body: { type: "Base de troca", client: "A", product: "B", productCode: "C", quantity: 1 } });
+	const missingExchange = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: { type: "Base de troca", client: "A", product: "B", productCode: "C", quantity: 1 }
+	});
 	assert.equal(missingExchange.status, 400);
-	const intake = await h.api("POST", "/api/cases", { token: operator.token, body: { type: "Base de troca", client: "A", product: "B", productCode: "C", quantity: 1, intake: true } });
+	const intake = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: { type: "Base de troca", client: "A", product: "B", productCode: "C", quantity: 1, intake: true }
+	});
 	assert.equal(intake.status, 201, "a triagem rapida aceita a troca sem os campos especificos");
 	const manager = await h.createUser("manager");
 	await h.api("PATCH", `/api/cases/${intake.body.case.id}/status`, { token: manager.token, body: { status: "Em analise" } });
@@ -53,8 +73,13 @@ test("server-side validation: document check digit, exchange fields, quantity", 
 
 test("100 concurrent creations never repeat a case number", async () => {
 	const operator = await h.createUser("operator");
-	const results = await Promise.all(Array.from({ length: 100 }, () => h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda") })));
-	assert.ok(results.every((response) => response.status === 201), "todas as criacoes devem funcionar");
+	const results = await Promise.all(
+		Array.from({ length: 100 }, () => h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda") }))
+	);
+	assert.ok(
+		results.every((response) => response.status === 201),
+		"todas as criacoes devem funcionar"
+	);
 	const numbers = results.map((response) => response.body.case.id);
 	assert.equal(new Set(numbers).size, 100);
 	const year = new Date().getFullYear();
@@ -107,11 +132,16 @@ test("cannot close with pending checklist or without documents; allowedTransitio
 	assert.equal(blockedChecklist.body.code, "CHECKLIST_PENDING");
 
 	const detail = (await h.api("GET", `/api/cases/${caseNumber}`, { token: manager.token })).body.case;
-	for (const item of detail.checklist) await h.api("PATCH", `/api/cases/${caseNumber}/checklist/${item.id}`, { token: operator.token, body: { completed: true } });
+	for (const item of detail.checklist)
+		await h.api("PATCH", `/api/cases/${caseNumber}/checklist/${item.id}`, { token: operator.token, body: { completed: true } });
 	const blockedDocument = await status({ status: "Concluido" });
 	assert.equal(blockedDocument.body.code, "DOCUMENT_REQUIRED");
 
-	const upload = await h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=comprovante`, { token: operator.token, raw: h.PNG, headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent("comprovante.png") } });
+	const upload = await h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=comprovante`, {
+		token: operator.token,
+		raw: h.PNG,
+		headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent("comprovante.png") }
+	});
 	assert.equal(upload.status, 201);
 	assert.equal((await status({ status: "Concluido" })).status, 200);
 
@@ -129,11 +159,24 @@ test("warranty needs a technical report before approval and stores decision and 
 	const early = await h.api("PATCH", `/api/cases/${caseNumber}/status`, { token: technician.token, body: { status: "Aprovado", destination: "reposicao" } });
 	assert.equal(early.body.code, "REPORT_REQUIRED");
 
-	assert.equal((await h.api("PATCH", `/api/cases/${caseNumber}`, { token: operator.token, body: { technicalReport: "x" } })).status, 403, "operador nao escreve laudo");
-	const report = await h.api("PATCH", `/api/cases/${caseNumber}`, { token: technician.token, body: { technicalReport: "Vedacao rompida por defeito de fabricacao.", technicalOwnerId: technician.id } });
+	assert.equal(
+		(await h.api("PATCH", `/api/cases/${caseNumber}`, { token: operator.token, body: { technicalReport: "x" } })).status,
+		403,
+		"operador nao escreve laudo"
+	);
+	const report = await h.api("PATCH", `/api/cases/${caseNumber}`, {
+		token: technician.token,
+		body: { technicalReport: "Vedacao rompida por defeito de fabricacao.", technicalOwnerId: technician.id }
+	});
 	assert.equal(report.status, 200);
-	assert.equal((await h.api("PATCH", `/api/cases/${caseNumber}/status`, { token: technician.token, body: { status: "Aprovado" } })).body.code, "DESTINATION_REQUIRED");
-	assert.equal((await h.api("PATCH", `/api/cases/${caseNumber}/status`, { token: technician.token, body: { status: "Aprovado", destination: "reposicao" } })).status, 200);
+	assert.equal(
+		(await h.api("PATCH", `/api/cases/${caseNumber}/status`, { token: technician.token, body: { status: "Aprovado" } })).body.code,
+		"DESTINATION_REQUIRED"
+	);
+	assert.equal(
+		(await h.api("PATCH", `/api/cases/${caseNumber}/status`, { token: technician.token, body: { status: "Aprovado", destination: "reposicao" } })).status,
+		200
+	);
 	const detail = (await h.api("GET", `/api/cases/${caseNumber}`, { token: technician.token })).body.case;
 	assert.equal(detail.warrantyDecision, "procedente");
 	assert.equal(detail.warrantyDestination, "reposicao");
@@ -160,7 +203,11 @@ test("duplicate origin document is blocked per type, case-insensitively (F3)", a
 	const duplicate = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Garantia", { documentReference: "nf-123" }) });
 	assert.equal(duplicate.status, 409);
 	assert.equal(duplicate.body.code, "DUPLICATE_ORIGIN_DOCUMENT");
-	assert.equal((await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda", { documentReference: "NF-123" }) })).status, 201, "outro tipo pode");
+	assert.equal(
+		(await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda", { documentReference: "NF-123" }) })).status,
+		201,
+		"outro tipo pode"
+	);
 });
 
 test("visibility: operators only see their cases; technicians and auditors see all but auditors cannot write", async () => {
@@ -185,9 +232,15 @@ test("pagination, sorting and filters on the case list", async () => {
 	const sorted = await h.api("GET", "/api/cases?sort=client&direction=asc&pageSize=2&page=1", { token: operator.token });
 	assert.equal(sorted.body.total, 4);
 	assert.equal(sorted.body.totalPages, 2);
-	assert.deepEqual(sorted.body.cases.map((item) => item.client), ["Alfa", "Beta"]);
+	assert.deepEqual(
+		sorted.body.cases.map((item) => item.client),
+		["Alfa", "Beta"]
+	);
 	const page2 = await h.api("GET", "/api/cases?sort=client&direction=asc&pageSize=2&page=2", { token: operator.token });
-	assert.deepEqual(page2.body.cases.map((item) => item.client), ["Delta", "Gama"]);
+	assert.deepEqual(
+		page2.body.cases.map((item) => item.client),
+		["Delta", "Gama"]
+	);
 	const onlyOrders = await h.api("GET", "/api/cases?type=Pedido%20de%20venda", { token: operator.token });
 	assert.equal(onlyOrders.body.total, 1);
 	assert.equal((await h.api("GET", "/api/cases?client=alf", { token: operator.token })).body.total, 1);
@@ -220,7 +273,12 @@ test("attachments: real upload, type sniffing, size limit, download and role-bas
 	const logistics = await h.createUser("logistics");
 	const technician = await h.createUser("technician");
 	const caseNumber = await h.createCase(operator.token);
-	const upload = (token, buffer, kind, name = "foto.png") => h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=${kind}`, { token, raw: buffer, headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(name) } });
+	const upload = (token, buffer, kind, name = "foto.png") =>
+		h.api("POST", `/api/cases/${caseNumber}/attachments/upload?kind=${kind}`, {
+			token,
+			raw: buffer,
+			headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(name) }
+		});
 
 	const ok = await upload(operator.token, h.PNG, "foto");
 	assert.equal(ok.status, 201);
@@ -234,11 +292,31 @@ test("attachments: real upload, type sniffing, size limit, download and role-bas
 	assert.equal(download.headers.get("content-type"), "image/png");
 	assert.ok(Buffer.compare(download.body, h.PNG) === 0);
 
-	const logisticsList = await h.api("GET", `/api/cases/${caseNumber}/attachments`, { token: await (async () => { await h.database.query("UPDATE cases SET assigned_to = $1", [logistics.id]); return logistics.token; })() });
-	assert.deepEqual(logisticsList.body.attachments.map((entry) => entry.kind), ["foto"], "logistica nao le laudo");
+	const logisticsList = await h.api("GET", `/api/cases/${caseNumber}/attachments`, {
+		token: await (async () => {
+			await h.database.query("UPDATE cases SET assigned_to = $1", [logistics.id]);
+			return logistics.token;
+		})()
+	});
+	assert.deepEqual(
+		logisticsList.body.attachments.map((entry) => entry.kind),
+		["foto"],
+		"logistica nao le laudo"
+	);
 
-	assert.equal((await h.api("POST", `/api/cases/${caseNumber}/attachments`, { token: operator.token, body: { fileName: "x", fileUrl: "javascript:alert(1)" } })).status, 400);
-	assert.equal((await h.api("POST", `/api/cases/${caseNumber}/attachments`, { token: operator.token, body: { fileName: "Manual", fileUrl: "https://example.com/manual.pdf" } })).status, 201);
+	assert.equal(
+		(await h.api("POST", `/api/cases/${caseNumber}/attachments`, { token: operator.token, body: { fileName: "x", fileUrl: "javascript:alert(1)" } })).status,
+		400
+	);
+	assert.equal(
+		(
+			await h.api("POST", `/api/cases/${caseNumber}/attachments`, {
+				token: operator.token,
+				body: { fileName: "Manual", fileUrl: "https://example.com/manual.pdf" }
+			})
+		).status,
+		201
+	);
 	assert.equal((await h.api("DELETE", `/api/cases/${caseNumber}/attachments/${ok.body.attachment.id}`, { token: operator.token })).status, 204);
 	const detail = (await h.api("GET", `/api/cases/${caseNumber}`, { token: technician.token })).body.case;
 	assert.equal(detail.attachments.length, 2);
@@ -261,16 +339,28 @@ test("creation is atomic: a failure leaves no orphan case, event or checklist", 
 	const operator = await h.createUser("operator");
 	const response = await h.api("POST", "/api/cases", { token: operator.token, body: h.basePayload("Pedido de venda", { customerId: 99999 }) });
 	assert.equal(response.status, 400);
-	const { rows } = await h.database.query("SELECT (SELECT COUNT(*) FROM cases)::int AS cases, (SELECT COUNT(*) FROM case_events)::int AS events, (SELECT COUNT(*) FROM case_checklist_items)::int AS checklist, (SELECT COALESCE(SUM(last_value), 0) FROM case_sequences)::int AS sequence");
+	const { rows } = await h.database.query(
+		"SELECT (SELECT COUNT(*) FROM cases)::int AS cases, (SELECT COUNT(*) FROM case_events)::int AS events, (SELECT COUNT(*) FROM case_checklist_items)::int AS checklist, (SELECT COALESCE(SUM(last_value), 0) FROM case_sequences)::int AS sequence"
+	);
 	assert.deepEqual(rows[0], { cases: 0, events: 0, checklist: 0, sequence: 0 });
 });
 
 test("order with multiple items stores items, totals and summary (F6)", async () => {
 	const operator = await h.createUser("operator");
-	const response = await h.api("POST", "/api/cases", { token: operator.token, body: { type: "Pedido de venda", client: "Oficina", product: "x", productCode: "x", quantity: 1, items: [
-		{ productCode: "A1", description: "Valvula", quantity: 2, unitPrice: 10.5 },
-		{ productCode: "B2", description: "Cilindro", quantity: 1, unitPrice: 100 }
-	] } });
+	const response = await h.api("POST", "/api/cases", {
+		token: operator.token,
+		body: {
+			type: "Pedido de venda",
+			client: "Oficina",
+			product: "x",
+			productCode: "x",
+			quantity: 1,
+			items: [
+				{ productCode: "A1", description: "Valvula", quantity: 2, unitPrice: 10.5 },
+				{ productCode: "B2", description: "Cilindro", quantity: 1, unitPrice: 100 }
+			]
+		}
+	});
 	assert.equal(response.status, 201);
 	const detail = (await h.api("GET", `/api/cases/${response.body.case.id}`, { token: operator.token })).body.case;
 	assert.equal(detail.items.length, 2);
@@ -288,7 +378,10 @@ test("customers and products registry with CPF/CNPJ validation (F3)", async () =
 	assert.equal(created.body.customer.document, "11222333000181");
 	assert.equal((await h.api("POST", "/api/customers", { token: operator.token, body: { name: "Outro", document: "11222333000181" } })).status, 409);
 	assert.equal((await h.api("PATCH", `/api/customers/${created.body.customer.id}`, { token: operator.token, body: { name: "x" } })).status, 403);
-	assert.equal((await h.api("PATCH", `/api/customers/${created.body.customer.id}`, { token: manager.token, body: { name: "Auto Viacao ABC SA" } })).status, 200);
+	assert.equal(
+		(await h.api("PATCH", `/api/customers/${created.body.customer.id}`, { token: manager.token, body: { name: "Auto Viacao ABC SA" } })).status,
+		200
+	);
 	const search = await h.api("GET", "/api/customers?q=viacao", { token: operator.token });
 	assert.equal(search.body.customers.length, 1);
 	assert.equal((await h.api("GET", "/api/customers?q=11222", { token: operator.token })).body.customers.length, 1);
@@ -305,7 +398,10 @@ test("notifications, bulk assignment and SLA alerts job", async () => {
 	const manager = await h.createUser("manager");
 	const operator = await h.createUser("operator");
 	const caseNumber = await h.createCase(manager.token);
-	const assign = await h.api("POST", "/api/cases/bulk/assign", { token: manager.token, body: { caseNumbers: [caseNumber, "NAO-EXISTE"], assignedTo: operator.id } });
+	const assign = await h.api("POST", "/api/cases/bulk/assign", {
+		token: manager.token,
+		body: { caseNumbers: [caseNumber, "NAO-EXISTE"], assignedTo: operator.id }
+	});
 	assert.equal(assign.body.assigned, 1);
 	const list = await h.api("GET", "/api/notifications", { token: operator.token });
 	assert.equal(list.body.unread, 1);
@@ -327,7 +423,7 @@ test("settings persist and exports (csv, xlsx, pdf) work with filters", async ()
 	assert.equal((await h.api("PUT", "/api/settings/require_documents", { token: operator.token, body: { value: false } })).status, 403);
 	assert.equal((await h.api("PUT", "/api/settings/require_documents", { token: manager.token, body: { value: false } })).status, 200);
 	assert.equal((await h.api("GET", "/api/settings", { token: operator.token })).body.settings.require_documents, false);
-	await h.createCase(operator.token, "Garantia", { client: "=HYPERLINK(\"x\")" });
+	await h.createCase(operator.token, "Garantia", { client: '=HYPERLINK("x")' });
 	const csv = await h.api("GET", "/api/reports/export.csv", { token: operator.token });
 	assert.equal(csv.status, 200);
 	assert.match(csv.body, /'=HYPERLINK/, "formulas neutralizadas");
@@ -367,5 +463,7 @@ test("serial/lot filter finds a part across orders, exchanges and warranties (F1
 		assert.equal(metrics.status, 200);
 		assert.match(metrics.body, /pp_http_requests_total/);
 		assert.match(metrics.body, /pp_cases_open 3/);
-	} finally { delete process.env.METRICS_TOKEN; }
+	} finally {
+		delete process.env.METRICS_TOKEN;
+	}
 });

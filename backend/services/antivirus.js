@@ -9,16 +9,23 @@ let override = null;
 const isConfigured = () => Boolean(process.env.CLAMAV_HOST);
 
 // Nos testes, substitui a conexao real por uma funcao (buffer) => resposta do clamd.
-function setScanner(next) { override = next; }
+function setScanner(next) {
+	override = next;
+}
 
 function streamToClamd(buffer, { host, port, timeoutMs }) {
 	return new Promise((resolve, reject) => {
 		const socket = net.createConnection({ host, port });
 		let reply = "";
-		const fail = (error) => { socket.destroy(); reject(error); };
+		const fail = (error) => {
+			socket.destroy();
+			reject(error);
+		};
 		socket.setTimeout(timeoutMs, () => fail(new Error("Tempo esgotado ao falar com o ClamAV.")));
 		socket.on("error", fail);
-		socket.on("data", (data) => { reply += data.toString("utf8"); });
+		socket.on("data", (data) => {
+			reply += data.toString("utf8");
+		});
 		socket.on("end", () => resolve(reply.replace(/\0/g, "").trim()));
 		socket.on("connect", () => {
 			socket.write("zINSTREAM\0");
@@ -47,7 +54,11 @@ async function scan(buffer) {
 	try {
 		const reply = override
 			? await override(buffer)
-			: await streamToClamd(buffer, { host: process.env.CLAMAV_HOST, port: Number(process.env.CLAMAV_PORT || 3310), timeoutMs: Number(process.env.CLAMAV_TIMEOUT_MS || 20000) });
+			: await streamToClamd(buffer, {
+					host: process.env.CLAMAV_HOST,
+					port: Number(process.env.CLAMAV_PORT || 3310),
+					timeoutMs: Number(process.env.CLAMAV_TIMEOUT_MS || 20000)
+				});
 		const result = parseReply(reply);
 		if (result.status === "error") logEvent("antivirus_error", { detail: result.detail });
 		return result;

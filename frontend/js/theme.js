@@ -5,5 +5,7 @@
 		const theme = localStorage.getItem("pp-theme");
 		if (theme === "light" || theme === "dark") root.dataset.theme = theme;
 		if (localStorage.getItem("pp-sidebar") === "collapsed") root.classList.add("sidebar-collapsed");
-	} catch { /* armazenamento indisponivel: segue o tema do sistema */ }
+	} catch {
+		/* armazenamento indisponivel: segue o tema do sistema */
+	}
 })();

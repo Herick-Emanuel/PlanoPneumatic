@@ -1,129 +1,233 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="/js/theme.js"></script>
-    <title>Plano Pneumatic | Operacao</title>
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#092d57" />
-    <link rel="icon" href="/icons/favicon-32.png" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/css/base.css" />
-    <link rel="stylesheet" href="/css/ui.css" />
-    <link rel="stylesheet" href="/css/dashboard.css" />
-  </head>
-  <body>
-    <main id="app" class="shell">
-      <section id="login-view" class="login-layout hidden">
-        <div class="login-visual">
-          <div class="brand brand-light">
-            <img src="/logo.png" alt="Plano Pneumatic" />
-            <span>FLUXO OPERACIONAL</span>
-          </div>
-          <div class="visual-copy">
-            <p class="eyebrow">Controle de ponta a ponta</p>
-            <h1>Da triagem ao encerramento, tudo no mesmo fluxo.</h1>
-            <p>Centralize pedidos, trocas e garantias com rastreabilidade para cada etapa e cada responsável.</p>
-          </div>
-          <div class="visual-footer">© 2026 Plano Pneumatic</div>
-        </div>
-        <section class="login-panel" aria-labelledby="login-title">
-          <div class="login-panel-inner">
-            <p class="eyebrow">Acesso restrito</p>
-            <h2 id="login-title">Entrar no sistema</h2>
-            <p class="muted">Use suas credenciais corporativas para continuar.</p>
-            <form id="login-form" class="form" novalidate>
-              <label>
-                E-mail
-                <input id="email" name="email" type="email" autocomplete="username" placeholder="voce@empresa.com" required />
-              </label>
-              <label>
-                Senha
-                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
-              </label>
-              <button class="button button-primary" type="submit">Entrar <span aria-hidden="true">→</span></button>
-              <p id="login-feedback" class="feedback" role="alert"></p>
-              <button class="link-button" type="button" data-auth-view="forgot">Esqueci minha senha</button>
-            </form>
-            <form id="forgot-form" class="form hidden" novalidate>
-              <p class="muted">Informe seu e-mail. Se ele estiver cadastrado, enviaremos um link para criar uma nova senha (vale 30 minutos).</p>
-              <label>
-                E-mail
-                <input name="email" type="email" autocomplete="username" placeholder="voce@empresa.com" required />
-              </label>
-              <button class="button button-primary" type="submit">Enviar link <span aria-hidden="true">→</span></button>
-              <p id="forgot-feedback" class="feedback" role="status"></p>
-              <button class="link-button" type="button" data-auth-view="login">Voltar para o login</button>
-            </form>
-            <form id="reset-form" class="form hidden" novalidate>
-              <p id="reset-intro" class="muted"></p>
-              <label>
-                Nova senha
-                <input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required />
-              </label>
-              <label>
-                Repita a senha
-                <input name="confirm" type="password" autocomplete="new-password" minlength="8" required />
-              </label>
-              <button class="button button-primary" type="submit">Salvar senha <span aria-hidden="true">→</span></button>
-              <p id="reset-feedback" class="feedback" role="alert"></p>
-              <button class="link-button" type="button" data-auth-view="login">Voltar para o login</button>
-            </form>
-            <div id="pwa-install-block" class="pwa-install-block hidden">
-              <div>
-                <strong>Instale o aplicativo</strong>
-                <p class="muted">Acesse o Plano Pneumatic direto do seu tablet ou desktop, sem precisar do navegador.</p>
-              </div>
-              <button id="pwa-install-button" class="button button-secondary" type="button">Baixar aplicativo <span aria-hidden="true">↓</span></button>
-            </div>
-          </div>
-        </section>
-      </section>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<script src="/js/theme.js"></script>
+		<title>Plano Pneumatic | Operacao</title>
+		<link rel="manifest" href="/manifest.json" />
+		<meta name="theme-color" content="#092d57" />
+		<link rel="icon" href="/icons/favicon-32.png" />
+		<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+		<link rel="stylesheet" href="/css/base.css" />
+		<link rel="stylesheet" href="/css/ui.css" />
+		<link rel="stylesheet" href="/css/dashboard.css" />
+	</head>
+	<body>
+		<main id="app" class="shell">
+			<section id="login-view" class="login-layout hidden">
+				<div class="login-visual">
+					<div class="brand brand-light">
+						<img src="/logo.png" alt="Plano Pneumatic" />
+						<span>FLUXO OPERACIONAL</span>
+					</div>
+					<div class="visual-copy">
+						<p class="eyebrow">Controle de ponta a ponta</p>
+						<h1>Da triagem ao encerramento, tudo no mesmo fluxo.</h1>
+						<p>Centralize pedidos, trocas e garantias com rastreabilidade para cada etapa e cada responsável.</p>
+					</div>
+					<div class="visual-footer">© 2026 Plano Pneumatic</div>
+				</div>
+				<section class="login-panel" aria-labelledby="login-title">
+					<div class="login-panel-inner">
+						<p class="eyebrow">Acesso restrito</p>
+						<h2 id="login-title">Entrar no sistema</h2>
+						<p class="muted">Use suas credenciais corporativas para continuar.</p>
+						<form id="login-form" class="form" novalidate>
+							<label>
+								E-mail
+								<input id="email" name="email" type="email" autocomplete="username" placeholder="voce@empresa.com" required />
+							</label>
+							<label>
+								Senha
+								<input id="password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+							</label>
+							<button class="button button-primary" type="submit">Entrar <span aria-hidden="true">→</span></button>
+							<p id="login-feedback" class="feedback" role="alert"></p>
+							<button class="link-button" type="button" data-auth-view="forgot">Esqueci minha senha</button>
+						</form>
+						<form id="forgot-form" class="form hidden" novalidate>
+							<p class="muted">Informe seu e-mail. Se ele estiver cadastrado, enviaremos um link para criar uma nova senha (vale 30 minutos).</p>
+							<label>
+								E-mail
+								<input name="email" type="email" autocomplete="username" placeholder="voce@empresa.com" required />
+							</label>
+							<button class="button button-primary" type="submit">Enviar link <span aria-hidden="true">→</span></button>
+							<p id="forgot-feedback" class="feedback" role="status"></p>
+							<button class="link-button" type="button" data-auth-view="login">Voltar para o login</button>
+						</form>
+						<form id="reset-form" class="form hidden" novalidate>
+							<p id="reset-intro" class="muted"></p>
+							<label>
+								Nova senha
+								<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required />
+							</label>
+							<label>
+								Repita a senha
+								<input name="confirm" type="password" autocomplete="new-password" minlength="8" required />
+							</label>
+							<button class="button button-primary" type="submit">Salvar senha <span aria-hidden="true">→</span></button>
+							<p id="reset-feedback" class="feedback" role="alert"></p>
+							<button class="link-button" type="button" data-auth-view="login">Voltar para o login</button>
+						</form>
+						<div id="pwa-install-block" class="pwa-install-block hidden">
+							<div>
+								<strong>Instale o aplicativo</strong>
+								<p class="muted">Acesse o Plano Pneumatic direto do seu tablet ou desktop, sem precisar do navegador.</p>
+							</div>
+							<button id="pwa-install-button" class="button button-secondary" type="button">Baixar aplicativo <span aria-hidden="true">↓</span></button>
+						</div>
+					</div>
+				</section>
+			</section>
 
-      <section id="dashboard-view" class="dashboard-layout hidden">
-        <aside class="sidebar">
-          <div class="brand brand-sidebar">
-            <img src="/logo.png" alt="Plano Pneumatic" />
-            <span>OPERAÇÃO</span>
-          </div>
-          <nav class="nav" aria-label="Navegação principal">
-            <a class="nav-link active" href="#dashboard"><span>▦</span> Dashboard</a>
-            <a class="nav-link" href="/triagem.html"><span>◎</span> Triagem</a>
-            <a class="nav-link" href="/pedido-venda.html"><span>▤</span> Pedidos de venda</a>
-            <a class="nav-link" href="/base-troca.html"><span>↻</span> Base de troca</a>
-            <a class="nav-link" href="/garantia.html"><span>✓</span> Garantias</a>
-            <a class="nav-link" href="/historico.html"><span>◷</span> Histórico</a>
-            <a class="nav-link" href="/relatorios.html"><span>▥</span> Relatórios</a>
-            <a class="nav-link" href="/configuracoes.html"><span>⚙</span> Configurações</a>
-          </nav>
-          <div class="sidebar-bottom">
-            <div class="profile-mini"><span id="profile-initials">AD</span><div><strong id="profile-name">Administrador</strong><small id="profile-role">Administrador</small></div></div>
-            <button id="logout-button" class="logout-button" type="button">Sair <span>↗</span></button>
-          </div>
-        </aside>
-        <div class="dashboard-content">
-          <header class="topbar">
-            <div><p class="eyebrow">Visão geral</p><h1>Dashboard operacional</h1></div>
-            <div class="topbar-actions"><span class="date-label">20 de setembro de 2026</span></div>
-          </header>
-          <section class="welcome-row"><div><h2>Bom dia, <span id="welcome-name">Administrador</span>.</h2><p class="muted">Acompanhe os processos que precisam da sua atenção.</p></div><a class="button button-primary" href="/triagem.html">+ Novo processo</a></section>
-          <form id="dashboard-filters" class="dashboard-filters panel">
-            <label>De<input name="from" type="date" /></label><label>Até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option><option>Pedido de venda</option><option>Base de troca</option><option>Garantia</option></select></label><label>Status<select name="status"><option value="">Todos</option><option>Criado</option><option>Em analise</option><option>Aguardando documento</option><option>Aprovado</option><option>Concluido</option><option>Encerrado</option><option>Cancelado</option></select></label><label>Cliente<input name="client" type="search" placeholder="Buscar cliente" /></label><label>Responsável<input name="responsible" type="search" placeholder="Nome" /></label><div class="filter-actions"><button class="button button-primary" type="submit">Aplicar filtros</button><button id="clear-dashboard-filters" class="button button-secondary" type="button">Limpar</button></div>
-          </form>
-          <section id="indicator-grid" class="indicator-grid" aria-live="polite"></section>
-          <section class="comparison-strip panel"><div><p class="eyebrow">Comparativo</p><h2>Período anterior</h2></div><div id="comparison-grid" class="comparison-grid"></div></section>
-          <section class="dashboard-insights"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Evolução</p><h2>Volume por dia</h2></div></div><div id="evolution-chart" class="bar-chart"></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Processos por tipo</h2></div></div><div id="type-chart" class="distribution-list"></div></article></section>
-          <section class="content-grid">
-            <article class="panel process-panel"><div class="panel-heading"><div><p class="eyebrow">Acompanhamento</p><h2>Casos recentes</h2></div><a href="/historico.html">Ver histórico →</a></div><div class="table-wrap"><table><thead><tr><th>Processo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Prazo</th><th>Atualizado</th></tr></thead><tbody id="cases-body"></tbody></table></div></article>
-            <article class="panel attention-panel"><div class="panel-heading"><div><p class="eyebrow">Atenção</p><h2>Minhas pendências</h2></div><span class="status-dot orange"></span></div><ul id="action-list" class="action-list"><li class="empty-action">Carregando próximas ações...</li></ul></article>
-          </section>
-          <section class="panel dashboard-alerts"><div class="panel-heading"><div><p class="eyebrow">Alertas</p><h2>Processos próximos do vencimento</h2></div><span id="alert-count" class="process-status">0 alertas</span></div><div id="alert-list" class="alert-list"></div></section>
-        </div>
-      </section>
-    </main>
-    <script src="/js/api.js" defer></script>
-    <script src="/js/pwa.js" defer></script>
-        <script src="/js/app.js" defer></script>
-  </body>
+			<section id="dashboard-view" class="dashboard-layout hidden">
+				<aside class="sidebar">
+					<div class="brand brand-sidebar">
+						<img src="/logo.png" alt="Plano Pneumatic" />
+						<span>OPERAÇÃO</span>
+					</div>
+					<nav class="nav" aria-label="Navegação principal">
+						<a class="nav-link active" href="#dashboard"><span>▦</span> Dashboard</a>
+						<a class="nav-link" href="/triagem.html"><span>◎</span> Triagem</a>
+						<a class="nav-link" href="/pedido-venda.html"><span>▤</span> Pedidos de venda</a>
+						<a class="nav-link" href="/base-troca.html"><span>↻</span> Base de troca</a>
+						<a class="nav-link" href="/garantia.html"><span>✓</span> Garantias</a>
+						<a class="nav-link" href="/historico.html"><span>◷</span> Histórico</a>
+						<a class="nav-link" href="/relatorios.html"><span>▥</span> Relatórios</a>
+						<a class="nav-link" href="/configuracoes.html"><span>⚙</span> Configurações</a>
+					</nav>
+					<div class="sidebar-bottom">
+						<div class="profile-mini">
+							<span id="profile-initials">AD</span>
+							<div><strong id="profile-name">Administrador</strong><small id="profile-role">Administrador</small></div>
+						</div>
+						<button id="logout-button" class="logout-button" type="button">Sair <span>↗</span></button>
+					</div>
+				</aside>
+				<div class="dashboard-content">
+					<header class="topbar">
+						<div>
+							<p class="eyebrow">Visão geral</p>
+							<h1>Dashboard operacional</h1>
+						</div>
+						<div class="topbar-actions"><span class="date-label">20 de setembro de 2026</span></div>
+					</header>
+					<section class="welcome-row">
+						<div>
+							<h2>Bom dia, <span id="welcome-name">Administrador</span>.</h2>
+							<p class="muted">Acompanhe os processos que precisam da sua atenção.</p>
+						</div>
+						<a class="button button-primary" href="/triagem.html">+ Novo processo</a>
+					</section>
+					<form id="dashboard-filters" class="dashboard-filters panel">
+						<label>De<input name="from" type="date" /></label><label>Até<input name="to" type="date" /></label
+						><label
+							>Tipo<select name="type">
+								<option value="">Todos</option>
+								<option>Pedido de venda</option>
+								<option>Base de troca</option>
+								<option>Garantia</option>
+							</select></label
+						><label
+							>Status<select name="status">
+								<option value="">Todos</option>
+								<option>Criado</option>
+								<option>Em analise</option>
+								<option>Aguardando documento</option>
+								<option>Aprovado</option>
+								<option>Concluido</option>
+								<option>Encerrado</option>
+								<option>Cancelado</option>
+							</select></label
+						><label>Cliente<input name="client" type="search" placeholder="Buscar cliente" /></label
+						><label>Responsável<input name="responsible" type="search" placeholder="Nome" /></label>
+						<div class="filter-actions">
+							<button class="button button-primary" type="submit">Aplicar filtros</button
+							><button id="clear-dashboard-filters" class="button button-secondary" type="button">Limpar</button>
+						</div>
+					</form>
+					<section id="indicator-grid" class="indicator-grid" aria-live="polite"></section>
+					<section class="comparison-strip panel">
+						<div>
+							<p class="eyebrow">Comparativo</p>
+							<h2>Período anterior</h2>
+						</div>
+						<div id="comparison-grid" class="comparison-grid"></div>
+					</section>
+					<section class="dashboard-insights">
+						<article class="panel">
+							<div class="panel-heading">
+								<div>
+									<p class="eyebrow">Evolução</p>
+									<h2>Volume por dia</h2>
+								</div>
+							</div>
+							<div id="evolution-chart" class="bar-chart"></div>
+						</article>
+						<article class="panel">
+							<div class="panel-heading">
+								<div>
+									<p class="eyebrow">Distribuição</p>
+									<h2>Processos por tipo</h2>
+								</div>
+							</div>
+							<div id="type-chart" class="distribution-list"></div>
+						</article>
+					</section>
+					<section class="content-grid">
+						<article class="panel process-panel">
+							<div class="panel-heading">
+								<div>
+									<p class="eyebrow">Acompanhamento</p>
+									<h2>Casos recentes</h2>
+								</div>
+								<a href="/historico.html">Ver histórico →</a>
+							</div>
+							<div class="table-wrap">
+								<table>
+									<thead>
+										<tr>
+											<th>Processo</th>
+											<th>Cliente</th>
+											<th>Tipo</th>
+											<th>Status</th>
+											<th>Prazo</th>
+											<th>Atualizado</th>
+										</tr>
+									</thead>
+									<tbody id="cases-body"></tbody>
+								</table>
+							</div>
+						</article>
+						<article class="panel attention-panel">
+							<div class="panel-heading">
+								<div>
+									<p class="eyebrow">Atenção</p>
+									<h2>Minhas pendências</h2>
+								</div>
+								<span class="status-dot orange"></span>
+							</div>
+							<ul id="action-list" class="action-list">
+								<li class="empty-action">Carregando próximas ações...</li>
+							</ul>
+						</article>
+					</section>
+					<section class="panel dashboard-alerts">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Alertas</p>
+								<h2>Processos próximos do vencimento</h2>
+							</div>
+							<span id="alert-count" class="process-status">0 alertas</span>
+						</div>
+						<div id="alert-list" class="alert-list"></div>
+					</section>
+				</div>
+			</section>
+		</main>
+		<script src="/js/api.js" defer></script>
+		<script src="/js/pwa.js" defer></script>
+		<script src="/js/app.js" defer></script>
+	</body>
 </html>

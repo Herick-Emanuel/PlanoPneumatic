@@ -11,8 +11,14 @@ const MAX_IMPORT = 20;
 
 // "AAAA-MM-DD" (input date) -> "DD/MM/AAAA" (Omie).
 const toOmieDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : null);
-const clean = (value, max) => { const text = String(value ?? "").trim(); return text ? text.slice(0, max) : ""; };
-const validDocument = (value) => { const digits = onlyDigits(value); return digits && isValidDocument(digits) ? digits : ""; };
+const clean = (value, max) => {
+	const text = String(value ?? "").trim();
+	return text ? text.slice(0, max) : "";
+};
+const validDocument = (value) => {
+	const digits = onlyDigits(value);
+	return digits && isValidDocument(digits) ? digits : "";
+};
 
 function dateFilter(from, to) {
 	const filter = {};
@@ -32,12 +38,14 @@ async function fetchPage(endpoint, method, base, listKey, page) {
 function mapOrder(order) {
 	const header = order.cabecalho || {};
 	const info = order.infoCadastro || {};
-	const items = (order.det || []).map((entry) => ({
-		productCode: clean(entry.produto?.codigo, 80),
-		description: clean(entry.produto?.descricao, 180),
-		quantity: Math.max(1, Math.round(Number(entry.produto?.quantidade) || 1)),
-		unitPrice: Number(entry.produto?.valor_unitario) || 0
-	})).filter((item) => item.productCode && item.description);
+	const items = (order.det || [])
+		.map((entry) => ({
+			productCode: clean(entry.produto?.codigo, 80),
+			description: clean(entry.produto?.descricao, 180),
+			quantity: Math.max(1, Math.round(Number(entry.produto?.quantidade) || 1)),
+			unitPrice: Number(entry.produto?.valor_unitario) || 0
+		}))
+		.filter((item) => item.productCode && item.description);
 	return {
 		ref: String(header.codigo_pedido),
 		omieOrderCode: Number(header.codigo_pedido) || null,
@@ -54,12 +62,14 @@ function mapOrder(order) {
 
 function mapInvoice(invoice) {
 	const ide = invoice.ide || {};
-	const items = (invoice.det || []).map((entry) => ({
-		productCode: clean(entry.prod?.cProd, 80),
-		description: clean(entry.prod?.xProd, 180),
-		quantity: Math.max(1, Math.round(Number(entry.prod?.qCom) || 1)),
-		unitPrice: Number(entry.prod?.vUnCom) || 0
-	})).filter((item) => item.productCode && item.description);
+	const items = (invoice.det || [])
+		.map((entry) => ({
+			productCode: clean(entry.prod?.cProd, 80),
+			description: clean(entry.prod?.xProd, 180),
+			quantity: Math.max(1, Math.round(Number(entry.prod?.qCom) || 1)),
+			unitPrice: Number(entry.prod?.vUnCom) || 0
+		}))
+		.filter((item) => item.productCode && item.description);
 	return {
 		ref: String(ide.nNF || "").replace(/^0+/, ""),
 		number: String(ide.nNF || ""),
@@ -93,7 +103,9 @@ async function attachCustomers(rows) {
 async function attachExisting(rows, kind) {
 	if (!rows.length) return rows;
 	const column = kind === "orders" ? "omie_order_code::text" : "ltrim(omie_invoice_number, '0')";
-	const { rows: found } = await database.query(`SELECT ${column} AS ref, case_number FROM cases WHERE ${column} = ANY($1::text[])`, [rows.map((row) => row.ref)]);
+	const { rows: found } = await database.query(`SELECT ${column} AS ref, case_number FROM cases WHERE ${column} = ANY($1::text[])`, [
+		rows.map((row) => row.ref)
+	]);
 	const byRef = new Map();
 	for (const item of found) byRef.set(item.ref, [...(byRef.get(item.ref) || []), item.case_number]);
 	return rows.map((row) => ({ ...row, cases: byRef.get(row.ref) || [] }));
@@ -134,15 +146,25 @@ async function loadInvoice(ref) {
  */
 async function importRecords(user, { kind, type, refs }) {
 	if (!CASE_TYPES.includes(type)) throw new AppError(400, "Tipo de processo invalido.", "BAD_TYPE");
-	if (!Array.isArray(refs) || !refs.length || refs.length > MAX_IMPORT) throw new AppError(400, `Escolha de 1 a ${MAX_IMPORT} registros por vez.`, "BAD_SELECTION");
+	if (!Array.isArray(refs) || !refs.length || refs.length > MAX_IMPORT)
+		throw new AppError(400, `Escolha de 1 a ${MAX_IMPORT} registros por vez.`, "BAD_SELECTION");
 	const results = [];
 	for (const ref of refs) {
 		try {
 			const record = kind === "orders" ? await loadOrder(ref) : await loadInvoice(ref);
 			const [existing] = (await attachExisting([record], kind))[0].cases;
-			if (existing) { results.push({ ref, status: "skipped", message: `Ja importado como ${existing}.`, caseNumber: existing }); continue; }
-			if (!record.items.length) { results.push({ ref, status: "error", message: "Sem itens com codigo e descricao." }); continue; }
-			if (!record.customerName) { results.push({ ref, status: "error", message: "Cliente nao encontrado no cadastro; sincronize os clientes do Omie." }); continue; }
+			if (existing) {
+				results.push({ ref, status: "skipped", message: `Ja importado como ${existing}.`, caseNumber: existing });
+				continue;
+			}
+			if (!record.items.length) {
+				results.push({ ref, status: "error", message: "Sem itens com codigo e descricao." });
+				continue;
+			}
+			if (!record.customerName) {
+				results.push({ ref, status: "error", message: "Cliente nao encontrado no cadastro; sincronize os clientes do Omie." });
+				continue;
+			}
 			const first = record.items[0];
 			const label = kind === "orders" ? `Pedido Omie ${record.number}` : `NF ${record.number}`;
 			const created = await cases.createCase(user, {
@@ -158,10 +180,12 @@ async function importRecords(user, { kind, type, refs }) {
 				notes: `Importado do Omie (${label}${record.date ? `, ${record.date}` : ""}).`,
 				items: type === "Pedido de venda" && record.items.length > 1 ? record.items : undefined
 			});
-			await database.query(
-				"UPDATE cases SET omie_order_code = $2, omie_order_number = $3, omie_invoice_number = $4 WHERE id = $1",
-				[created.id, record.omieOrderCode, kind === "orders" ? record.number : null, kind === "invoices" ? record.number : null]
-			);
+			await database.query("UPDATE cases SET omie_order_code = $2, omie_order_number = $3, omie_invoice_number = $4 WHERE id = $1", [
+				created.id,
+				record.omieOrderCode,
+				kind === "orders" ? record.number : null,
+				kind === "invoices" ? record.number : null
+			]);
 			await cases.addEvent(database, created.id, "VALIDACAO", `Processo aberto a partir do Omie (${label})`, user);
 			results.push({ ref, status: "created", caseNumber: created.case_number });
 		} catch (error) {

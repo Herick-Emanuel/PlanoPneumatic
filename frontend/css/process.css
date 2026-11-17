@@ -1,40 +1,81 @@
 /* =====================================================================
    Formularios de pedido de venda, base de troca e garantia
    ===================================================================== */
-.process-content { width: 100%; }
+.process-content {
+	width: 100%;
+}
 .process-intro {
-    align-items: center;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    display: flex;
-    gap: 16px;
-    justify-content: space-between;
-    padding: 14px 18px;
+	align-items: center;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	display: flex;
+	gap: 16px;
+	justify-content: space-between;
+	padding: 14px 18px;
 }
-.process-intro p { color: var(--text-2); margin: 0; max-width: 720px; }
-.process-intro .process-status { background: var(--orange-soft); color: var(--orange); }
-.process-form { display: grid; gap: 18px; margin: 0 auto; max-width: 1080px; width: 100%; }
+.process-intro p {
+	color: var(--text-2);
+	margin: 0;
+	max-width: 720px;
+}
+.process-intro .process-status {
+	background: var(--orange-soft);
+	color: var(--orange);
+}
+.process-form {
+	display: grid;
+	gap: 18px;
+	margin: 0 auto;
+	max-width: 1080px;
+	width: 100%;
+}
 .process-form > .form-actions {
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(6px);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    bottom: 12px;
-    box-shadow: var(--shadow);
-    padding: 12px 16px;
-    position: sticky;
-    z-index: 5;
+	background: color-mix(in srgb, var(--surface) 92%, transparent);
+	backdrop-filter: blur(6px);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	bottom: 12px;
+	box-shadow: var(--shadow);
+	padding: 12px 16px;
+	position: sticky;
+	z-index: 5;
 }
-.process-content > .draft-banner, .process-content .draft-banner { margin: 0 auto; max-width: 1080px; width: 100%; }
-.field-grid > .button { align-self: end; justify-self: start; }
+.process-content > .draft-banner,
+.process-content .draft-banner {
+	margin: 0 auto;
+	max-width: 1080px;
+	width: 100%;
+}
+.field-grid > .button {
+	align-self: end;
+	justify-self: start;
+}
 
 @media (max-width: 760px) {
-    .process-intro { align-items: flex-start; flex-direction: column; }
-    .process-form > .form-actions { bottom: 8px; }
+	.process-intro {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+	.process-form > .form-actions {
+		bottom: 8px;
+	}
 }
 
 /* F4: resultado do antivirus em cada anexo */
-.scan-badge { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-.scan-badge.clean { background: var(--success-soft, #e3f4ea); color: var(--success-ink, #1c6b3d); }
-.scan-badge.warn { background: var(--warning-soft, #fdf0dc); color: var(--warning-ink, #8a4b0a); }
+.scan-badge {
+	display: inline-block;
+	margin-top: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+}
+.scan-badge.clean {
+	background: var(--success-soft, #e3f4ea);
+	color: var(--success-ink, #1c6b3d);
+}
+.scan-badge.warn {
+	background: var(--warning-soft, #fdf0dc);
+	color: var(--warning-ink, #8a4b0a);
+}

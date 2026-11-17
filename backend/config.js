@@ -23,11 +23,17 @@ function validateConfig() {
 	if (isProduction) {
 		if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL e obrigatoria em producao.");
 		const missing = ["FRONTEND_ORIGIN", "API_PUBLIC_URL"].filter((name) => !process.env[name]);
-		if (missing.length) throw new Error(`${missing.join(" e ")} ${missing.length > 1 ? "sao obrigatorias" : "e obrigatoria"} em producao (endereco publico do frontend e da API).`);
-		for (const name of ["FRONTEND_ORIGIN", "API_PUBLIC_URL"]) if (!/^https:\/\/[^/]+$/.test(process.env[name])) throw new Error(`${name} deve ser uma URL https sem barra no final, por exemplo https://app.empresa.com.br.`);
+		if (missing.length)
+			throw new Error(
+				`${missing.join(" e ")} ${missing.length > 1 ? "sao obrigatorias" : "e obrigatoria"} em producao (endereco publico do frontend e da API).`
+			);
+		for (const name of ["FRONTEND_ORIGIN", "API_PUBLIC_URL"])
+			if (!/^https:\/\/[^/]+$/.test(process.env[name]))
+				throw new Error(`${name} deve ser uma URL https sem barra no final, por exemplo https://app.empresa.com.br.`);
 	}
 	if (process.env.SMTP_HOST && !process.env.MAIL_FROM) warnings.push("SMTP_HOST definido sem MAIL_FROM; usando o remetente padrao.");
-	if (Boolean(process.env.WHATSAPP_TOKEN) !== Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID)) warnings.push("WhatsApp precisa de WHATSAPP_TOKEN e WHATSAPP_PHONE_NUMBER_ID juntos; canal desligado.");
+	if (Boolean(process.env.WHATSAPP_TOKEN) !== Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID))
+		warnings.push("WhatsApp precisa de WHATSAPP_TOKEN e WHATSAPP_PHONE_NUMBER_ID juntos; canal desligado.");
 	if (isProduction && !process.env.SMTP_HOST) warnings.push("SMTP_HOST nao definido: recuperacao de senha, convites e avisos por e-mail ficam desligados.");
 	if (!Number.isFinite(config.sessionDurationInDays) || config.sessionDurationInDays <= 0) throw new Error("SESSION_DURATION_DAYS invalido.");
 	return warnings;

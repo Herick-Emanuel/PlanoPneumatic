@@ -16,10 +16,13 @@ const pending = new Set();
 const idle = () => Promise.allSettled([...pending]);
 
 async function recordDelivery(notificationId, userId, channel, result) {
-	await database.query(
-		"INSERT INTO notification_deliveries (notification_id, user_id, channel, status, error) VALUES ($1, $2, $3, $4, $5)",
-		[notificationId, userId, channel, result.delivered ? "sent" : "skipped", result.delivered ? null : result.reason || null]
-	);
+	await database.query("INSERT INTO notification_deliveries (notification_id, user_id, channel, status, error) VALUES ($1, $2, $3, $4, $5)", [
+		notificationId,
+		userId,
+		channel,
+		result.delivered ? "sent" : "skipped",
+		result.delivered ? null : result.reason || null
+	]);
 }
 
 // Le a notificacao ja gravada (se a transacao que a criou foi desfeita, nada e enviado).
@@ -34,13 +37,15 @@ async function deliverChannels(notificationId) {
 	const title = KIND_TITLES[item.kind] || "Aviso do PlanoPneumatic";
 	// Canal sem configuracao no servidor nao gera tentativa nem registro.
 	if (item.notify_email && item.email && mailer.isConfigured()) {
-		const result = await mailer.send({
-			to: item.email,
-			subject: `PlanoPneumatic: ${title}${item.case_number ? ` · ${item.case_number}` : ""}`,
-			title,
-			lines: [item.message, "Você recebe este aviso porque está participando do processo. Desative os e-mails em Minha conta."],
-			action: item.case_number ? { label: "Abrir o processo", url: mailer.appUrl(`/caso.html?id=${encodeURIComponent(item.case_number)}`) } : undefined
-		}).catch((error) => ({ delivered: false, reason: error.message }));
+		const result = await mailer
+			.send({
+				to: item.email,
+				subject: `PlanoPneumatic: ${title}${item.case_number ? ` · ${item.case_number}` : ""}`,
+				title,
+				lines: [item.message, "Você recebe este aviso porque está participando do processo. Desative os e-mails em Minha conta."],
+				action: item.case_number ? { label: "Abrir o processo", url: mailer.appUrl(`/caso.html?id=${encodeURIComponent(item.case_number)}`) } : undefined
+			})
+			.catch((error) => ({ delivered: false, reason: error.message }));
 		await recordDelivery(item.id, item.user_id, "email", result);
 	}
 	if (item.notify_whatsapp && item.phone && whatsapp.isConfigured()) {
@@ -59,7 +64,12 @@ function scheduleDelivery(notificationId) {
 
 async function notifyUser(userId, caseId, kind, message, executor = database) {
 	if (!userId) return;
-	const { rows } = await executor.query("INSERT INTO notifications (user_id, case_id, kind, message) VALUES ($1, $2, $3, $4) RETURNING id", [userId, caseId, kind, message]);
+	const { rows } = await executor.query("INSERT INTO notifications (user_id, case_id, kind, message) VALUES ($1, $2, $3, $4) RETURNING id", [
+		userId,
+		caseId,
+		kind,
+		message
+	]);
 	scheduleDelivery(rows[0].id);
 }
 
