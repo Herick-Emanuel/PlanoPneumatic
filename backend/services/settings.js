@@ -38,7 +38,9 @@ async function get(key, fallback, executor = database) {
 	return rows[0] ? rows[0].value : fallback;
 }
 
-const invalidate = () => { cache = null; };
+const invalidate = () => {
+	cache = null;
+};
 
 async function set(key, value, userId) {
 	if (!Object.hasOwn(DEFAULTS, key)) return false;

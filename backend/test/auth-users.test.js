@@ -57,7 +57,10 @@ test("admin edits a user's profile and resets the password", async () => {
 	assert.equal(edit.status, 200);
 	assert.equal(edit.body.user.role, "logistics");
 	assert.equal((await h.api("GET", "/api/auth/me", { token: operator.token })).status, 401, "mudar o perfil encerra as sessoes");
-	assert.equal((await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "Senha-Provisoria-Cinza-48" } })).status, 204);
+	assert.equal(
+		(await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "Senha-Provisoria-Cinza-48" } })).status,
+		204
+	);
 	const login = await h.api("POST", "/api/auth/login", { body: { email: operator.email, password: "Senha-Provisoria-Cinza-48" } });
 	assert.equal(login.status, 200);
 	const manager = await h.createUser("manager");

@@ -29,7 +29,9 @@ app.get("/sw.js", (request, response) => {
 });
 app.use(express.static(config.frontendDirectory));
 app.use(express.static(path.join(config.frontendDirectory, "html")));
-app.get("/api/openapi.yaml", (request, response) => response.type("text/yaml").send(fs.readFileSync(path.join(__dirname, "..", "docs", "openapi.yaml"), "utf8")));
+app.get("/api/openapi.yaml", (request, response) =>
+	response.type("text/yaml").send(fs.readFileSync(path.join(__dirname, "..", "docs", "openapi.yaml"), "utf8"))
+);
 
 async function health(request, response) {
 	try {
@@ -48,7 +50,9 @@ app.get("/api/metrics", async (request, response, next) => {
 		if (!token) return response.status(404).json({ message: "Rota nao encontrada." });
 		if (!safeEqual(request.get("authorization") || "", `Bearer ${token}`)) return response.status(401).json({ message: "Nao autorizado." });
 		return response.type("text/plain; version=0.0.4").send(await metrics.render());
-	} catch (error) { return next(error); }
+	} catch (error) {
+		return next(error);
+	}
 });
 
 app.use("/api/auth", require("./routes/auth").router);

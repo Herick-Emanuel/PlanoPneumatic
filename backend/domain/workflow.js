@@ -73,20 +73,34 @@ function validateTransition(user, item, target, context) {
 	}
 	if (item.type === "Garantia" && target === "Aprovado") {
 		if (!String(item.technical_report || "").trim()) return { code: "REPORT_REQUIRED", message: "Registre o laudo técnico antes de aprovar a garantia." };
-		if (!context.destination && !item.warranty_destination) return { code: "DESTINATION_REQUIRED", message: "Informe o destino da garantia (reposição, devolução, troca ou arquivo)." };
+		if (!context.destination && !item.warranty_destination)
+			return { code: "DESTINATION_REQUIRED", message: "Informe o destino da garantia (reposição, devolução, troca ou arquivo)." };
 	}
 	if (item.type === "Base de troca" && target === "Aprovado" && (!item.exchange_reason || !item.item_condition)) {
 		return { code: "FIELDS_REQUIRED", message: "Informe o motivo da troca e a condição do item antes de aprovar." };
 	}
-	if (item.type === "Garantia" && target === "Improcedente" &&!String(item.technical_report || "").trim()) {
+	if (item.type === "Garantia" && target === "Improcedente" && !String(item.technical_report || "").trim()) {
 		return { code: "REPORT_REQUIRED", message: "Registre o laudo técnico antes de marcar a garantia como improcedente." };
 	}
 	if (CLOSING_STATUSES.includes(target)) {
 		const pending = context.checklist.filter((entry) => !entry.completed);
-		if (pending.length && item.status !== "Improcedente") return { code: "CHECKLIST_PENDING", message: `Conclua o checklist antes de encerrar (${pending.length} item(ns) pendente(s)).` };
-		if (context.requireDocuments && context.attachmentCount < 1 && item.status !== "Improcedente") return { code: "DOCUMENT_REQUIRED", message: "Anexe ao menos um documento antes de concluir ou encerrar o processo." };
+		if (pending.length && item.status !== "Improcedente")
+			return { code: "CHECKLIST_PENDING", message: `Conclua o checklist antes de encerrar (${pending.length} item(ns) pendente(s)).` };
+		if (context.requireDocuments && context.attachmentCount < 1 && item.status !== "Improcedente")
+			return { code: "DOCUMENT_REQUIRED", message: "Anexe ao menos um documento antes de concluir ou encerrar o processo." };
 	}
 	return null;
 }
 
-module.exports = { transitions, nextStatuses, isTransitionValid, allowedTransitions, validateTransition, FINAL_STATUSES, DECISION_STATUSES, REASON_REQUIRED, CLOSING_STATUSES, REOPEN_TARGET };
+module.exports = {
+	transitions,
+	nextStatuses,
+	isTransitionValid,
+	allowedTransitions,
+	validateTransition,
+	FINAL_STATUSES,
+	DECISION_STATUSES,
+	REASON_REQUIRED,
+	CLOSING_STATUSES,
+	REOPEN_TARGET
+};

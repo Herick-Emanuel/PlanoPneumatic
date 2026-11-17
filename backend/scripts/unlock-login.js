@@ -10,4 +10,10 @@ async function main() {
 	console.log(cleared ? `Login de ${email} desbloqueado (${cleared} contador(es) removido(s)).` : `Nenhum bloqueio encontrado para ${email}.`);
 }
 
-main().then(() => database.end()).catch(async (error) => { console.error(error.message); await database.end(); process.exitCode = 1; });
+main()
+	.then(() => database.end())
+	.catch(async (error) => {
+		console.error(error.message);
+		await database.end();
+		process.exitCode = 1;
+	});

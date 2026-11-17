@@ -12,17 +12,44 @@ const settings = require("./settings");
 const omie = require("./omie");
 
 const FIELD_COLUMNS = Object.freeze({
-	client: "client", clientDocument: "client_document", product: "product", productCode: "product_code", quantity: "quantity",
-	documentReference: "document_reference", notes: "notes", customerId: "customer_id", productId: "product_id",
-	salesRepresentative: "sales_representative", unitPrice: "unit_price", paymentTerms: "payment_terms", salesChannel: "sales_channel",
-	exchangeReason: "exchange_reason", itemCondition: "item_condition", originOrder: "origin_order", trackingCode: "tracking_code",
-	receivedAt: "received_at", defectDescription: "defect_description", riskLevel: "risk_level", serialNumber: "serial_number",
-	lotNumber: "lot_number", technicalReport: "technical_report", technicalOwnerId: "technical_owner_id",
-	warrantyDestination: "warranty_destination", logisticsStatus: "logistics_status"
+	client: "client",
+	clientDocument: "client_document",
+	product: "product",
+	productCode: "product_code",
+	quantity: "quantity",
+	documentReference: "document_reference",
+	notes: "notes",
+	customerId: "customer_id",
+	productId: "product_id",
+	salesRepresentative: "sales_representative",
+	unitPrice: "unit_price",
+	paymentTerms: "payment_terms",
+	salesChannel: "sales_channel",
+	exchangeReason: "exchange_reason",
+	itemCondition: "item_condition",
+	originOrder: "origin_order",
+	trackingCode: "tracking_code",
+	receivedAt: "received_at",
+	defectDescription: "defect_description",
+	riskLevel: "risk_level",
+	serialNumber: "serial_number",
+	lotNumber: "lot_number",
+	technicalReport: "technical_report",
+	technicalOwnerId: "technical_owner_id",
+	warrantyDestination: "warranty_destination",
+	logisticsStatus: "logistics_status"
 });
 const TECHNICAL_FIELDS = ["technicalReport", "technicalOwnerId", "warrantyDestination"];
 const LOGISTICS_FIELDS = ["logisticsStatus"];
-const SORT_COLUMNS = Object.freeze({ case_number: "c.case_number", client: "c.client", type: "c.type", status: "c.status", updated_at: "c.updated_at", created_at: "c.created_at", due_at: "c.due_at" });
+const SORT_COLUMNS = Object.freeze({
+	case_number: "c.case_number",
+	client: "c.client",
+	type: "c.type",
+	status: "c.status",
+	updated_at: "c.updated_at",
+	created_at: "c.created_at",
+	due_at: "c.due_at"
+});
 const ASSIGNABLE_ROLES = [roles.OPERATOR, roles.TECHNICIAN, roles.LOGISTICS];
 
 function formatDate(value) {
@@ -97,12 +124,22 @@ async function nextCaseNumber(db, type) {
 }
 
 async function addEvent(db, caseId, type, description, user, details = null) {
-	await db.query(
-		"INSERT INTO case_events (case_id, event_type, description, responsible, actor_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
-		[caseId, type, description, user.name, user.id, details ? JSON.stringify(details) : null]
-	);
+	await db.query("INSERT INTO case_events (case_id, event_type, description, responsible, actor_id, details) VALUES ($1, $2, $3, $4, $5, $6)", [
+		caseId,
+		type,
+		description,
+		user.name,
+		user.id,
+		details ? JSON.stringify(details) : null
+	]);
 	// Auditoria geral (P2): o mesmo evento com IP e navegador de quem fez, na mesma transacao.
-	await audit("CASE_EVENT", { actorId: user.id || null, entityType: "case", entityId: caseId, details: { eventType: type, description, ...(details ? { changes: details } : {}) }, executor: db });
+	await audit("CASE_EVENT", {
+		actorId: user.id || null,
+		entityType: "case",
+		entityId: caseId,
+		details: { eventType: type, description, ...(details ? { changes: details } : {}) },
+		executor: db
+	});
 }
 
 function canView(user, item) {
@@ -139,7 +176,8 @@ async function assertNoDuplicateOrigin(db, type, documentReference, ignoreId = n
 		"SELECT case_number FROM cases WHERE type = $1 AND lower(document_reference) = lower($2) AND archived_at IS NULL AND status NOT IN ('Cancelado', 'Improcedente') AND ($3::int IS NULL OR id <> $3)",
 		[type, documentReference, ignoreId]
 	);
-	if (rows[0]) throw conflict(`Ja existe o processo ${rows[0].case_number} deste tipo com o documento de origem "${documentReference}".`, "DUPLICATE_ORIGIN_DOCUMENT");
+	if (rows[0])
+		throw conflict(`Ja existe o processo ${rows[0].case_number} deste tipo com o documento de origem "${documentReference}".`, "DUPLICATE_ORIGIN_DOCUMENT");
 }
 
 async function resolveRegistry(db, data) {
@@ -170,7 +208,11 @@ async function createCase(user, data) {
 			const { customerId, productId } = await resolveRegistry(db, data);
 			const items = data.items || [];
 			const summary = items.length
-				? { product: items.length > 1 ? `${items[0].description} (+${items.length - 1})` : items[0].description, productCode: items[0].productCode, quantity: items.reduce((sum, entry) => sum + entry.quantity, 0) }
+				? {
+						product: items.length > 1 ? `${items[0].description} (+${items.length - 1})` : items[0].description,
+						productCode: items[0].productCode,
+						quantity: items.reduce((sum, entry) => sum + entry.quantity, 0)
+					}
 				: { product: data.product, productCode: data.productCode, quantity: data.quantity };
 			const caseNumber = await nextCaseNumber(db, data.type);
 			const slaDays = await getSlaDays(data.type, db);
@@ -197,7 +239,8 @@ async function createCase(user, data) {
 				);
 			}
 			await addEvent(db, inserted.id, "ABERTURA", "Caso criado na triagem", user);
-			for (const label of CHECKLIST_TEMPLATES[data.type]) await db.query("INSERT INTO case_checklist_items (case_id, label) VALUES ($1, $2)", [inserted.id, label]);
+			for (const label of CHECKLIST_TEMPLATES[data.type])
+				await db.query("INSERT INTO case_checklist_items (case_id, label) VALUES ($1, $2)", [inserted.id, label]);
 			return inserted;
 		});
 		dispatchWebhook("case.created", { id: created.case_number, type: created.type, client: created.client });
@@ -222,11 +265,29 @@ async function validateAgainstOmie(created, user, data) {
 		const order = await omie.lookupOrder(data.omieOrderNumber, { maxWait: 90000 });
 		const lines = data.items?.length ? data.items : [{ productCode: data.productCode, quantity: data.quantity, unitPrice: data.unitPrice }];
 		const issues = omie.compareOrderLines(order.items, lines);
-		await database.query("UPDATE cases SET omie_order_number = $2, omie_order_code = $3, commercial_divergence = $4 WHERE id = $1", [created.id, order.orderNumber, order.omieOrderCode, issues.length ? JSON.stringify({ checkedAt: new Date().toISOString(), issues }) : null]);
+		await database.query("UPDATE cases SET omie_order_number = $2, omie_order_code = $3, commercial_divergence = $4 WHERE id = $1", [
+			created.id,
+			order.orderNumber,
+			order.omieOrderCode,
+			issues.length ? JSON.stringify({ checkedAt: new Date().toISOString(), issues }) : null
+		]);
 		if (issues.length) {
-			await addEvent(database, created.id, "DIVERGENCIA", `Divergencia comercial com o pedido ${order.orderNumber} do Omie (${issues.length}): enviada para revisao`, user, { issues });
+			await addEvent(
+				database,
+				created.id,
+				"DIVERGENCIA",
+				`Divergencia comercial com o pedido ${order.orderNumber} do Omie (${issues.length}): enviada para revisao`,
+				user,
+				{ issues }
+			);
 			const { rows: managers } = await database.query("SELECT id FROM users WHERE role = 'manager' AND active = TRUE");
-			for (const manager of managers) await notifyUser(manager.id, created.id, "COMMERCIAL_DIVERGENCE", `O processo ${created.case_number} diverge do pedido ${order.orderNumber} do Omie. Revise antes de aprovar.`);
+			for (const manager of managers)
+				await notifyUser(
+					manager.id,
+					created.id,
+					"COMMERCIAL_DIVERGENCE",
+					`O processo ${created.case_number} diverge do pedido ${order.orderNumber} do Omie. Revise antes de aprovar.`
+				);
 		} else await addEvent(database, created.id, "VALIDACAO", `Itens conferem com o pedido ${order.orderNumber} do Omie`, user);
 	} catch (error) {
 		await addEvent(database, created.id, "VALIDACAO", `Nao foi possivel validar com o Omie: ${error.message}`, user).catch(() => {});
@@ -236,13 +297,24 @@ async function validateAgainstOmie(created, user, data) {
 async function getCaseDetail(user, caseNumber) {
 	const item = await findCase(caseNumber, user);
 	const [events, items, checklist, attachments] = await Promise.all([
-		database.query("SELECT e.id, e.event_type AS type, e.description, e.responsible, e.created_at AS \"createdAt\", e.details, u.name AS \"actorName\" FROM case_events e LEFT JOIN users u ON u.id = e.actor_id WHERE e.case_id = $1 ORDER BY e.created_at DESC, e.id DESC", [item.id]),
-		database.query("SELECT id, product_code AS \"productCode\", description, quantity, unit_price AS \"unitPrice\", serial_number AS \"serialNumber\", lot_number AS \"lotNumber\" FROM case_items WHERE case_id = $1 ORDER BY id", [item.id]),
-		database.query("SELECT id, label, completed, completed_at AS \"completedAt\" FROM case_checklist_items WHERE case_id = $1 ORDER BY id", [item.id]),
-		database.query("SELECT a.id, a.file_name AS \"fileName\", a.file_url AS \"fileUrl\", a.mime_type AS \"mimeType\", a.size_bytes AS \"sizeBytes\", a.kind, a.stage, a.created_at AS \"createdAt\", (a.content IS NOT NULL) AS \"hasFile\", u.name AS \"uploadedBy\" FROM case_attachments a LEFT JOIN users u ON u.id = a.uploaded_by WHERE a.case_id = $1 AND a.removed_at IS NULL ORDER BY a.created_at DESC", [item.id])
+		database.query(
+			'SELECT e.id, e.event_type AS type, e.description, e.responsible, e.created_at AS "createdAt", e.details, u.name AS "actorName" FROM case_events e LEFT JOIN users u ON u.id = e.actor_id WHERE e.case_id = $1 ORDER BY e.created_at DESC, e.id DESC',
+			[item.id]
+		),
+		database.query(
+			'SELECT id, product_code AS "productCode", description, quantity, unit_price AS "unitPrice", serial_number AS "serialNumber", lot_number AS "lotNumber" FROM case_items WHERE case_id = $1 ORDER BY id',
+			[item.id]
+		),
+		database.query('SELECT id, label, completed, completed_at AS "completedAt" FROM case_checklist_items WHERE case_id = $1 ORDER BY id', [item.id]),
+		database.query(
+			'SELECT a.id, a.file_name AS "fileName", a.file_url AS "fileUrl", a.mime_type AS "mimeType", a.size_bytes AS "sizeBytes", a.kind, a.stage, a.created_at AS "createdAt", (a.content IS NOT NULL) AS "hasFile", u.name AS "uploadedBy" FROM case_attachments a LEFT JOIN users u ON u.id = a.uploaded_by WHERE a.case_id = $1 AND a.removed_at IS NULL ORDER BY a.created_at DESC',
+			[item.id]
+		)
 	]);
 	const detail = formatCaseDetail(item);
-	const { rows: owners } = await database.query("SELECT id, name FROM users WHERE id = ANY($1::int[])", [[item.technical_owner_id, item.assigned_to, item.decided_by].filter(Boolean)]);
+	const { rows: owners } = await database.query("SELECT id, name FROM users WHERE id = ANY($1::int[])", [
+		[item.technical_owner_id, item.assigned_to, item.decided_by].filter(Boolean)
+	]);
 	const nameOf = (id) => owners.find((owner) => owner.id === id)?.name || "";
 	detail.technicalOwnerName = nameOf(item.technical_owner_id);
 	detail.decidedByName = nameOf(item.decided_by);
@@ -251,7 +323,9 @@ async function getCaseDetail(user, caseNumber) {
 		...detail,
 		events: events.rows,
 		items: itemRows,
-		totalValue: itemRows.length ? itemRows.reduce((sum, row) => sum + row.quantity * (Number(row.unitPrice) || 0), 0) : (Number(item.unit_price) || 0) * (item.quantity || 0),
+		totalValue: itemRows.length
+			? itemRows.reduce((sum, row) => sum + row.quantity * (Number(row.unitPrice) || 0), 0)
+			: (Number(item.unit_price) || 0) * (item.quantity || 0),
 		checklist: checklist.rows,
 		attachments: attachments.rows,
 		allowedTransitions: item.archived_at ? [] : allowedTransitions(user, item),
@@ -292,10 +366,13 @@ async function updateCase(user, caseNumber, data, rawBody) {
 	try {
 		return await withTransaction(async (db) => {
 			const current = await findCase(caseNumber, user, { db, lock: true, includeArchived: false });
-			if (FINAL_STATUSES.includes(current.status)) throw new AppError(422, "Processo encerrado ou cancelado nao pode ser editado. Reabra o processo primeiro.", "CASE_LOCKED");
+			if (FINAL_STATUSES.includes(current.status))
+				throw new AppError(422, "Processo encerrado ou cancelado nao pode ser editado. Reabra o processo primeiro.", "CASE_LOCKED");
 			const sent = Object.keys(data).concat(Object.keys(rawBody || {}).filter((key) => FIELD_COLUMNS[key] && data[key] === undefined));
-			if (sent.some((field) => TECHNICAL_FIELDS.includes(field)) && !can(user, capabilities.TECHNICAL_ANALYSIS)) throw forbidden("Somente tecnico, gerente ou administrador altera laudo e destino.");
-			if (sent.some((field) => LOGISTICS_FIELDS.includes(field)) && !can(user, capabilities.MANAGE_LOGISTICS)) throw forbidden("Somente a logistica altera o status de logistica reversa.");
+			if (sent.some((field) => TECHNICAL_FIELDS.includes(field)) && !can(user, capabilities.TECHNICAL_ANALYSIS))
+				throw forbidden("Somente tecnico, gerente ou administrador altera laudo e destino.");
+			if (sent.some((field) => LOGISTICS_FIELDS.includes(field)) && !can(user, capabilities.MANAGE_LOGISTICS))
+				throw forbidden("Somente a logistica altera o status de logistica reversa.");
 			const updates = {};
 			for (const field of new Set(sent)) {
 				const column = FIELD_COLUMNS[field];
@@ -304,7 +381,12 @@ async function updateCase(user, caseNumber, data, rawBody) {
 			}
 			if (data.documentReference !== undefined) await assertNoDuplicateOrigin(db, current.type, data.documentReference, current.id);
 			if (data.customerId || data.clientDocument || data.productId || data.productCode) {
-				const resolved = await resolveRegistry(db, { customerId: data.customerId, clientDocument: data.clientDocument, productId: data.productId, productCode: data.productCode });
+				const resolved = await resolveRegistry(db, {
+					customerId: data.customerId,
+					clientDocument: data.clientDocument,
+					productId: data.productId,
+					productCode: data.productCode
+				});
 				if (resolved.customerId) updates.customer_id = resolved.customerId;
 				if (resolved.productId) updates.product_id = resolved.productId;
 			}
@@ -312,7 +394,10 @@ async function updateCase(user, caseNumber, data, rawBody) {
 			if (!Object.keys(changes).length) return current;
 			const columns = Object.keys(updates);
 			const assignments = columns.map((column, index) => `${column} = $${index + 1}`).join(", ");
-			const { rows } = await db.query(`UPDATE cases SET ${assignments}, updated_at = NOW() WHERE id = $${columns.length + 1} RETURNING *`, [...columns.map((column) => updates[column]), current.id]);
+			const { rows } = await db.query(`UPDATE cases SET ${assignments}, updated_at = NOW() WHERE id = $${columns.length + 1} RETURNING *`, [
+				...columns.map((column) => updates[column]),
+				current.id
+			]);
 			await addEvent(db, current.id, "EDICAO", "Dados do processo atualizados", user, { changes });
 			return rows[0];
 		});
@@ -327,7 +412,9 @@ async function changeStatus(user, caseNumber, { status, reason, destination }) {
 		if (current.status === status) throw badRequest("O processo ja possui este status.", "SAME_STATUS");
 		// Uma transacao usa um unico client: as consultas rodam em sequencia.
 		const { rows: checklist } = await db.query("SELECT completed FROM case_checklist_items WHERE case_id = $1", [current.id]);
-		const { rows: attachmentRows } = await db.query("SELECT COUNT(*)::int AS count FROM case_attachments WHERE case_id = $1 AND removed_at IS NULL", [current.id]);
+		const { rows: attachmentRows } = await db.query("SELECT COUNT(*)::int AS count FROM case_attachments WHERE case_id = $1 AND removed_at IS NULL", [
+			current.id
+		]);
 		const requireDocuments = await settings.get("require_documents", true, db);
 		const problem = validateTransition(user, current, status, { checklist, attachmentCount: attachmentRows[0].count, requireDocuments, reason, destination });
 		if (problem) throw new AppError(problem.code === "FORBIDDEN" ? 403 : 422, problem.message, problem.code);
@@ -335,9 +422,14 @@ async function changeStatus(user, caseNumber, { status, reason, destination }) {
 		const isReopen = FINAL_STATUSES.includes(current.status) && status === REOPEN_TARGET;
 		const sets = ["status = $1", "status_reason = $2", "updated_at = NOW()"];
 		const values = [status, reason || null];
-		const push = (sql, value) => { values.push(value); sets.push(sql.replace("$V", `$${values.length}`)); };
+		const push = (sql, value) => {
+			values.push(value);
+			sets.push(sql.replace("$V", `$${values.length}`));
+		};
 
-		if (current.status === PAUSING_STATUS && current.sla_paused_at) { sets.push("due_at = due_at + (NOW() - sla_paused_at)", "sla_paused_at = NULL", "sla_notified_at = NULL"); }
+		if (current.status === PAUSING_STATUS && current.sla_paused_at) {
+			sets.push("due_at = due_at + (NOW() - sla_paused_at)", "sla_paused_at = NULL", "sla_notified_at = NULL");
+		}
 		if (status === PAUSING_STATUS) sets.push("sla_paused_at = COALESCE(sla_paused_at, NOW())");
 		if (FINISHED_STATUSES.includes(status)) sets.push("closed_at = NOW()");
 		if (isReopen) {
@@ -357,7 +449,9 @@ async function changeStatus(user, caseNumber, { status, reason, destination }) {
 		values.push(current.id);
 		const { rows } = await db.query(`UPDATE cases SET ${sets.join(", ")} WHERE id = $${values.length} RETURNING *`, values);
 		const label = (code) => STATUS_LABELS[code] || code;
-		const description = isReopen ? `Processo reaberto (de ${label(current.status)}). Justificativa: ${reason}` : `Status alterado de ${label(current.status)} para ${label(status)}${reason ? `. Motivo: ${reason}` : ""}`;
+		const description = isReopen
+			? `Processo reaberto (de ${label(current.status)}). Justificativa: ${reason}`
+			: `Status alterado de ${label(current.status)} para ${label(status)}${reason ? `. Motivo: ${reason}` : ""}`;
 		await addEvent(db, current.id, isReopen ? "REABERTURA" : "STATUS", description, user, { from: current.status, to: status, reason: reason || null });
 		await notifyCaseParticipants(current, user.id, "STATUS_CHANGED", `O processo ${caseNumber} mudou para ${status}.`, db);
 		return { updated: rows[0], previous: current.status };
@@ -371,9 +465,14 @@ async function assignCase(user, caseNumber, assigneeId) {
 	const updated = await withTransaction(async (db) => {
 		const { rows: assignees } = await db.query("SELECT id, name, role, active FROM users WHERE id = $1", [assigneeId]);
 		const assignee = assignees[0];
-		if (!assignee || !ASSIGNABLE_ROLES.includes(assignee.role) || !assignee.active) throw badRequest("O processo deve ser atribuido a um usuario ativo de operacao, tecnico ou logistica.", "INVALID_ASSIGNEE");
+		if (!assignee || !ASSIGNABLE_ROLES.includes(assignee.role) || !assignee.active)
+			throw badRequest("O processo deve ser atribuido a um usuario ativo de operacao, tecnico ou logistica.", "INVALID_ASSIGNEE");
 		const current = await findCase(caseNumber, user, { db, lock: true, includeArchived: false });
-		const { rows } = await db.query("UPDATE cases SET assigned_to = $1, responsible = $2, updated_at = NOW() WHERE id = $3 RETURNING *", [assignee.id, assignee.name, current.id]);
+		const { rows } = await db.query("UPDATE cases SET assigned_to = $1, responsible = $2, updated_at = NOW() WHERE id = $3 RETURNING *", [
+			assignee.id,
+			assignee.name,
+			current.id
+		]);
 		await addEvent(db, current.id, "ATRIBUICAO", `Processo atribuido para ${assignee.name}`, user, { from: current.responsible, to: assignee.name });
 		await notifyUser(assignee.id, current.id, "CASE_ASSIGNED", `O processo ${caseNumber} foi atribuido a voce.`, db);
 		return rows[0];
@@ -386,14 +485,32 @@ async function setArchived(user, caseNumber, archived) {
 	if (!can(user, capabilities.ARCHIVE_CASE)) throw forbidden();
 	return withTransaction(async (db) => {
 		const current = await findCase(caseNumber, user, { db, lock: true });
-		if (archived && !FINISHED_STATUSES.includes(current.status)) throw new AppError(422, "Somente processos concluidos, encerrados ou cancelados podem ser arquivados.", "NOT_FINISHED");
-		const { rows } = await db.query(`UPDATE cases SET archived_at = ${archived ? "NOW()" : "NULL"}, updated_at = NOW() WHERE id = $1 RETURNING *`, [current.id]);
+		if (archived && !FINISHED_STATUSES.includes(current.status))
+			throw new AppError(422, "Somente processos concluidos, encerrados ou cancelados podem ser arquivados.", "NOT_FINISHED");
+		const { rows } = await db.query(`UPDATE cases SET archived_at = ${archived ? "NOW()" : "NULL"}, updated_at = NOW() WHERE id = $1 RETURNING *`, [
+			current.id
+		]);
 		await addEvent(db, current.id, archived ? "ARQUIVAMENTO" : "DESARQUIVAMENTO", archived ? "Processo arquivado" : "Processo restaurado do arquivo", user);
 		return rows[0];
 	});
 }
 
 module.exports = {
-	FIELD_COLUMNS, ASSIGNABLE_ROLES, formatCase, formatCaseDetail, formatDate, nextCaseNumber, addEvent, canView, findCase,
-	createCase, idle, getCaseDetail, listCases, updateCase, changeStatus, assignCase, setArchived
+	FIELD_COLUMNS,
+	ASSIGNABLE_ROLES,
+	formatCase,
+	formatCaseDetail,
+	formatDate,
+	nextCaseNumber,
+	addEvent,
+	canView,
+	findCase,
+	createCase,
+	idle,
+	getCaseDetail,
+	listCases,
+	updateCase,
+	changeStatus,
+	assignCase,
+	setArchived
 };

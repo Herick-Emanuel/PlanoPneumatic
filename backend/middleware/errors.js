@@ -36,7 +36,13 @@ function requestLogger(request, response, next) {
 	response.on("finish", () => {
 		const path = request.originalUrl.split("?")[0];
 		if (path === "/health" || path === "/api/health") return;
-		logEvent("http_request", { requestId: request.id, method: request.method, path, status: response.statusCode, durationMs: Number(process.hrtime.bigint() - startedAt) / 1e6 });
+		logEvent("http_request", {
+			requestId: request.id,
+			method: request.method,
+			path,
+			status: response.statusCode,
+			durationMs: Number(process.hrtime.bigint() - startedAt) / 1e6
+		});
 	});
 	return next();
 }
@@ -52,7 +58,9 @@ function errorHandler(error, request, response, next) {
 		return response.status(400).json({ message: issues[0]?.message || "Dados invalidos.", code: "VALIDATION_ERROR", errors: issues, requestId: request.id });
 	}
 	if (error instanceof AppError) {
-		return response.status(error.status).json({ message: error.message, code: error.code, ...(error.details ? { details: error.details } : {}), requestId: request.id });
+		return response
+			.status(error.status)
+			.json({ message: error.message, code: error.code, ...(error.details ? { details: error.details } : {}), requestId: request.id });
 	}
 	if (error.type === "entity.too.large") {
 		return response.status(413).json({ message: "Arquivo ou requisicao maior que o limite permitido.", code: "PAYLOAD_TOO_LARGE", requestId: request.id });
@@ -63,7 +71,13 @@ function errorHandler(error, request, response, next) {
 	if (error.code === "23505") {
 		return response.status(409).json({ message: "Ja existe um registro com estes dados.", code: "DUPLICATE", requestId: request.id });
 	}
-	logEvent("http_error", { requestId: request.id, method: request.method, path: request.path, error: error.message, stack: process.env.NODE_ENV === "production" ? undefined : error.stack });
+	logEvent("http_error", {
+		requestId: request.id,
+		method: request.method,
+		path: request.path,
+		error: error.message,
+		stack: process.env.NODE_ENV === "production" ? undefined : error.stack
+	});
 	return response.status(500).json({ message: "Erro interno do servidor.", code: "INTERNAL", requestId: request.id });
 }
 

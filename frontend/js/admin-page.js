@@ -8,15 +8,29 @@ document.head.appendChild(sharedShellScript);
 	const page = document.querySelector("[data-admin-page]");
 	const pageType = page.dataset.adminPage;
 	const content = () => document.querySelector("#page-content");
-	const set = (html) => { content().innerHTML = html; };
+	const set = (html) => {
+		content().innerHTML = html;
+	};
 	let me = null;
 
-	const card = (label, value, tone = "blue") => `<article class="indicator-card ${tone}"><div class="indicator-top"><span>${esc(label)}</span><span class="indicator-mark" aria-hidden="true">↗</span></div><strong>${esc(value)}</strong><small>Dados atuais</small></article>`;
+	const card = (label, value, tone = "blue") =>
+		`<article class="indicator-card ${tone}"><div class="indicator-top"><span>${esc(label)}</span><span class="indicator-mark" aria-hidden="true">↗</span></div><strong>${esc(value)}</strong><small>Dados atuais</small></article>`;
 	const loading = () => set(PP.skeleton(5));
-	const failure = (error, retry) => { set(`<section class="panel">${PP.errorState(error.message)}</section>`); content().querySelector("[data-retry]")?.addEventListener("click", retry); };
-	const section = (eyebrow, title, body, extra = "") => `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2></div>${extra}</div>${body}</section>`;
-	const table = (heads, rows, empty = "Nenhum registro.") => `<div class="table-wrap"><table><thead><tr>${heads.map((head) => `<th>${esc(head)}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${heads.length}">${PP.emptyState(empty)}</td></tr>`}</tbody></table></div>`;
-	const filterQuery = (form) => { const params = new URLSearchParams(new FormData(form)); [...params.keys()].forEach((key) => { if (!params.get(key)) params.delete(key); }); return params.toString(); };
+	const failure = (error, retry) => {
+		set(`<section class="panel">${PP.errorState(error.message)}</section>`);
+		content().querySelector("[data-retry]")?.addEventListener("click", retry);
+	};
+	const section = (eyebrow, title, body, extra = "") =>
+		`<section class="panel"><div class="panel-heading"><div><p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2></div>${extra}</div>${body}</section>`;
+	const table = (heads, rows, empty = "Nenhum registro.") =>
+		`<div class="table-wrap"><table><thead><tr>${heads.map((head) => `<th>${esc(head)}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${heads.length}">${PP.emptyState(empty)}</td></tr>`}</tbody></table></div>`;
+	const filterQuery = (form) => {
+		const params = new URLSearchParams(new FormData(form));
+		[...params.keys()].forEach((key) => {
+			if (!params.get(key)) params.delete(key);
+		});
+		return params.toString();
+	};
 
 	// ---------------------------------------------------------------- Relatorios
 	async function reports() {
@@ -26,9 +40,15 @@ document.head.appendChild(sharedShellScript);
 		if (actions && !actions.dataset.ready) {
 			actions.dataset.ready = "1";
 			actions.querySelectorAll("a.button").forEach((link) => link.remove());
-			if (exportable) actions.insertAdjacentHTML("afterbegin", '<button class="button button-secondary compact-button" data-export="xlsx" type="button">Excel (XLSX)</button><button class="button button-secondary compact-button" data-export="pdf" type="button">PDF</button><button class="button button-secondary compact-button" data-export="csv" type="button">CSV</button>');
+			if (exportable)
+				actions.insertAdjacentHTML(
+					"afterbegin",
+					'<button class="button button-secondary compact-button" data-export="xlsx" type="button">Excel (XLSX)</button><button class="button button-secondary compact-button" data-export="pdf" type="button">PDF</button><button class="button button-secondary compact-button" data-export="csv" type="button">CSV</button>'
+				);
 		}
-		set(`<form id="report-filters" class="history-filters panel"><label>De<input name="from" type="date" /></label><label>Até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label><div class="filter-actions"><button class="button button-primary" type="submit">Aplicar</button></div></form><nav class="tabs" role="tablist" aria-label="Visões do relatório"><button class="active" role="tab" data-view="summary">Resumo</button><button role="tab" data-view="customer">Por cliente</button><button role="tab" data-view="product">Por produto (reincidência)</button><button role="tab" data-view="case">Por processo</button></nav><div id="report-view" aria-live="polite"></div>`);
+		set(
+			`<form id="report-filters" class="history-filters panel"><label>De<input name="from" type="date" /></label><label>Até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label><div class="filter-actions"><button class="button button-primary" type="submit">Aplicar</button></div></form><nav class="tabs" role="tablist" aria-label="Visões do relatório"><button class="active" role="tab" data-view="summary">Resumo</button><button role="tab" data-view="customer">Por cliente</button><button role="tab" data-view="product">Por produto (reincidência)</button><button role="tab" data-view="case">Por processo</button></nav><div id="report-view" aria-live="polite"></div>`
+		);
 		const form = document.querySelector("#report-filters");
 		let view = "summary";
 		const renderView = async () => {
@@ -38,14 +58,40 @@ document.head.appendChild(sharedShellScript);
 				if (view === "summary") {
 					const data = await api.get(`/api/reports/summary?${filterQuery(form)}`);
 					host.innerHTML = `<section class="indicator-grid report-cards">${card("Total de casos", data.totals.total)}${card("Aguardando documento", data.totals.pending, "orange")}${card("Garantias em análise", data.totals.guarantees_in_analysis, "red")}${card("Concluídos", data.totals.completed, "green")}</section>
-					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Casos por tipo</h2></div></div><div class="report-bars">${data.byType.map((item) => `<div class="report-bar"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i data-w="${Math.max(10, item.value / Math.max(data.totals.total, 1) * 100)}"></i></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
-					<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Prazo</p><h2>Processos vencidos</h2></div><span class="process-status">${data.stalled.length}</span></div>${table(["Processo", "Cliente", "Status", "Vencimento"], data.stalled.slice(0, 10).map((item) => `<tr><td><a class="table-link" href="/caso.html?id=${encodeURIComponent(item.id)}">${esc(item.id)}</a></td><td>${esc(item.client)}</td><td>${esc(PP.statusLabel(item.status))}</td><td>${esc(PP.formatDateTime(item.dueAt))}</td></tr>`), "Nenhum processo vencido.")}</article></section>
-					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Produtividade</p><h2>Por responsável</h2></div></div>${table(["Responsável", "Processos", "Concluídos"], data.productivity.map((item) => `<tr><td>${esc(item.user)}</td><td>${esc(item.total)}</td><td>${esc(item.completed)}</td></tr>`))}</article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Rastreabilidade</p><h2>Eventos recentes</h2></div></div><div class="event-list">${data.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.id)} · ${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small></div></div>`).join("") || '<p class="muted">Sem eventos.</p>'}</div></article></section>`;
+					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Casos por tipo</h2></div></div><div class="report-bars">${data.byType.map((item) => `<div class="report-bar"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i data-w="${Math.max(10, (item.value / Math.max(data.totals.total, 1)) * 100)}"></i></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
+					<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Prazo</p><h2>Processos vencidos</h2></div><span class="process-status">${data.stalled.length}</span></div>${table(
+						["Processo", "Cliente", "Status", "Vencimento"],
+						data.stalled
+							.slice(0, 10)
+							.map(
+								(item) =>
+									`<tr><td><a class="table-link" href="/caso.html?id=${encodeURIComponent(item.id)}">${esc(item.id)}</a></td><td>${esc(item.client)}</td><td>${esc(PP.statusLabel(item.status))}</td><td>${esc(PP.formatDateTime(item.dueAt))}</td></tr>`
+							),
+						"Nenhum processo vencido."
+					)}</article></section>
+					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Produtividade</p><h2>Por responsável</h2></div></div>${table(
+						["Responsável", "Processos", "Concluídos"],
+						data.productivity.map((item) => `<tr><td>${esc(item.user)}</td><td>${esc(item.total)}</td><td>${esc(item.completed)}</td></tr>`)
+					)}</article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Rastreabilidade</p><h2>Eventos recentes</h2></div></div><div class="event-list">${data.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.id)} · ${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small></div></div>`).join("") || '<p class="muted">Sem eventos.</p>'}</div></article></section>`;
 				} else if (view === "customer" || view === "product") {
 					const data = await api.get(`/api/reports/by-${view}?${filterQuery(form)}`);
-					host.innerHTML = section(view === "customer" ? "Clientes" : "Produtos", view === "customer" ? "Ocorrências por cliente" : "Reincidência por produto", table([view === "customer" ? "Cliente" : "Produto", "Total", "Garantias", "Trocas", "Pedidos", "Peças", "Último movimento"], data.rows.map((row) => `<tr><td><strong>${esc(row.label)}</strong>${view === "product" ? `<br><small class="muted">${esc(row.key)}</small>` : ""}</td><td>${esc(row.total)}</td><td>${row.warranties > 1 && view === "product" ? `<span class="table-status red">${esc(row.warranties)} (reincidente)</span>` : esc(row.warranties)}</td><td>${esc(row.exchanges)}</td><td>${esc(row.orders)}</td><td>${esc(row.quantity)}</td><td>${esc(PP.formatDateTime(row.lastAt))}</td></tr>`)));
+					host.innerHTML = section(
+						view === "customer" ? "Clientes" : "Produtos",
+						view === "customer" ? "Ocorrências por cliente" : "Reincidência por produto",
+						table(
+							[view === "customer" ? "Cliente" : "Produto", "Total", "Garantias", "Trocas", "Pedidos", "Peças", "Último movimento"],
+							data.rows.map(
+								(row) =>
+									`<tr><td><strong>${esc(row.label)}</strong>${view === "product" ? `<br><small class="muted">${esc(row.key)}</small>` : ""}</td><td>${esc(row.total)}</td><td>${row.warranties > 1 && view === "product" ? `<span class="table-status red">${esc(row.warranties)} (reincidente)</span>` : esc(row.warranties)}</td><td>${esc(row.exchanges)}</td><td>${esc(row.orders)}</td><td>${esc(row.quantity)}</td><td>${esc(PP.formatDateTime(row.lastAt))}</td></tr>`
+							)
+						)
+					);
 				} else {
-					host.innerHTML = section("Processo", "Relatório de um processo", '<form id="case-report-form" class="inline-form"><label>Número do processo<input name="id" placeholder="Ex.: GAR-2026-0045" required /></label><button class="button button-primary compact-button" type="submit">Gerar</button></form><div id="case-report" class="mt-16"></div>');
+					host.innerHTML = section(
+						"Processo",
+						"Relatório de um processo",
+						'<form id="case-report-form" class="inline-form"><label>Número do processo<input name="id" placeholder="Ex.: GAR-2026-0045" required /></label><button class="button button-primary compact-button" type="submit">Gerar</button></form><div id="case-report" class="mt-16"></div>'
+					);
 					host.querySelector("#case-report-form").addEventListener("submit", async (event) => {
 						event.preventDefault();
 						const target = host.querySelector("#case-report");
@@ -53,31 +99,93 @@ document.head.appendChild(sharedShellScript);
 						try {
 							const { case: item } = await api.get(`/api/reports/by-case/${encodeURIComponent(event.currentTarget.id.value.trim())}`);
 							target.innerHTML = `<div class="kv-grid"><div><small>Processo</small><strong>${esc(item.id)}</strong></div><div><small>Cliente</small><strong>${esc(item.client)}</strong></div><div><small>Tipo</small><strong>${esc(item.type)}</strong></div><div><small>Status</small><strong>${esc(PP.statusLabel(item.status))}</strong></div><div><small>Responsável</small><strong>${esc(item.responsible)}</strong></div><div><small>Prazo</small><strong>${esc(PP.formatDateTime(item.dueAt))}</strong></div></div><h3>Linha do tempo</h3><div class="timeline">${item.events.map((entry) => `<div class="timeline-entry"><strong>${esc(entry.description)}</strong><small>${esc(entry.actorName || entry.responsible)} · ${esc(PP.formatDateTime(entry.createdAt))}</small></div>`).join("")}</div><button class="button button-secondary compact-button" type="button" onclick="window.print()">Imprimir</button>`;
-						} catch (error) { target.innerHTML = `<p class="feedback">${esc(error.message)}</p>`; }
+						} catch (error) {
+							target.innerHTML = `<p class="feedback">${esc(error.message)}</p>`;
+						}
 					});
 				}
-			} catch (error) { host.innerHTML = PP.errorState(error.message); host.querySelector("[data-retry]")?.addEventListener("click", renderView); }
+			} catch (error) {
+				host.innerHTML = PP.errorState(error.message);
+				host.querySelector("[data-retry]")?.addEventListener("click", renderView);
+			}
 		};
-		form.addEventListener("submit", (event) => { event.preventDefault(); renderView(); });
-		content().querySelectorAll("[data-view]").forEach((tab) => tab.addEventListener("click", () => { view = tab.dataset.view; content().querySelectorAll("[data-view]").forEach((other) => other.classList.toggle("active", other === tab)); renderView(); }));
-		document.querySelectorAll("[data-export]").forEach((button) => { if (button.dataset.bound) return; button.dataset.bound = "1"; button.addEventListener("click", () => PP.download(`/api/reports/export.${button.dataset.export}?${filterQuery(form)}`, `relatorio-processos.${button.dataset.export}`).catch((error) => PP.toast(error.message, "error"))); });
+		form.addEventListener("submit", (event) => {
+			event.preventDefault();
+			renderView();
+		});
+		content()
+			.querySelectorAll("[data-view]")
+			.forEach((tab) =>
+				tab.addEventListener("click", () => {
+					view = tab.dataset.view;
+					content()
+						.querySelectorAll("[data-view]")
+						.forEach((other) => other.classList.toggle("active", other === tab));
+					renderView();
+				})
+			);
+		document.querySelectorAll("[data-export]").forEach((button) => {
+			if (button.dataset.bound) return;
+			button.dataset.bound = "1";
+			button.addEventListener("click", () =>
+				PP.download(`/api/reports/export.${button.dataset.export}?${filterQuery(form)}`, `relatorio-processos.${button.dataset.export}`).catch((error) =>
+					PP.toast(error.message, "error")
+				)
+			);
+		});
 		await renderView();
 	}
 
 	async function teamPerformance() {
 		const data = await api.get("/api/reports/team-performance");
 		const canGoal = PP.can("settings.manage");
-		const teamCards = data.teams.map((team) => `<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Time</p><h2>${esc(team.managerName)}</h2></div><span class="process-status">${esc(team.partsRegistered)} peças</span></div>${team.managerId && team.monthlyTarget ? `<div class="distribution-row"><div><strong>Meta do mês</strong><span>${esc(team.casesThisMonth)}/${esc(team.monthlyTarget)} processos</span></div><i data-w="${Math.min(100, team.casesThisMonth / team.monthlyTarget * 100)}"></i></div>` : ""}${canGoal && team.managerId ? `<form class="inline-form" data-goal="${esc(team.managerId)}"><label>Meta mensal (processos)<input name="monthlyTarget" type="number" min="1" value="${esc(team.monthlyTarget || "")}" required /></label><button class="button button-secondary compact-button" type="submit">Salvar meta</button></form>` : ""}${table(["Integrante", "Perfil", "Processos", "Peças", "No mês"], team.members.map((member) => `<tr><td><strong>${esc(member.name)}</strong></td><td>${esc(PP.roleLabel(member.role))}</td><td>${esc(member.casesRegistered)}</td><td>${esc(member.partsRegistered)}</td><td>${esc(member.casesThisMonth)}</td></tr>`))}</article>`).join("") || PP.emptyState("Nenhum time encontrado");
+		const teamCards =
+			data.teams
+				.map(
+					(team) =>
+						`<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Time</p><h2>${esc(team.managerName)}</h2></div><span class="process-status">${esc(team.partsRegistered)} peças</span></div>${team.managerId && team.monthlyTarget ? `<div class="distribution-row"><div><strong>Meta do mês</strong><span>${esc(team.casesThisMonth)}/${esc(team.monthlyTarget)} processos</span></div><i data-w="${Math.min(100, (team.casesThisMonth / team.monthlyTarget) * 100)}"></i></div>` : ""}${canGoal && team.managerId ? `<form class="inline-form" data-goal="${esc(team.managerId)}"><label>Meta mensal (processos)<input name="monthlyTarget" type="number" min="1" value="${esc(team.monthlyTarget || "")}" required /></label><button class="button button-secondary compact-button" type="submit">Salvar meta</button></form>` : ""}${table(
+							["Integrante", "Perfil", "Processos", "Peças", "No mês"],
+							team.members.map(
+								(member) =>
+									`<tr><td><strong>${esc(member.name)}</strong></td><td>${esc(PP.roleLabel(member.role))}</td><td>${esc(member.casesRegistered)}</td><td>${esc(member.partsRegistered)}</td><td>${esc(member.casesThisMonth)}</td></tr>`
+							)
+						)}</article>`
+				)
+				.join("") || PP.emptyState("Nenhum time encontrado");
 		set(`<section class="team-performance-grid">${teamCards}</section>`);
-		content().querySelectorAll("[data-goal]").forEach((form) => form.addEventListener("submit", async (event) => {
-			event.preventDefault();
-			try { await api.put(`/api/reports/team-goals/${form.dataset.goal}`, { monthlyTarget: Number(form.monthlyTarget.value) }); PP.toast("Meta salva.", "success"); await teamPerformance(); } catch (error) { PP.toast(error.message, "error"); }
-		}));
+		content()
+			.querySelectorAll("[data-goal]")
+			.forEach((form) =>
+				form.addEventListener("submit", async (event) => {
+					event.preventDefault();
+					try {
+						await api.put(`/api/reports/team-goals/${form.dataset.goal}`, { monthlyTarget: Number(form.monthlyTarget.value) });
+						PP.toast("Meta salva.", "success");
+						await teamPerformance();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
 	}
 
 	async function managerPerformance() {
 		const data = await api.get("/api/reports/manager-performance");
-		set(section("Avaliação", "Desempenho dos gerentes", `<p class="muted">A pontuação de engajamento considera cliques, navegação, dias ativos e processos concluídos do time. Os dados de atividade são usados apenas para gestão operacional.</p>${table(["Gerente", "Time", "Ações", "Navegações", "Cliques", "Dias ativos", "Última atividade", "Casos do time", "Concluídos", "Score"], data.managers.map((manager) => `<tr><td><strong>${esc(manager.name)}</strong></td><td>${esc(manager.teamSize)}</td><td>${esc(manager.totalActions)}</td><td>${esc(manager.navigationCount)}</td><td>${esc(manager.clickCount)}</td><td>${esc(manager.activeDays)}</td><td>${manager.lastActivityAt ? esc(PP.formatDateTime(manager.lastActivityAt)) : "—"}</td><td>${esc(manager.teamCases)}</td><td>${esc(manager.teamCompletedCases)}</td><td><span class="table-status ${manager.engagementScore >= 60 ? "green" : manager.engagementScore >= 30 ? "orange" : "red"}">${esc(manager.engagementScore)}</span></td></tr>`), "Nenhum gerente cadastrado.")}`, `<span class="process-status">${data.managers.length} gerentes</span>`));
+		set(
+			section(
+				"Avaliação",
+				"Desempenho dos gerentes",
+				`<p class="muted">A pontuação de engajamento considera cliques, navegação, dias ativos e processos concluídos do time. Os dados de atividade são usados apenas para gestão operacional.</p>${table(
+					["Gerente", "Time", "Ações", "Navegações", "Cliques", "Dias ativos", "Última atividade", "Casos do time", "Concluídos", "Score"],
+					data.managers.map(
+						(manager) =>
+							`<tr><td><strong>${esc(manager.name)}</strong></td><td>${esc(manager.teamSize)}</td><td>${esc(manager.totalActions)}</td><td>${esc(manager.navigationCount)}</td><td>${esc(manager.clickCount)}</td><td>${esc(manager.activeDays)}</td><td>${manager.lastActivityAt ? esc(PP.formatDateTime(manager.lastActivityAt)) : "—"}</td><td>${esc(manager.teamCases)}</td><td>${esc(manager.teamCompletedCases)}</td><td><span class="table-status ${manager.engagementScore >= 60 ? "green" : manager.engagementScore >= 30 ? "orange" : "red"}">${esc(manager.engagementScore)}</span></td></tr>`
+					),
+					"Nenhum gerente cadastrado."
+				)}`,
+				`<span class="process-status">${data.managers.length} gerentes</span>`
+			)
+		);
 	}
 
 	// ------------------------------------------------------------- Configuracoes
@@ -85,24 +193,64 @@ document.head.appendChild(sharedShellScript);
 		const [{ settings, sla }, meta] = await Promise.all([api.get("/api/settings"), PP.meta()]);
 		const editable = PP.can("settings.manage");
 		const isAdmin = PP.can("users.create.any");
-		const toggle = (key, title, hint, allowed = editable) => `<label class="setting-row"><span><strong>${esc(title)}</strong><small>${esc(hint)}</small></span><input type="checkbox" data-setting="${esc(key)}" ${settings[key] ? "checked" : ""} ${allowed ? "" : "disabled"} /></label>`;
+		const toggle = (key, title, hint, allowed = editable) =>
+			`<label class="setting-row"><span><strong>${esc(title)}</strong><small>${esc(hint)}</small></span><input type="checkbox" data-setting="${esc(key)}" ${settings[key] ? "checked" : ""} ${allowed ? "" : "disabled"} /></label>`;
 		const securityPanel = `<article class="panel"><p class="eyebrow">Segurança e privacidade</p><h2>Acesso aos dados</h2>${isAdmin ? "" : '<p class="muted">Somente o administrador altera estas opções.</p>'}${toggle("manager_team_scope", "Gerente vê só o próprio time", "Cada gerente vê apenas os processos criados por ou atribuídos a ele e aos usuários do seu time. Monte os times em Usuários antes de ligar.", isAdmin)}${toggle("mfa_required", "Verificação em duas etapas obrigatória", "Administradores e gerentes só acessam depois de ativar o código do celular (MFA).", isAdmin)}${toggle("activity_tracking", "Registro de navegação", "Guarda as telas visitadas para relatórios de uso (apagado automaticamente após o prazo de retenção).", isAdmin)}</article>`;
 		set(`<section class="settings-grid"><article class="panel"><p class="eyebrow">Operação</p><h2>Configurações do sistema</h2>${editable ? "" : '<p class="muted">Somente gerentes e administradores alteram estas opções.</p>'}${toggle("alerts_enabled", "Alertas de prazo", "Exibir processos vencidos ou perto do vencimento no dashboard")}${toggle("auto_refresh", "Atualização automática", "Atualizar os indicadores do dashboard a cada minuto")}${toggle("require_documents", "Exigir documentação", "Bloquear conclusão e encerramento sem ao menos um anexo")}</article>
 		<article class="panel"><p class="eyebrow">Prazos</p><h2>SLA por tipo (dias)</h2><p class="muted">O prazo conta da abertura e fica pausado enquanto o processo aguarda documento.</p>${sla.map((entry) => `<form class="inline-form" data-sla="${esc(entry.type)}"><label>${esc(entry.type)}<input name="days" type="number" min="1" max="365" value="${esc(entry.days)}" ${editable ? "" : "disabled"} required /></label>${editable ? '<button class="button button-secondary compact-button" type="submit">Salvar</button>' : ""}</form>`).join("")}</article>
 		<article class="panel"><p class="eyebrow">Padrão operacional</p><h2>Status do fluxo</h2><div class="status-reference">${meta.statuses.map((status) => `<span class="table-status ${PP.statusTone(status.code)}">${esc(status.label)}</span>`).join("")}</div><p class="muted">Cada tipo de processo só permite as transições válidas; decisões (aprovar, improcedente, encerrar) exigem perfil de gerente ou técnico.</p></article>${securityPanel}</section>`);
-		content().querySelectorAll("[data-setting]").forEach((input) => input.addEventListener("change", async () => {
-			try { await api.put(`/api/settings/${input.dataset.setting}`, { value: input.checked }); PP.toast("Configuração salva.", "success"); } catch (error) { input.checked = !input.checked; PP.toast(error.message, "error"); }
-		}));
-		content().querySelectorAll("[data-sla]").forEach((form) => form.addEventListener("submit", async (event) => {
-			event.preventDefault();
-			try { await api.put(`/api/sla/${encodeURIComponent(form.dataset.sla)}`, { days: Number(form.days.value) }); PP.toast(`SLA de ${form.dataset.sla} atualizado.`, "success"); } catch (error) { PP.toast(error.message, "error"); }
-		}));
+		content()
+			.querySelectorAll("[data-setting]")
+			.forEach((input) =>
+				input.addEventListener("change", async () => {
+					try {
+						await api.put(`/api/settings/${input.dataset.setting}`, { value: input.checked });
+						PP.toast("Configuração salva.", "success");
+					} catch (error) {
+						input.checked = !input.checked;
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-sla]")
+			.forEach((form) =>
+				form.addEventListener("submit", async (event) => {
+					event.preventDefault();
+					try {
+						await api.put(`/api/sla/${encodeURIComponent(form.dataset.sla)}`, { days: Number(form.days.value) });
+						PP.toast(`SLA de ${form.dataset.sla} atualizado.`, "success");
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
 	}
 
 	const describeDevice = (userAgent) => {
 		const text = String(userAgent || "");
-		const browser = /Edg\//.test(text) ? "Edge" : /OPR\//.test(text) ? "Opera" : /Chrome\//.test(text) ? "Chrome" : /Firefox\//.test(text) ? "Firefox" : /Safari\//.test(text) ? "Safari" : "Navegador";
-		const system = /Android/.test(text) ? "Android" : /iPhone|iPad/.test(text) ? "iOS" : /Windows/.test(text) ? "Windows" : /Mac OS X/.test(text) ? "macOS" : /Linux/.test(text) ? "Linux" : "";
+		const browser = /Edg\//.test(text)
+			? "Edge"
+			: /OPR\//.test(text)
+				? "Opera"
+				: /Chrome\//.test(text)
+					? "Chrome"
+					: /Firefox\//.test(text)
+						? "Firefox"
+						: /Safari\//.test(text)
+							? "Safari"
+							: "Navegador";
+		const system = /Android/.test(text)
+			? "Android"
+			: /iPhone|iPad/.test(text)
+				? "iOS"
+				: /Windows/.test(text)
+					? "Windows"
+					: /Mac OS X/.test(text)
+						? "macOS"
+						: /Linux/.test(text)
+							? "Linux"
+							: "";
 		return text ? `${browser}${system ? ` no ${system}` : ""}` : "Aplicativo ou integração";
 	};
 
@@ -117,39 +265,93 @@ document.head.appendChild(sharedShellScript);
 			event.preventDefault();
 			const form = event.currentTarget;
 			const feedback = document.querySelector("#account-feedback");
-			try { const result = await api.patch("/api/account", { name: form.name.value }); PP.fillProfile(result.user); feedback.textContent = ""; PP.toast("Dados atualizados.", "success"); } catch (error) { feedback.textContent = error.message; }
+			try {
+				const result = await api.patch("/api/account", { name: form.name.value });
+				PP.fillProfile(result.user);
+				feedback.textContent = "";
+				PP.toast("Dados atualizados.", "success");
+			} catch (error) {
+				feedback.textContent = error.message;
+			}
 		});
 		document.querySelector("#password-form").addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
 			const feedback = document.querySelector("#password-feedback");
 			feedback.textContent = "";
-			if (form.newPassword.value.length < 12) { feedback.textContent = "A nova senha deve ter pelo menos 12 caracteres."; return; }
-			if (form.newPassword.value !== form.confirmPassword.value) { feedback.textContent = "A confirmação não confere com a nova senha."; return; }
+			if (form.newPassword.value.length < 12) {
+				feedback.textContent = "A nova senha deve ter pelo menos 12 caracteres.";
+				return;
+			}
+			if (form.newPassword.value !== form.confirmPassword.value) {
+				feedback.textContent = "A confirmação não confere com a nova senha.";
+				return;
+			}
 			try {
 				const result = await api.post("/api/auth/change-password", { currentPassword: form.currentPassword.value, newPassword: form.newPassword.value });
 				form.reset();
-				PP.toast(result.otherSessionsEnded ? `Senha alterada. ${result.otherSessionsEnded} outro(s) aparelho(s) saíram da conta.` : "Senha alterada.", "success");
+				PP.toast(
+					result.otherSessionsEnded ? `Senha alterada. ${result.otherSessionsEnded} outro(s) aparelho(s) saíram da conta.` : "Senha alterada.",
+					"success"
+				);
 				await loadSessions();
-			} catch (error) { feedback.textContent = error.message; }
+			} catch (error) {
+				feedback.textContent = error.message;
+			}
 		});
 
 		async function loadSessions() {
 			const host = document.querySelector("#sessions-panel");
 			try {
 				const data = await api.get("/api/auth/sessions");
-				host.innerHTML = `<p class="muted">Sessões sem uso por ${esc(Math.round(data.idleMinutes / 60 * 10) / 10)} h saem automaticamente.</p>${table(["Aparelho", "IP", "Entrou em", "Último uso", ""], data.sessions.map((session) => `<tr><td class="${session.current ? "session-current" : ""}">${esc(describeDevice(session.userAgent))}${session.current ? " (este aparelho)" : ""}</td><td>${esc(session.ip || "—")}</td><td>${esc(PP.formatDateTime(session.createdAt))}</td><td>${esc(PP.formatDateTime(session.lastSeenAt))}</td><td>${session.current ? "" : `<button class="button button-secondary compact-button" type="button" data-revoke-session="${esc(session.id)}">Encerrar</button>`}</td></tr>`), "Nenhuma sessão ativa.")}`;
-				host.querySelectorAll("[data-revoke-session]").forEach((button) => button.addEventListener("click", async () => {
-					try { await api.delete(`/api/auth/sessions/${button.dataset.revokeSession}`); PP.toast("Sessão encerrada.", "success"); await loadSessions(); } catch (error) { PP.toast(error.message, "error"); }
-				}));
-			} catch (error) { host.innerHTML = PP.errorState(error.message); host.querySelector("[data-retry]")?.addEventListener("click", loadSessions); }
+				host.innerHTML = `<p class="muted">Sessões sem uso por ${esc(Math.round((data.idleMinutes / 60) * 10) / 10)} h saem automaticamente.</p>${table(
+					["Aparelho", "IP", "Entrou em", "Último uso", ""],
+					data.sessions.map(
+						(session) =>
+							`<tr><td class="${session.current ? "session-current" : ""}">${esc(describeDevice(session.userAgent))}${session.current ? " (este aparelho)" : ""}</td><td>${esc(session.ip || "—")}</td><td>${esc(PP.formatDateTime(session.createdAt))}</td><td>${esc(PP.formatDateTime(session.lastSeenAt))}</td><td>${session.current ? "" : `<button class="button button-secondary compact-button" type="button" data-revoke-session="${esc(session.id)}">Encerrar</button>`}</td></tr>`
+					),
+					"Nenhuma sessão ativa."
+				)}`;
+				host.querySelectorAll("[data-revoke-session]").forEach((button) =>
+					button.addEventListener("click", async () => {
+						try {
+							await api.delete(`/api/auth/sessions/${button.dataset.revokeSession}`);
+							PP.toast("Sessão encerrada.", "success");
+							await loadSessions();
+						} catch (error) {
+							PP.toast(error.message, "error");
+						}
+					})
+				);
+			} catch (error) {
+				host.innerHTML = PP.errorState(error.message);
+				host.querySelector("[data-retry]")?.addEventListener("click", loadSessions);
+			}
 		}
 		document.querySelector("#revoke-others").addEventListener("click", async () => {
-			try { const result = await api.post("/api/auth/sessions/revoke-others"); PP.toast(`${result.sessionsEnded} sessão(ões) encerrada(s).`, "success"); await loadSessions(); } catch (error) { PP.toast(error.message, "error"); }
+			try {
+				const result = await api.post("/api/auth/sessions/revoke-others");
+				PP.toast(`${result.sessionsEnded} sessão(ões) encerrada(s).`, "success");
+				await loadSessions();
+			} catch (error) {
+				PP.toast(error.message, "error");
+			}
 		});
 		document.querySelector("#logout-all").addEventListener("click", async () => {
-			if (!(await PP.confirmAction("Sair de todos os aparelhos", "Todas as sessões, inclusive esta, serão encerradas. Você precisará entrar de novo.", "Sair de todos", true))) return;
-			try { await api.post("/api/auth/logout-all"); } catch { /* sessao ja encerrada */ }
+			if (
+				!(await PP.confirmAction(
+					"Sair de todos os aparelhos",
+					"Todas as sessões, inclusive esta, serão encerradas. Você precisará entrar de novo.",
+					"Sair de todos",
+					true
+				))
+			)
+				return;
+			try {
+				await api.post("/api/auth/logout-all");
+			} catch {
+				/* sessao ja encerrada */
+			}
 			PP.clearSession();
 			window.location.href = "/";
 		});
@@ -163,21 +365,53 @@ document.head.appendChild(sharedShellScript);
 				badge.className = `table-status ${status.enabled ? "green" : "orange"}`;
 				if (!status.enabled) {
 					host.innerHTML = `<p class="muted">Além da senha, o acesso passa a pedir um código de 6 dígitos gerado no celular. Mesmo que alguém descubra sua senha, não consegue entrar.${status.required ? " <strong>Obrigatória para o seu perfil.</strong>" : ""}</p><button class="button button-primary" type="button" id="mfa-start" data-track="mfa-ativar">Ativar verificação em duas etapas</button>`;
-					host.querySelector("#mfa-start").addEventListener("click", () => PP.mfaEnrollment(host, { onDone: () => { PP.toast("Verificação em duas etapas ativada. Os outros aparelhos saíram da conta.", "success"); loadMfa(); loadSessions(); }, onCancel: loadMfa }));
+					host.querySelector("#mfa-start").addEventListener("click", () =>
+						PP.mfaEnrollment(host, {
+							onDone: () => {
+								PP.toast("Verificação em duas etapas ativada. Os outros aparelhos saíram da conta.", "success");
+								loadMfa();
+								loadSessions();
+							},
+							onCancel: loadMfa
+						})
+					);
 					return;
 				}
 				host.innerHTML = `<p class="muted">Restam <strong>${esc(status.recoveryCodesRemaining)}</strong> código(s) de recuperação.${status.recoveryCodesRemaining <= 3 ? " Gere novos códigos para não ficar sem acesso se perder o celular." : ""}</p><div class="form-actions"><button class="button button-secondary" type="button" id="mfa-codes">Gerar novos códigos de recuperação</button>${status.required ? "" : '<button class="button button-danger" type="button" id="mfa-disable">Desativar</button>'}</div>`;
 				host.querySelector("#mfa-codes").addEventListener("click", async () => {
-					const answer = await PP.dialog({ title: "Gerar novos códigos", body: '<p>Os códigos antigos deixam de valer.</p><label>Código atual do aplicativo<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></label>', confirmLabel: "Gerar" });
+					const answer = await PP.dialog({
+						title: "Gerar novos códigos",
+						body: '<p>Os códigos antigos deixam de valer.</p><label>Código atual do aplicativo<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></label>',
+						confirmLabel: "Gerar"
+					});
 					if (!answer) return;
-					try { const result = await api.post("/api/auth/mfa/recovery-codes", { code: answer.code }); PP.showRecoveryCodes(host, result.recoveryCodes, loadMfa, "Concluir"); } catch (error) { PP.toast(error.message, "error"); }
+					try {
+						const result = await api.post("/api/auth/mfa/recovery-codes", { code: answer.code });
+						PP.showRecoveryCodes(host, result.recoveryCodes, loadMfa, "Concluir");
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
 				});
 				host.querySelector("#mfa-disable")?.addEventListener("click", async () => {
-					const answer = await PP.dialog({ title: "Desativar verificação em duas etapas", body: '<label>Senha<input name="password" type="password" autocomplete="current-password" required /></label><label>Código atual do aplicativo<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></label>', confirmLabel: "Desativar", danger: true });
+					const answer = await PP.dialog({
+						title: "Desativar verificação em duas etapas",
+						body: '<label>Senha<input name="password" type="password" autocomplete="current-password" required /></label><label>Código atual do aplicativo<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></label>',
+						confirmLabel: "Desativar",
+						danger: true
+					});
 					if (!answer) return;
-					try { await api.post("/api/auth/mfa/disable", answer); PP.toast("Verificação em duas etapas desativada.", "success"); await loadMfa(); } catch (error) { PP.toast(error.message, "error"); }
+					try {
+						await api.post("/api/auth/mfa/disable", answer);
+						PP.toast("Verificação em duas etapas desativada.", "success");
+						await loadMfa();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
 				});
-			} catch (error) { host.innerHTML = PP.errorState(error.message); host.querySelector("[data-retry]")?.addEventListener("click", loadMfa); }
+			} catch (error) {
+				host.innerHTML = PP.errorState(error.message);
+				host.querySelector("[data-retry]")?.addEventListener("click", loadMfa);
+			}
 		}
 		await Promise.all([loadSessions(), loadMfa()]);
 	}
@@ -186,49 +420,184 @@ document.head.appendChild(sharedShellScript);
 	async function usersPage() {
 		const data = await api.get("/api/users");
 		const isAdmin = PP.can("users.create.any");
-		const roleOptions = (isAdmin ? Object.keys(data.roles).filter((role) => role !== "admin") : ["operator"]).map((role) => `<option value="${esc(role)}">${esc(data.roles[role])}</option>`).join("");
+		const roleOptions = (isAdmin ? Object.keys(data.roles).filter((role) => role !== "admin") : ["operator"])
+			.map((role) => `<option value="${esc(role)}">${esc(data.roles[role])}</option>`)
+			.join("");
 		const managers = data.users.filter((user) => user.role === "manager" && user.active);
-		const managerOptions = (current) => `<option value="">Sem time</option>${managers.map((manager) => `<option value="${esc(manager.id)}" ${manager.id === current ? "selected" : ""}>${esc(manager.name)}</option>`).join("")}`;
-		set(section("Acessos", "Usuários e perfis", `<form id="create-user-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required /></label><label>E-mail<input name="email" type="email" required /></label><label>Senha inicial (mín. 12 caracteres)<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required /></label><label>Perfil<select name="role">${roleOptions}</select></label>${isAdmin ? `<label>Time<select name="managerId">${managerOptions(null)}</select></label>` : ""}</div><div class="form-actions"><p id="create-user-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar conta <span>+</span></button></div></form>${table(["Nome", "E-mail", "Perfil", "Time", "Status", "Ação"], data.users.map((user) => `<tr><td><strong>${esc(user.name)}</strong>${user.mfaEnabled || user.mustChangePassword ? `<div class="badge-row">${user.mfaEnabled ? '<span class="table-status green">MFA</span>' : ""}${user.mustChangePassword ? '<span class="table-status orange">Troca de senha pendente</span>' : ""}</div>` : ""}</td><td>${esc(user.email)}</td><td>${esc(data.roles[user.role] || user.role)}</td><td>${isAdmin && user.role === "operator" ? `<select data-transfer-user-id="${esc(user.id)}" aria-label="Time de ${esc(user.name)}">${managerOptions(user.managerId)}</select>` : esc(user.managerName || (user.role === "manager" ? "—" : "Sem time"))}</td><td><span class="table-status ${user.active ? "green" : "red"}">${user.active ? "Ativo" : "Bloqueado"}</span></td><td>${user.id === me.id ? "Conta atual" : `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-status-user="${esc(user.id)}" data-active="${!user.active}" data-name="${esc(user.name)}">${user.active ? "Bloquear" : "Ativar"}</button><button class="button button-secondary compact-button" type="button" data-revoke-user="${esc(user.id)}" data-name="${esc(user.name)}">Encerrar sessões</button><button class="button button-secondary compact-button" type="button" data-unlock-user="${esc(user.id)}" data-name="${esc(user.name)}">Desbloquear login</button>${isAdmin ? `<button class="button button-secondary compact-button" type="button" data-edit-user="${esc(user.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-reset-user="${esc(user.id)}" data-name="${esc(user.name)}">Redefinir senha</button>${user.mfaEnabled ? `<button class="button button-secondary compact-button" type="button" data-mfa-reset="${esc(user.id)}" data-name="${esc(user.name)}">Remover MFA</button>` : ""}` : ""}</div>`}</td></tr>`))}`, `<span class="process-status">${data.users.length} usuários</span>`));
+		const managerOptions = (current) =>
+			`<option value="">Sem time</option>${managers.map((manager) => `<option value="${esc(manager.id)}" ${manager.id === current ? "selected" : ""}>${esc(manager.name)}</option>`).join("")}`;
+		set(
+			section(
+				"Acessos",
+				"Usuários e perfis",
+				`<form id="create-user-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required /></label><label>E-mail<input name="email" type="email" required /></label><label>Senha inicial (mín. 12 caracteres)<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required /></label><label>Perfil<select name="role">${roleOptions}</select></label>${isAdmin ? `<label>Time<select name="managerId">${managerOptions(null)}</select></label>` : ""}</div><div class="form-actions"><p id="create-user-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar conta <span>+</span></button></div></form>${table(
+					["Nome", "E-mail", "Perfil", "Time", "Status", "Ação"],
+					data.users.map(
+						(user) =>
+							`<tr><td><strong>${esc(user.name)}</strong>${user.mfaEnabled || user.mustChangePassword ? `<div class="badge-row">${user.mfaEnabled ? '<span class="table-status green">MFA</span>' : ""}${user.mustChangePassword ? '<span class="table-status orange">Troca de senha pendente</span>' : ""}</div>` : ""}</td><td>${esc(user.email)}</td><td>${esc(data.roles[user.role] || user.role)}</td><td>${isAdmin && user.role === "operator" ? `<select data-transfer-user-id="${esc(user.id)}" aria-label="Time de ${esc(user.name)}">${managerOptions(user.managerId)}</select>` : esc(user.managerName || (user.role === "manager" ? "—" : "Sem time"))}</td><td><span class="table-status ${user.active ? "green" : "red"}">${user.active ? "Ativo" : "Bloqueado"}</span></td><td>${user.id === me.id ? "Conta atual" : `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-status-user="${esc(user.id)}" data-active="${!user.active}" data-name="${esc(user.name)}">${user.active ? "Bloquear" : "Ativar"}</button><button class="button button-secondary compact-button" type="button" data-revoke-user="${esc(user.id)}" data-name="${esc(user.name)}">Encerrar sessões</button><button class="button button-secondary compact-button" type="button" data-unlock-user="${esc(user.id)}" data-name="${esc(user.name)}">Desbloquear login</button>${isAdmin ? `<button class="button button-secondary compact-button" type="button" data-edit-user="${esc(user.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-reset-user="${esc(user.id)}" data-name="${esc(user.name)}">Redefinir senha</button>${user.mfaEnabled ? `<button class="button button-secondary compact-button" type="button" data-mfa-reset="${esc(user.id)}" data-name="${esc(user.name)}">Remover MFA</button>` : ""}` : ""}</div>`}</td></tr>`
+					)
+				)}`,
+				`<span class="process-status">${data.users.length} usuários</span>`
+			)
+		);
 		const feedback = () => document.querySelector("#create-user-feedback");
-		content().querySelectorAll("[data-status-user]").forEach((button) => button.addEventListener("click", async () => {
-			const active = button.dataset.active === "true";
-			if (!active && !(await PP.confirmAction("Bloquear usuário", `${button.dataset.name} perderá o acesso e seus processos abertos serão reatribuídos ao gerente do time (ou a você). Continuar?`, "Bloquear", true))) return;
-			try { const result = await api.patch(`/api/users/${button.dataset.statusUser}/status`, { active }); if (result.reassignment?.reassigned) PP.toast(`${result.reassignment.reassigned} processo(s) reatribuído(s).`, "success"); await usersPage(); } catch (error) { feedback().textContent = error.message; }
-		}));
-		content().querySelectorAll("[data-transfer-user-id]").forEach((select) => select.addEventListener("change", async () => {
-			try { await api.patch(`/api/users/${select.dataset.transferUserId}/team`, { managerId: select.value || null }); await usersPage(); } catch (error) { feedback().textContent = error.message; select.disabled = false; }
-		}));
-		content().querySelectorAll("[data-edit-user]").forEach((button) => button.addEventListener("click", async () => {
-			const user = data.users.find((entry) => String(entry.id) === button.dataset.editUser);
-			const answer = await PP.dialog({ title: `Editar ${user.name}`, body: `<label>Nome<input name="name" value="${esc(user.name)}" required /></label><label>E-mail<input name="email" type="email" value="${esc(user.email)}" required /></label><label>Perfil<select name="role">${Object.keys(data.roles).filter((role) => role !== "admin" || user.role === "admin").map((role) => `<option value="${esc(role)}" ${role === user.role ? "selected" : ""}>${esc(data.roles[role])}</option>`).join("")}</select></label><p class="muted">Mudar o perfil encerra as sessões do usuário.</p>`, confirmLabel: "Salvar" });
-			if (!answer) return;
-			try { await api.patch(`/api/users/${user.id}`, answer); PP.toast("Usuário atualizado.", "success"); await usersPage(); } catch (error) { PP.toast(error.message, "error"); }
-		}));
-		content().querySelectorAll("[data-reset-user]").forEach((button) => button.addEventListener("click", async () => {
-			const answer = await PP.dialog({ title: `Redefinir senha de ${button.dataset.name}`, body: '<label>Nova senha provisória (mín. 12 caracteres)<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required /></label><p class="muted">Passe a senha à pessoa por um canal seguro. As sessões atuais serão encerradas e ela terá de criar uma senha pessoal no próximo acesso.</p>', confirmLabel: "Redefinir" });
-			if (!answer) return;
-			try { await api.post(`/api/users/${button.dataset.resetUser}/reset-password`, { password: answer.password }); PP.toast("Senha provisória definida.", "success"); await usersPage(); } catch (error) { PP.toast(error.message, "error"); }
-		}));
-		content().querySelectorAll("[data-revoke-user]").forEach((button) => button.addEventListener("click", async () => {
-			if (!(await PP.confirmAction("Encerrar sessões", `${button.dataset.name} sairá da conta em todos os aparelhos (use em caso de aparelho perdido ou suspeita de acesso indevido).`, "Encerrar", true))) return;
-			try { const result = await api.post(`/api/users/${button.dataset.revokeUser}/sessions/revoke`); PP.toast(`${result.sessionsEnded} sessão(ões) encerrada(s).`, "success"); } catch (error) { PP.toast(error.message, "error"); }
-		}));
-		content().querySelectorAll("[data-unlock-user]").forEach((button) => button.addEventListener("click", async () => {
-			try { const result = await api.post(`/api/users/${button.dataset.unlockUser}/unlock-login`); PP.toast(result.cleared ? `Login de ${button.dataset.name} desbloqueado.` : `${button.dataset.name} não estava bloqueado.`, "success"); } catch (error) { PP.toast(error.message, "error"); }
-		}));
-		content().querySelectorAll("[data-mfa-reset]").forEach((button) => button.addEventListener("click", async () => {
-			if (!(await PP.confirmAction("Remover verificação em duas etapas", `Use quando ${button.dataset.name} perdeu o celular e os códigos de recuperação. Confirme a identidade da pessoa antes. Ela sairá de todos os aparelhos.`, "Remover MFA", true))) return;
-			try { await api.post(`/api/users/${button.dataset.mfaReset}/mfa/reset`); PP.toast("MFA removido.", "success"); await usersPage(); } catch (error) { PP.toast(error.message, "error"); }
-		}));
+		content()
+			.querySelectorAll("[data-status-user]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					const active = button.dataset.active === "true";
+					if (
+						!active &&
+						!(await PP.confirmAction(
+							"Bloquear usuário",
+							`${button.dataset.name} perderá o acesso e seus processos abertos serão reatribuídos ao gerente do time (ou a você). Continuar?`,
+							"Bloquear",
+							true
+						))
+					)
+						return;
+					try {
+						const result = await api.patch(`/api/users/${button.dataset.statusUser}/status`, { active });
+						if (result.reassignment?.reassigned) PP.toast(`${result.reassignment.reassigned} processo(s) reatribuído(s).`, "success");
+						await usersPage();
+					} catch (error) {
+						feedback().textContent = error.message;
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-transfer-user-id]")
+			.forEach((select) =>
+				select.addEventListener("change", async () => {
+					try {
+						await api.patch(`/api/users/${select.dataset.transferUserId}/team`, { managerId: select.value || null });
+						await usersPage();
+					} catch (error) {
+						feedback().textContent = error.message;
+						select.disabled = false;
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-edit-user]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					const user = data.users.find((entry) => String(entry.id) === button.dataset.editUser);
+					const answer = await PP.dialog({
+						title: `Editar ${user.name}`,
+						body: `<label>Nome<input name="name" value="${esc(user.name)}" required /></label><label>E-mail<input name="email" type="email" value="${esc(user.email)}" required /></label><label>Perfil<select name="role">${Object.keys(
+							data.roles
+						)
+							.filter((role) => role !== "admin" || user.role === "admin")
+							.map((role) => `<option value="${esc(role)}" ${role === user.role ? "selected" : ""}>${esc(data.roles[role])}</option>`)
+							.join("")}</select></label><p class="muted">Mudar o perfil encerra as sessões do usuário.</p>`,
+						confirmLabel: "Salvar"
+					});
+					if (!answer) return;
+					try {
+						await api.patch(`/api/users/${user.id}`, answer);
+						PP.toast("Usuário atualizado.", "success");
+						await usersPage();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-reset-user]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					const answer = await PP.dialog({
+						title: `Redefinir senha de ${button.dataset.name}`,
+						body: '<label>Nova senha provisória (mín. 12 caracteres)<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required /></label><p class="muted">Passe a senha à pessoa por um canal seguro. As sessões atuais serão encerradas e ela terá de criar uma senha pessoal no próximo acesso.</p>',
+						confirmLabel: "Redefinir"
+					});
+					if (!answer) return;
+					try {
+						await api.post(`/api/users/${button.dataset.resetUser}/reset-password`, { password: answer.password });
+						PP.toast("Senha provisória definida.", "success");
+						await usersPage();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-revoke-user]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					if (
+						!(await PP.confirmAction(
+							"Encerrar sessões",
+							`${button.dataset.name} sairá da conta em todos os aparelhos (use em caso de aparelho perdido ou suspeita de acesso indevido).`,
+							"Encerrar",
+							true
+						))
+					)
+						return;
+					try {
+						const result = await api.post(`/api/users/${button.dataset.revokeUser}/sessions/revoke`);
+						PP.toast(`${result.sessionsEnded} sessão(ões) encerrada(s).`, "success");
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-unlock-user]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					try {
+						const result = await api.post(`/api/users/${button.dataset.unlockUser}/unlock-login`);
+						PP.toast(result.cleared ? `Login de ${button.dataset.name} desbloqueado.` : `${button.dataset.name} não estava bloqueado.`, "success");
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		content()
+			.querySelectorAll("[data-mfa-reset]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					if (
+						!(await PP.confirmAction(
+							"Remover verificação em duas etapas",
+							`Use quando ${button.dataset.name} perdeu o celular e os códigos de recuperação. Confirme a identidade da pessoa antes. Ela sairá de todos os aparelhos.`,
+							"Remover MFA",
+							true
+						))
+					)
+						return;
+					try {
+						await api.post(`/api/users/${button.dataset.mfaReset}/mfa/reset`);
+						PP.toast("MFA removido.", "success");
+						await usersPage();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
 		document.querySelector("#create-user-form").addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
 			const button = form.querySelector("button[type=submit]");
 			button.disabled = true;
 			feedback().textContent = "";
-			try { await api.post("/api/users", { name: form.name.value, email: form.email.value, password: form.password.value, role: form.role.value, managerId: form.managerId ? form.managerId.value || undefined : undefined }); PP.toast("Conta criada.", "success"); await usersPage(); }
-			catch (error) { feedback().textContent = error.message; } finally { button.disabled = false; }
+			try {
+				await api.post("/api/users", {
+					name: form.name.value,
+					email: form.email.value,
+					password: form.password.value,
+					role: form.role.value,
+					managerId: form.managerId ? form.managerId.value || undefined : undefined
+				});
+				PP.toast("Conta criada.", "success");
+				await usersPage();
+			} catch (error) {
+				feedback().textContent = error.message;
+			} finally {
+				button.disabled = false;
+			}
 		});
 	}
 
@@ -236,9 +605,33 @@ document.head.appendChild(sharedShellScript);
 	async function notificationsPage() {
 		const render = async () => {
 			const data = await api.get("/api/notifications");
-			set(section("Central", "Notificações", `<div class="inline-form"><button class="button button-secondary compact-button" type="button" id="read-all">Marcar todas como lidas</button></div>${table(["", "Mensagem", "Processo", "Quando"], data.notifications.map((item) => `<tr><td>${item.readAt ? "" : '<span class="table-status blue">Nova</span>'}</td><td>${esc(item.message)}</td><td>${item.caseNumber ? `<a class="table-link" href="/caso.html?id=${encodeURIComponent(item.caseNumber)}" data-read="${esc(item.id)}">${esc(item.caseNumber)}</a>` : "—"}</td><td>${esc(PP.formatDateTime(item.createdAt))}</td></tr>`), "Nenhuma notificação por aqui.")}`, `<span class="process-status">${data.unread} não lidas</span>`));
-			document.querySelector("#read-all").addEventListener("click", async () => { await api.post("/api/notifications/read-all"); window.PPShellTools?.refreshNotifications(); render(); });
-			content().querySelectorAll("[data-read]").forEach((link) => link.addEventListener("click", () => { api.patch(`/api/notifications/${link.dataset.read}/read`).catch(() => {}); }));
+			set(
+				section(
+					"Central",
+					"Notificações",
+					`<div class="inline-form"><button class="button button-secondary compact-button" type="button" id="read-all">Marcar todas como lidas</button></div>${table(
+						["", "Mensagem", "Processo", "Quando"],
+						data.notifications.map(
+							(item) =>
+								`<tr><td>${item.readAt ? "" : '<span class="table-status blue">Nova</span>'}</td><td>${esc(item.message)}</td><td>${item.caseNumber ? `<a class="table-link" href="/caso.html?id=${encodeURIComponent(item.caseNumber)}" data-read="${esc(item.id)}">${esc(item.caseNumber)}</a>` : "—"}</td><td>${esc(PP.formatDateTime(item.createdAt))}</td></tr>`
+						),
+						"Nenhuma notificação por aqui."
+					)}`,
+					`<span class="process-status">${data.unread} não lidas</span>`
+				)
+			);
+			document.querySelector("#read-all").addEventListener("click", async () => {
+				await api.post("/api/notifications/read-all");
+				window.PPShellTools?.refreshNotifications();
+				render();
+			});
+			content()
+				.querySelectorAll("[data-read]")
+				.forEach((link) =>
+					link.addEventListener("click", () => {
+						api.patch(`/api/notifications/${link.dataset.read}/read`).catch(() => {});
+					})
+				);
 		};
 		await render();
 	}
@@ -247,19 +640,45 @@ document.head.appendChild(sharedShellScript);
 	const auditDetails = (item) => {
 		const details = item.details || {};
 		if (item.action === "CASE_EVENT") {
-			const changes = details.changes?.changes ? Object.entries(details.changes.changes).map(([field, change]) => `${field}: ${change.before ?? "—"} → ${change.after ?? "—"}`).join("; ") : "";
+			const changes = details.changes?.changes
+				? Object.entries(details.changes.changes)
+						.map(([field, change]) => `${field}: ${change.before ?? "—"} → ${change.after ?? "—"}`)
+						.join("; ")
+				: "";
 			return [details.description, changes].filter(Boolean).join(" · ");
 		}
-		return Object.entries(details).filter(([, value]) => value !== null && typeof value !== "object").map(([key, value]) => `${key}: ${value}`).join(", ");
+		return Object.entries(details)
+			.filter(([, value]) => value !== null && typeof value !== "object")
+			.map(([key, value]) => `${key}: ${value}`)
+			.join(", ");
 	};
 	async function auditPage() {
 		const params = new URLSearchParams(window.location.search);
 		const query = new URLSearchParams();
 		for (const key of ["action", "caseNumber", "from", "to"]) if (params.get(key)) query.set(key, params.get(key));
 		const data = await api.get(`/api/audit?${query}`);
-		const actionOptions = Object.entries(data.actions).map(([code, label]) => `<option value="${esc(code)}" ${params.get("action") === code ? "selected" : ""}>${esc(label)}</option>`).join("");
-		const target = (item) => item.caseNumber ? `<a href="/caso.html?id=${encodeURIComponent(item.caseNumber)}">${esc(item.caseNumber)}</a>` : esc(item.targetName || (item.entityType === "login" ? item.entityId : item.entityType === "setting" ? item.entityId : "") || "—");
-		set(section("Rastreabilidade", "Auditoria", `<form id="audit-filters" class="audit-filters"><label>Ação<select name="action"><option value="">Todas</option>${actionOptions}</select></label><label>Processo<input name="caseNumber" value="${esc(params.get("caseNumber") || "")}" placeholder="Ex.: GAR-2026-0045" /></label><label>De<input name="from" type="date" value="${esc(params.get("from") || "")}" /></label><label>Até<input name="to" type="date" value="${esc(params.get("to") || "")}" /></label><button class="button button-primary compact-button" type="submit">Filtrar</button><a class="button button-secondary compact-button" href="/auditoria.html">Limpar</a></form>${table(["Quando", "Quem", "Ação", "Alvo", "IP", "Detalhes"], data.audit.map((item) => `<tr><td>${esc(PP.formatDateTime(item.createdAt))}</td><td>${esc(item.actorName || "—")}</td><td>${esc(data.actions[item.action] || item.action)}</td><td>${target(item)}</td><td title="${esc(item.userAgent || "")}">${esc(item.ip || "—")}</td><td class="muted audit-details">${esc(auditDetails(item))}</td></tr>`), "Nenhum registro de auditoria.")}`, `<span class="process-status">${data.audit.length} registros${data.audit.length >= 200 ? " (mais recentes)" : ""}</span>`));
+		const actionOptions = Object.entries(data.actions)
+			.map(([code, label]) => `<option value="${esc(code)}" ${params.get("action") === code ? "selected" : ""}>${esc(label)}</option>`)
+			.join("");
+		const target = (item) =>
+			item.caseNumber
+				? `<a href="/caso.html?id=${encodeURIComponent(item.caseNumber)}">${esc(item.caseNumber)}</a>`
+				: esc(item.targetName || (item.entityType === "login" ? item.entityId : item.entityType === "setting" ? item.entityId : "") || "—");
+		set(
+			section(
+				"Rastreabilidade",
+				"Auditoria",
+				`<form id="audit-filters" class="audit-filters"><label>Ação<select name="action"><option value="">Todas</option>${actionOptions}</select></label><label>Processo<input name="caseNumber" value="${esc(params.get("caseNumber") || "")}" placeholder="Ex.: GAR-2026-0045" /></label><label>De<input name="from" type="date" value="${esc(params.get("from") || "")}" /></label><label>Até<input name="to" type="date" value="${esc(params.get("to") || "")}" /></label><button class="button button-primary compact-button" type="submit">Filtrar</button><a class="button button-secondary compact-button" href="/auditoria.html">Limpar</a></form>${table(
+					["Quando", "Quem", "Ação", "Alvo", "IP", "Detalhes"],
+					data.audit.map(
+						(item) =>
+							`<tr><td>${esc(PP.formatDateTime(item.createdAt))}</td><td>${esc(item.actorName || "—")}</td><td>${esc(data.actions[item.action] || item.action)}</td><td>${target(item)}</td><td title="${esc(item.userAgent || "")}">${esc(item.ip || "—")}</td><td class="muted audit-details">${esc(auditDetails(item))}</td></tr>`
+					),
+					"Nenhum registro de auditoria."
+				)}`,
+				`<span class="process-status">${data.audit.length} registros${data.audit.length >= 200 ? " (mais recentes)" : ""}</span>`
+			)
+		);
 		document.querySelector("#audit-filters").addEventListener("submit", (event) => {
 			event.preventDefault();
 			const next = new URLSearchParams();
@@ -272,30 +691,100 @@ document.head.appendChild(sharedShellScript);
 	async function omieSection() {
 		const status = await api.get("/api/omie/sync").catch(() => ({ configured: false, runs: [] }));
 		const kindLabel = { customers: "Clientes", products: "Produtos" };
-		const runs = table(["Quando", "Tipo", "Origem", "Resultado", "Novos", "Atualizados", "Ignorados"], status.runs.slice(0, 8).map((run) => `<tr><td>${esc(PP.formatDateTime(run.startedAt))}</td><td>${esc(kindLabel[run.kind] || run.kind)}</td><td>${run.trigger === "scheduled" ? "Agendada" : `Manual (${esc(run.startedBy || "—")})`}</td><td><span class="table-status ${run.status === "success" ? "green" : run.status === "error" ? "red" : "orange"}" title="${esc(run.message || "")}">${run.status === "success" ? "Concluída" : run.status === "error" ? "Erro" : "Em andamento"}</span></td><td>${esc(run.created)}</td><td>${esc(run.updated)}</td><td>${esc(run.skipped)}</td></tr>`), "Nenhuma sincronização ainda.");
-		return section("ERP", "Omie", `<p class="muted">Importa clientes e produtos do Omie para os cadastros (carga completa na primeira vez, depois só o que mudou; rotina automática a cada 24 h). Pedidos e notas fiscais são consultados ao abrir um processo.</p>${status.configured ? `<div class="inline-form"><button class="button button-primary compact-button" type="button" data-omie-sync="all">Sincronizar agora</button><button class="button button-secondary compact-button" type="button" data-omie-sync="customers">Só clientes</button><button class="button button-secondary compact-button" type="button" data-omie-sync="products">Só produtos</button><span id="omie-feedback" class="muted" role="status"></span></div>` : '<p class="feedback">Integração não configurada: defina OMIE_APP_KEY e OMIE_APP_SECRET no servidor.</p>'}${runs}`);
+		const runs = table(
+			["Quando", "Tipo", "Origem", "Resultado", "Novos", "Atualizados", "Ignorados"],
+			status.runs
+				.slice(0, 8)
+				.map(
+					(run) =>
+						`<tr><td>${esc(PP.formatDateTime(run.startedAt))}</td><td>${esc(kindLabel[run.kind] || run.kind)}</td><td>${run.trigger === "scheduled" ? "Agendada" : `Manual (${esc(run.startedBy || "—")})`}</td><td><span class="table-status ${run.status === "success" ? "green" : run.status === "error" ? "red" : "orange"}" title="${esc(run.message || "")}">${run.status === "success" ? "Concluída" : run.status === "error" ? "Erro" : "Em andamento"}</span></td><td>${esc(run.created)}</td><td>${esc(run.updated)}</td><td>${esc(run.skipped)}</td></tr>`
+				),
+			"Nenhuma sincronização ainda."
+		);
+		return section(
+			"ERP",
+			"Omie",
+			`<p class="muted">Importa clientes e produtos do Omie para os cadastros (carga completa na primeira vez, depois só o que mudou; rotina automática a cada 24 h). Pedidos e notas fiscais são consultados ao abrir um processo.</p>${status.configured ? `<div class="inline-form"><button class="button button-primary compact-button" type="button" data-omie-sync="all">Sincronizar agora</button><button class="button button-secondary compact-button" type="button" data-omie-sync="customers">Só clientes</button><button class="button button-secondary compact-button" type="button" data-omie-sync="products">Só produtos</button><span id="omie-feedback" class="muted" role="status"></span></div>` : '<p class="feedback">Integração não configurada: defina OMIE_APP_KEY e OMIE_APP_SECRET no servidor.</p>'}${runs}`
+		);
 	}
 	async function integrationsPage() {
 		const [{ webhooks }, meta, omieHtml] = await Promise.all([api.get("/api/integrations/webhooks"), PP.meta(), omieSection()]);
-		set(omieHtml + section("Eventos", "Webhooks", `<form id="webhook-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required maxlength="120" /></label><label>Endpoint HTTPS<input name="endpointUrl" type="url" placeholder="https://" required /></label><label>Segredo (assinatura HMAC)<input name="secret" type="password" autocomplete="off" required /></label><fieldset class="plain-fieldset"><legend class="plain-legend">Eventos</legend>${meta.webhookEvents.map((event) => `<label class="checkbox-row"><input type="checkbox" name="events" value="${esc(event)}" checked /> ${esc(event)}</label>`).join("")}</fieldset></div><div class="form-actions"><p id="webhook-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar webhook</button></div></form>${table(["Nome", "Endpoint", "Eventos", "Status", "Ação"], webhooks.map((hook) => `<tr><td><strong>${esc(hook.name)}</strong></td><td>${esc(hook.endpointUrl)}</td><td>${esc((hook.events || []).join(", "))}</td><td><span class="table-status ${hook.active ? "green" : "red"}">${hook.active ? "Ativo" : "Inativo"}</span></td><td><div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-toggle-hook="${esc(hook.id)}" data-active="${!hook.active}">${hook.active ? "Desativar" : "Ativar"}</button><button class="button button-secondary compact-button" type="button" data-deliveries="${esc(hook.id)}">Entregas</button></div></td></tr>`), "Nenhum webhook configurado.")}<div id="deliveries"></div>`));
-		content().querySelectorAll("[data-omie-sync]").forEach((button) => button.addEventListener("click", async () => {
-			const note = document.querySelector("#omie-feedback");
-			content().querySelectorAll("[data-omie-sync]").forEach((other) => { other.disabled = true; });
-			note.textContent = "Sincronizando… isso pode levar alguns minutos.";
-			try { const result = await api.post("/api/omie/sync", { kind: button.dataset.omieSync }); PP.toast(`Omie: ${result.results.map((item) => `${item.created} novos, ${item.updated} atualizados`).join(" | ")}.`, "success"); await integrationsPage(); }
-			catch (error) { PP.toast(error.message, "error"); await integrationsPage(); }
-		}));
+		set(
+			omieHtml +
+				section(
+					"Eventos",
+					"Webhooks",
+					`<form id="webhook-form" class="create-user-form" novalidate><div class="editor-grid"><label>Nome<input name="name" required maxlength="120" /></label><label>Endpoint HTTPS<input name="endpointUrl" type="url" placeholder="https://" required /></label><label>Segredo (assinatura HMAC)<input name="secret" type="password" autocomplete="off" required /></label><fieldset class="plain-fieldset"><legend class="plain-legend">Eventos</legend>${meta.webhookEvents.map((event) => `<label class="checkbox-row"><input type="checkbox" name="events" value="${esc(event)}" checked /> ${esc(event)}</label>`).join("")}</fieldset></div><div class="form-actions"><p id="webhook-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Criar webhook</button></div></form>${table(
+						["Nome", "Endpoint", "Eventos", "Status", "Ação"],
+						webhooks.map(
+							(hook) =>
+								`<tr><td><strong>${esc(hook.name)}</strong></td><td>${esc(hook.endpointUrl)}</td><td>${esc((hook.events || []).join(", "))}</td><td><span class="table-status ${hook.active ? "green" : "red"}">${hook.active ? "Ativo" : "Inativo"}</span></td><td><div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-toggle-hook="${esc(hook.id)}" data-active="${!hook.active}">${hook.active ? "Desativar" : "Ativar"}</button><button class="button button-secondary compact-button" type="button" data-deliveries="${esc(hook.id)}">Entregas</button></div></td></tr>`
+						),
+						"Nenhum webhook configurado."
+					)}<div id="deliveries"></div>`
+				)
+		);
+		content()
+			.querySelectorAll("[data-omie-sync]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					const note = document.querySelector("#omie-feedback");
+					content()
+						.querySelectorAll("[data-omie-sync]")
+						.forEach((other) => {
+							other.disabled = true;
+						});
+					note.textContent = "Sincronizando… isso pode levar alguns minutos.";
+					try {
+						const result = await api.post("/api/omie/sync", { kind: button.dataset.omieSync });
+						PP.toast(`Omie: ${result.results.map((item) => `${item.created} novos, ${item.updated} atualizados`).join(" | ")}.`, "success");
+						await integrationsPage();
+					} catch (error) {
+						PP.toast(error.message, "error");
+						await integrationsPage();
+					}
+				})
+			);
 		const feedback = document.querySelector("#webhook-feedback");
 		document.querySelector("#webhook-form").addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const form = event.currentTarget;
-			try { await api.post("/api/integrations/webhooks", { name: form.name.value, endpointUrl: form.endpointUrl.value, secret: form.secret.value, events: [...form.querySelectorAll('[name="events"]:checked')].map((box) => box.value) }); PP.toast("Webhook criado.", "success"); await integrationsPage(); } catch (error) { feedback.textContent = error.message; }
+			try {
+				await api.post("/api/integrations/webhooks", {
+					name: form.name.value,
+					endpointUrl: form.endpointUrl.value,
+					secret: form.secret.value,
+					events: [...form.querySelectorAll('[name="events"]:checked')].map((box) => box.value)
+				});
+				PP.toast("Webhook criado.", "success");
+				await integrationsPage();
+			} catch (error) {
+				feedback.textContent = error.message;
+			}
 		});
-		content().querySelectorAll("[data-toggle-hook]").forEach((button) => button.addEventListener("click", async () => { await api.patch(`/api/integrations/webhooks/${button.dataset.toggleHook}`, { active: button.dataset.active === "true" }); await integrationsPage(); }));
-		content().querySelectorAll("[data-deliveries]").forEach((button) => button.addEventListener("click", async () => {
-			const { deliveries } = await api.get(`/api/integrations/webhooks/${button.dataset.deliveries}/deliveries`);
-			document.querySelector("#deliveries").innerHTML = `<h3>Últimas entregas</h3>${table(["Quando", "Evento", "Tentativa", "Resultado"], deliveries.map((item) => `<tr><td>${esc(PP.formatDateTime(item.createdAt))}</td><td>${esc(item.event)}</td><td>${esc(item.attempt)}</td><td><span class="table-status ${item.success ? "green" : "red"}">${item.success ? `OK ${esc(item.statusCode)}` : esc(item.error || "Falha")}</span></td></tr>`), "Nenhuma entrega registrada.")}`;
-		}));
+		content()
+			.querySelectorAll("[data-toggle-hook]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					await api.patch(`/api/integrations/webhooks/${button.dataset.toggleHook}`, { active: button.dataset.active === "true" });
+					await integrationsPage();
+				})
+			);
+		content()
+			.querySelectorAll("[data-deliveries]")
+			.forEach((button) =>
+				button.addEventListener("click", async () => {
+					const { deliveries } = await api.get(`/api/integrations/webhooks/${button.dataset.deliveries}/deliveries`);
+					document.querySelector("#deliveries").innerHTML = `<h3>Últimas entregas</h3>${table(
+						["Quando", "Evento", "Tentativa", "Resultado"],
+						deliveries.map(
+							(item) =>
+								`<tr><td>${esc(PP.formatDateTime(item.createdAt))}</td><td>${esc(item.event)}</td><td>${esc(item.attempt)}</td><td><span class="table-status ${item.success ? "green" : "red"}">${item.success ? `OK ${esc(item.statusCode)}` : esc(item.error || "Falha")}</span></td></tr>`
+						),
+						"Nenhuma entrega registrada."
+					)}`;
+				})
+			);
 	}
 
 	// -------------------------------------------------- Cadastro de clientes/produtos
@@ -307,31 +796,100 @@ document.head.appendChild(sharedShellScript);
 			const q = document.querySelector("#registry-search")?.value || "";
 			const data = await api.get(`/api/${tab}?limit=100&includeInactive=${canManage}${q ? `&q=${encodeURIComponent(q)}` : ""}`);
 			const rows = isCustomers ? data.customers : data.products;
-			set(`<nav class="tabs" role="tablist"><button role="tab" class="${isCustomers ? "active" : ""}" data-tab="customers">Clientes</button><button role="tab" class="${isCustomers ? "" : "active"}" data-tab="products">Produtos</button></nav>${section(isCustomers ? "Clientes" : "Produtos", isCustomers ? "Cadastro de clientes" : "Cadastro de produtos", `<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? '<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>' : '<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>'}</div><div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label></div>${table(isCustomers ? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Status", ""] : ["Código", "Descrição", "Status", ""], rows.map((row) => `<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td>` : `<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td>`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td>${canManage ? `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button></div>` : ""}</td></tr>`), "Nada cadastrado ainda.")}`)}`);
-			content().querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => { tab = button.dataset.tab; render(); }));
+			set(
+				`<nav class="tabs" role="tablist"><button role="tab" class="${isCustomers ? "active" : ""}" data-tab="customers">Clientes</button><button role="tab" class="${isCustomers ? "" : "active"}" data-tab="products">Produtos</button></nav>${section(
+					isCustomers ? "Clientes" : "Produtos",
+					isCustomers ? "Cadastro de clientes" : "Cadastro de produtos",
+					`<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? '<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>' : '<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>'}</div><div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label></div>${table(
+						isCustomers ? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Status", ""] : ["Código", "Descrição", "Status", ""],
+						rows.map(
+							(row) =>
+								`<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td>` : `<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td>`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td>${canManage ? `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button></div>` : ""}</td></tr>`
+						),
+						"Nada cadastrado ainda."
+					)}`
+				)}`
+			);
+			content()
+				.querySelectorAll("[data-tab]")
+				.forEach((button) =>
+					button.addEventListener("click", () => {
+						tab = button.dataset.tab;
+						render();
+					})
+				);
 			const form = document.querySelector("#registry-form");
 			if (form.elements.document) PP.bindDocumentInput(form.elements.document);
 			form.addEventListener("submit", async (event) => {
 				event.preventDefault();
 				PP.clearFieldErrors(form);
-				try { await api.post(`/api/${tab}`, Object.fromEntries(new FormData(form))); PP.toast("Cadastrado.", "success"); render(); }
-				catch (error) { if (!PP.applyServerErrors(form, error)) document.querySelector("#registry-feedback").textContent = error.message; }
+				try {
+					await api.post(`/api/${tab}`, Object.fromEntries(new FormData(form)));
+					PP.toast("Cadastrado.", "success");
+					render();
+				} catch (error) {
+					if (!PP.applyServerErrors(form, error)) document.querySelector("#registry-feedback").textContent = error.message;
+				}
 			});
-			document.querySelector("#registry-search").addEventListener("input", PP.debounce(async () => { const value = document.querySelector("#registry-search").value; await render(); const input = document.querySelector("#registry-search"); input.focus(); input.setSelectionRange(value.length, value.length); }, 350));
-			content().querySelectorAll("[data-active]").forEach((button) => button.addEventListener("click", async () => { try { await api.patch(`/api/${tab}/${button.dataset.active}`, { active: button.dataset.value === "true" }); render(); } catch (error) { PP.toast(error.message, "error"); } }));
-			content().querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", async () => {
-				const row = rows.find((entry) => String(entry.id) === button.dataset.edit);
-				const body = isCustomers ? `<label>Nome<input name="name" value="${esc(row.name)}" required /></label><label>CPF ou CNPJ<input name="document" value="${esc(PP.formatDocument(row.document || ""))}" /></label><label>E-mail<input name="email" value="${esc(row.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(row.phone || "")}" /></label>` : `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>`;
-				const answer = await PP.dialog({ title: "Editar cadastro", body, confirmLabel: "Salvar" });
-				if (!answer) return;
-				try { await api.patch(`/api/${tab}/${row.id}`, answer); PP.toast("Atualizado.", "success"); render(); } catch (error) { PP.toast(error.message, "error"); }
-			}));
+			document.querySelector("#registry-search").addEventListener(
+				"input",
+				PP.debounce(async () => {
+					const value = document.querySelector("#registry-search").value;
+					await render();
+					const input = document.querySelector("#registry-search");
+					input.focus();
+					input.setSelectionRange(value.length, value.length);
+				}, 350)
+			);
+			content()
+				.querySelectorAll("[data-active]")
+				.forEach((button) =>
+					button.addEventListener("click", async () => {
+						try {
+							await api.patch(`/api/${tab}/${button.dataset.active}`, { active: button.dataset.value === "true" });
+							render();
+						} catch (error) {
+							PP.toast(error.message, "error");
+						}
+					})
+				);
+			content()
+				.querySelectorAll("[data-edit]")
+				.forEach((button) =>
+					button.addEventListener("click", async () => {
+						const row = rows.find((entry) => String(entry.id) === button.dataset.edit);
+						const body = isCustomers
+							? `<label>Nome<input name="name" value="${esc(row.name)}" required /></label><label>CPF ou CNPJ<input name="document" value="${esc(PP.formatDocument(row.document || ""))}" /></label><label>E-mail<input name="email" value="${esc(row.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(row.phone || "")}" /></label>`
+							: `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>`;
+						const answer = await PP.dialog({ title: "Editar cadastro", body, confirmLabel: "Salvar" });
+						if (!answer) return;
+						try {
+							await api.patch(`/api/${tab}/${row.id}`, answer);
+							PP.toast("Atualizado.", "success");
+							render();
+						} catch (error) {
+							PP.toast(error.message, "error");
+						}
+					})
+				);
 		};
 		await render();
 	}
 
 	// ------------------------------------------------------- Importacao em lote
-	const IMPORT_COLUMNS = ["type", "client", "clientDocument", "product", "productCode", "quantity", "documentReference", "notes", "exchangeReason", "itemCondition", "unitPrice"];
+	const IMPORT_COLUMNS = [
+		"type",
+		"client",
+		"clientDocument",
+		"product",
+		"productCode",
+		"quantity",
+		"documentReference",
+		"notes",
+		"exchangeReason",
+		"itemCondition",
+		"unitPrice"
+	];
 	function parseCsv(text) {
 		const separator = (text.split("\n")[0].match(/;/g) || []).length >= (text.split("\n")[0].match(/,/g) || []).length ? ";" : ",";
 		const rows = [];
@@ -340,19 +898,41 @@ document.head.appendChild(sharedShellScript);
 		let quoted = false;
 		for (let index = 0; index < text.length; index += 1) {
 			const char = text[index];
-			if (quoted) { if (char === '"' && text[index + 1] === '"') { cell += '"'; index += 1; } else if (char === '"') quoted = false; else cell += char; }
-			else if (char === '"') quoted = true;
-			else if (char === separator) { row.push(cell); cell = ""; }
-			else if (char === "\n") { row.push(cell.replace(/\r$/, "")); rows.push(row); row = []; cell = ""; }
-			else cell += char;
+			if (quoted) {
+				if (char === '"' && text[index + 1] === '"') {
+					cell += '"';
+					index += 1;
+				} else if (char === '"') quoted = false;
+				else cell += char;
+			} else if (char === '"') quoted = true;
+			else if (char === separator) {
+				row.push(cell);
+				cell = "";
+			} else if (char === "\n") {
+				row.push(cell.replace(/\r$/, ""));
+				rows.push(row);
+				row = [];
+				cell = "";
+			} else cell += char;
 		}
-		if (cell || row.length) { row.push(cell.replace(/\r$/, "")); rows.push(row); }
+		if (cell || row.length) {
+			row.push(cell.replace(/\r$/, ""));
+			rows.push(row);
+		}
 		return rows.filter((entry) => entry.some((value) => value.trim()));
 	}
 	async function importPage() {
-		set(section("Lote", "Importar pedidos e processos", `<p class="muted">Envie um arquivo CSV (separador ; ou ,) com as colunas: <code>${IMPORT_COLUMNS.join(", ")}</code>. Máximo de 500 linhas. Base de troca exige <em>exchangeReason</em> e <em>itemCondition</em>.</p><div class="inline-form"><label>Arquivo CSV<input type="file" id="import-file" accept=".csv,text/csv" /></label><button class="button button-secondary compact-button" type="button" id="import-template">Baixar modelo</button></div><div id="import-preview" class="mt-16"></div>`));
+		set(
+			section(
+				"Lote",
+				"Importar pedidos e processos",
+				`<p class="muted">Envie um arquivo CSV (separador ; ou ,) com as colunas: <code>${IMPORT_COLUMNS.join(", ")}</code>. Máximo de 500 linhas. Base de troca exige <em>exchangeReason</em> e <em>itemCondition</em>.</p><div class="inline-form"><label>Arquivo CSV<input type="file" id="import-file" accept=".csv,text/csv" /></label><button class="button button-secondary compact-button" type="button" id="import-template">Baixar modelo</button></div><div id="import-preview" class="mt-16"></div>`
+			)
+		);
 		document.querySelector("#import-template").addEventListener("click", () => {
-			const blob = new Blob([`\ufeff${IMPORT_COLUMNS.join(";")}\nPedido de venda;Oficina Central;;Válvula 5/2 vias;VL-52;2;NF-1001;;;;150,00\n`], { type: "text/csv" });
+			const blob = new Blob([`\ufeff${IMPORT_COLUMNS.join(";")}\nPedido de venda;Oficina Central;;Válvula 5/2 vias;VL-52;2;NF-1001;;;;150,00\n`], {
+				type: "text/csv"
+			});
 			const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "modelo-importacao.csv" });
 			link.click();
 			URL.revokeObjectURL(link.href);
@@ -364,25 +944,64 @@ document.head.appendChild(sharedShellScript);
 			const header = rows.shift()?.map((name) => name.trim().replace(/^\ufeff/, "")) || [];
 			const missing = ["type", "client", "product", "productCode", "quantity"].filter((name) => !header.includes(name));
 			const preview = document.querySelector("#import-preview");
-			if (missing.length) { preview.innerHTML = `<p class="feedback">Colunas obrigatórias ausentes: ${esc(missing.join(", "))}.</p>`; return; }
+			if (missing.length) {
+				preview.innerHTML = `<p class="feedback">Colunas obrigatórias ausentes: ${esc(missing.join(", "))}.</p>`;
+				return;
+			}
 			const items = rows.slice(0, 500).map((cells) => {
 				const item = {};
-				header.forEach((name, index) => { const value = (cells[index] || "").trim(); if (value && IMPORT_COLUMNS.includes(name)) item[name] = name === "quantity" ? Number(value) : name === "unitPrice" ? PP.parseMoney(value) : value; });
+				header.forEach((name, index) => {
+					const value = (cells[index] || "").trim();
+					if (value && IMPORT_COLUMNS.includes(name)) item[name] = name === "quantity" ? Number(value) : name === "unitPrice" ? PP.parseMoney(value) : value;
+				});
 				return item;
 			});
-			preview.innerHTML = `<p><strong>${items.length}</strong> linha(s) prontas${rows.length > 500 ? " (somente as 500 primeiras serão enviadas)" : ""}.</p>${table(["#", "Tipo", "Cliente", "Produto", "Código", "Qtd"], items.slice(0, 10).map((item, index) => `<tr><td>${index + 1}</td><td>${esc(item.type)}</td><td>${esc(item.client)}</td><td>${esc(item.product)}</td><td>${esc(item.productCode)}</td><td>${esc(item.quantity)}</td></tr>`))}<div class="form-actions"><button class="button button-primary" type="button" id="import-run">Importar ${items.length} processo(s)</button></div><div id="import-result"></div>`;
+			preview.innerHTML = `<p><strong>${items.length}</strong> linha(s) prontas${rows.length > 500 ? " (somente as 500 primeiras serão enviadas)" : ""}.</p>${table(
+				["#", "Tipo", "Cliente", "Produto", "Código", "Qtd"],
+				items
+					.slice(0, 10)
+					.map(
+						(item, index) =>
+							`<tr><td>${index + 1}</td><td>${esc(item.type)}</td><td>${esc(item.client)}</td><td>${esc(item.product)}</td><td>${esc(item.productCode)}</td><td>${esc(item.quantity)}</td></tr>`
+					)
+			)}<div class="form-actions"><button class="button button-primary" type="button" id="import-run">Importar ${items.length} processo(s)</button></div><div id="import-result"></div>`;
 			document.querySelector("#import-run").addEventListener("click", async (click) => {
 				click.currentTarget.disabled = true;
 				try {
 					const result = await api.post("/api/cases/import", { items });
-					document.querySelector("#import-result").innerHTML = `<p><strong>${result.created}</strong> criado(s), <strong>${result.errors}</strong> com erro.</p>${result.errors ? table(["Linha", "Problema"], result.results.filter((entry) => entry.status === "error").map((entry) => `<tr><td>${esc(entry.line + 1)}</td><td>${esc(entry.message)}</td></tr>`)) : ""}`;
+					document.querySelector("#import-result").innerHTML =
+						`<p><strong>${result.created}</strong> criado(s), <strong>${result.errors}</strong> com erro.</p>${
+							result.errors
+								? table(
+										["Linha", "Problema"],
+										result.results
+											.filter((entry) => entry.status === "error")
+											.map((entry) => `<tr><td>${esc(entry.line + 1)}</td><td>${esc(entry.message)}</td></tr>`)
+									)
+								: ""
+						}`;
 					PP.toast(`${result.created} processo(s) importado(s).`, result.errors ? "info" : "success");
-				} catch (error) { document.querySelector("#import-result").innerHTML = `<p class="feedback">${esc(error.message)}</p>`; click.currentTarget.disabled = false; }
+				} catch (error) {
+					document.querySelector("#import-result").innerHTML = `<p class="feedback">${esc(error.message)}</p>`;
+					click.currentTarget.disabled = false;
+				}
 			});
 		});
 	}
 
-	const pages = { reports, "reports-team": teamPerformance, "reports-managers": managerPerformance, settings: settingsPage, account: () => accountPage(me), users: usersPage, notifications: notificationsPage, audit: auditPage, integrations: integrationsPage, registry: registryPage, import: importPage };
+	const pages = {
+		reports,
+		"reports-team": teamPerformance,
+		"reports-managers": managerPerformance,
+		settings: settingsPage,
+		account: () => accountPage(me),
+		users: usersPage,
+		notifications: notificationsPage,
+		audit: auditPage,
+		integrations: integrationsPage,
+		registry: registryPage,
+		import: importPage
+	};
 	try {
 		me = await PP.requireUser();
 		if (!me) return;
@@ -393,5 +1012,7 @@ document.head.appendChild(sharedShellScript);
 		window.PPShellTools?.mount();
 		loading();
 		await pages[pageType]();
-	} catch (error) { failure(error, () => window.location.reload()); }
+	} catch (error) {
+		failure(error, () => window.location.reload());
+	}
 })();

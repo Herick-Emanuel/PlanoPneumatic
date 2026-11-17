@@ -56,7 +56,10 @@ test("requisicao que altera dados vinda de outra origem e recusada", async () =>
 	const response = await h.api("POST", "/api/cases", { cookies, headers: { Origin: "https://site-malicioso.example" }, body: h.basePayload() });
 	assert.equal(response.status, 403);
 	assert.equal(response.body.code, "ORIGIN_NOT_ALLOWED");
-	const loginCsrf = await h.api("POST", "/api/auth/login", { headers: { Origin: "https://site-malicioso.example" }, body: { email: operator.email, password: h.PASSWORD } });
+	const loginCsrf = await h.api("POST", "/api/auth/login", {
+		headers: { Origin: "https://site-malicioso.example" },
+		body: { email: operator.email, password: h.PASSWORD }
+	});
 	assert.equal(loginCsrf.status, 403, "login CSRF tambem e bloqueado");
 	assert.equal((await h.api("POST", "/api/cases", { cookies, headers: { Origin: h.baseUrl() }, body: h.basePayload() })).status, 201);
 });
@@ -94,7 +97,9 @@ test("cinco falhas bloqueiam o e-mail (mesmo com a senha certa) e a resposta e i
 	// Login correto depois do bloqueio zera o contador.
 	await h.database.query("UPDATE login_throttle SET locked_until = NULL");
 	assert.equal((await h.api("POST", "/api/auth/login", { body: { email: operator.email, password: h.PASSWORD } })).status, 200);
-	const { rows } = await h.database.query("SELECT COUNT(*)::int AS count FROM login_throttle WHERE email_hash = encode(sha256($1::bytea), 'hex')", [operator.email]);
+	const { rows } = await h.database.query("SELECT COUNT(*)::int AS count FROM login_throttle WHERE email_hash = encode(sha256($1::bytea), 'hex')", [
+		operator.email
+	]);
 	assert.equal(rows[0].count, 0, "acerto apaga os contadores do e-mail");
 	const stored = await h.database.query("SELECT throttle_key, email_hash FROM login_throttle");
 	assert.ok(stored.rows.length >= 1 && stored.rows.every((row) => !row.email_hash.includes("@")), "a tabela guarda so hashes");
@@ -102,7 +107,9 @@ test("cinco falhas bloqueiam o e-mail (mesmo com a senha certa) e a resposta e i
 
 test("tentativas em paralelo nao passam do limite (reserva atomica) no login e no MFA", async () => {
 	const operator = await h.createUser("operator");
-	const results = await Promise.all(Array.from({ length: 15 }, () => h.api("POST", "/api/auth/login", { body: { email: operator.email, password: "senha-errada-qualquer" } })));
+	const results = await Promise.all(
+		Array.from({ length: 15 }, () => h.api("POST", "/api/auth/login", { body: { email: operator.email, password: "senha-errada-qualquer" } }))
+	);
 	const evaluated = results.filter((response) => response.status === 401 || (response.status === 429 && response.body.code === "LOGIN_LOCKED")).length;
 	assert.equal(results.filter((response) => response.status === 401).length, 4, "so 4 tentativas erradas sao avaliadas antes do bloqueio");
 	assert.equal(evaluated, 15);
@@ -150,7 +157,10 @@ test("aparelho conhecido entra mesmo com o e-mail sob ataque distribuido; admini
 test("limite por IP nao e burlado trocando X-Real-IP / X-Forwarded-For sem o segredo do proxy", async () => {
 	let last;
 	for (let attempt = 0; attempt < 21; attempt += 1) {
-		last = await h.api("POST", "/api/auth/login", { headers: { "X-Real-IP": `203.0.113.${attempt}`, "X-Forwarded-For": `198.51.100.${attempt}` }, body: { email: `pessoa${attempt}@test.local`, password: "x" } });
+		last = await h.api("POST", "/api/auth/login", {
+			headers: { "X-Real-IP": `203.0.113.${attempt}`, "X-Forwarded-For": `198.51.100.${attempt}` },
+			body: { email: `pessoa${attempt}@test.local`, password: "x" }
+		});
 	}
 	assert.equal(last.status, 429);
 	assert.equal(last.body.code, "RATE_LIMITED");
@@ -159,7 +169,17 @@ test("limite por IP nao e burlado trocando X-Real-IP / X-Forwarded-For sem o seg
 // ------------------------------------------------------------------ P0/P1: senhas
 test("politica de senha: 12+ caracteres, sem senhas comuns, exemplos ou dados do usuario", () => {
 	assert.match(passwordProblem("Curta1!"), /12 caracteres/);
-	for (const weak of ["Admin123!", "Password1234", "senha1234567", "P@ssw0rd2026!", "Operador123!", "aaaaaaaaaaaaaa", "123456789012", "<strong-secret>", "planopneumatic2026"]) {
+	for (const weak of [
+		"Admin123!",
+		"Password1234",
+		"senha1234567",
+		"P@ssw0rd2026!",
+		"Operador123!",
+		"aaaaaaaaaaaaaa",
+		"123456789012",
+		"<strong-secret>",
+		"planopneumatic2026"
+	]) {
 		assert.ok(passwordProblem(weak), `${weak} deveria ser recusada`);
 	}
 	assert.match(passwordProblem("Joaquim-Silva-2026", { email: "joaquim@empresa.com", name: "Joaquim Silva" }), /nome|e-mail/);
@@ -171,28 +191,51 @@ test("politica de senha: 12+ caracteres, sem senhas comuns, exemplos ou dados do
 test("subida recusa senha de seed fraca ou de exemplo", () => {
 	assert.throws(() => validateSeedPasswords({ SEED_ADMIN_PASSWORD: "Admin123!", SEED_ADMIN_EMAIL: "admin@x.com" }), /SEED_ADMIN_PASSWORD recusada/);
 	assert.throws(() => validateSeedPasswords({ SEED_ADMIN_PASSWORD: "<strong-secret>" }), /recusada/);
-	assert.throws(() => validateSeedPasswords({ SEED_ADMIN_PASSWORD: "Pneu-Recauchutado-Azul-77", SEED_OPERATOR_PASSWORD: "Operador123!" }), /SEED_OPERATOR_PASSWORD/);
+	assert.throws(
+		() => validateSeedPasswords({ SEED_ADMIN_PASSWORD: "Pneu-Recauchutado-Azul-77", SEED_OPERATOR_PASSWORD: "Operador123!" }),
+		/SEED_OPERATOR_PASSWORD/
+	);
 	assert.doesNotThrow(() => validateSeedPasswords({ SEED_ADMIN_PASSWORD: "Pneu-Recauchutado-Azul-77", SEED_ADMIN_EMAIL: "admin@x.com" }));
 	assert.doesNotThrow(() => validateSeedPasswords({}));
 });
 
 test("usuario criado pelo administrador troca a senha no primeiro acesso antes de usar o sistema", async () => {
 	const admin = await h.createUser("admin");
-	const weak = await h.api("POST", "/api/users", { token: admin.token, body: { name: "Nova Pessoa", email: "nova@test.local", password: "Senha12345!", role: "operator" } });
+	const weak = await h.api("POST", "/api/users", {
+		token: admin.token,
+		body: { name: "Nova Pessoa", email: "nova@test.local", password: "Senha12345!", role: "operator" }
+	});
 	assert.equal(weak.status, 400);
 	assert.equal(weak.body.code, "WEAK_PASSWORD");
-	assert.equal((await h.api("POST", "/api/users", { token: admin.token, body: { name: "Nova Pessoa", email: "nova@test.local", password: "Inicial-Provisoria-Laranja-3", role: "operator" } })).status, 201);
+	assert.equal(
+		(
+			await h.api("POST", "/api/users", {
+				token: admin.token,
+				body: { name: "Nova Pessoa", email: "nova@test.local", password: "Inicial-Provisoria-Laranja-3", role: "operator" }
+			})
+		).status,
+		201
+	);
 	const { response, cookies } = await h.loginWithCookies("nova@test.local", "Inicial-Provisoria-Laranja-3");
 	assert.equal(response.body.user.mustChangePassword, true);
 	const blocked = await h.api("GET", "/api/cases", { cookies });
 	assert.equal(blocked.status, 403);
 	assert.equal(blocked.body.code, "PASSWORD_CHANGE_REQUIRED");
 	assert.equal((await h.api("GET", "/api/auth/me", { cookies })).body.user.mustChangePassword, true);
-	const wrongCurrent = await h.api("POST", "/api/auth/change-password", { cookies, body: { currentPassword: "errada", newPassword: "Freio-Disco-Traseiro-2031" } });
+	const wrongCurrent = await h.api("POST", "/api/auth/change-password", {
+		cookies,
+		body: { currentPassword: "errada", newPassword: "Freio-Disco-Traseiro-2031" }
+	});
 	assert.equal(wrongCurrent.body.code, "INVALID_CURRENT_PASSWORD");
-	const same = await h.api("POST", "/api/auth/change-password", { cookies, body: { currentPassword: "Inicial-Provisoria-Laranja-3", newPassword: "Inicial-Provisoria-Laranja-3" } });
+	const same = await h.api("POST", "/api/auth/change-password", {
+		cookies,
+		body: { currentPassword: "Inicial-Provisoria-Laranja-3", newPassword: "Inicial-Provisoria-Laranja-3" }
+	});
 	assert.equal(same.status, 400);
-	const changed = await h.api("POST", "/api/auth/change-password", { cookies, body: { currentPassword: "Inicial-Provisoria-Laranja-3", newPassword: "Freio-Disco-Traseiro-2031" } });
+	const changed = await h.api("POST", "/api/auth/change-password", {
+		cookies,
+		body: { currentPassword: "Inicial-Provisoria-Laranja-3", newPassword: "Freio-Disco-Traseiro-2031" }
+	});
 	assert.equal(changed.status, 200);
 	assert.equal((await h.api("GET", "/api/cases", { cookies })).status, 200, "a sessao atual continua valida");
 });
@@ -204,7 +247,10 @@ test("trocar a senha exige a senha atual e encerra as outras sessoes", async () 
 	const noCurrent = await h.api("PATCH", "/api/account", { cookies: first.cookies, body: { name: "Operador", password: "Freio-Disco-Traseiro-2031" } });
 	assert.equal(noCurrent.status, 400);
 	assert.equal(noCurrent.body.code, "INVALID_CURRENT_PASSWORD");
-	const ok = await h.api("PATCH", "/api/account", { cookies: first.cookies, body: { name: "Operador", currentPassword: h.PASSWORD, password: "Freio-Disco-Traseiro-2031" } });
+	const ok = await h.api("PATCH", "/api/account", {
+		cookies: first.cookies,
+		body: { name: "Operador", currentPassword: h.PASSWORD, password: "Freio-Disco-Traseiro-2031" }
+	});
 	assert.equal(ok.status, 200);
 	assert.equal((await h.api("GET", "/api/auth/me", { cookies: first.cookies })).status, 200);
 	assert.equal((await h.api("GET", "/api/auth/me", { cookies: second.cookies })).status, 401, "a outra sessao foi encerrada");
@@ -215,7 +261,10 @@ test("senha provisoria do administrador segue a politica e obriga a troca", asyn
 	const admin = await h.createUser("admin");
 	const operator = await h.createUser("operator");
 	assert.equal((await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "12345678" } })).status, 400);
-	assert.equal((await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "Senha-Provisoria-Cinza-48" } })).status, 204);
+	assert.equal(
+		(await h.api("POST", `/api/users/${operator.id}/reset-password`, { token: admin.token, body: { password: "Senha-Provisoria-Cinza-48" } })).status,
+		204
+	);
 	const { response } = await h.loginWithCookies(operator.email, "Senha-Provisoria-Cinza-48");
 	assert.equal(response.body.user.mustChangePassword, true);
 });
@@ -251,19 +300,42 @@ test("gerente so administra usuarios do proprio time e nunca administradores", a
 	assert.equal((await h.api("PATCH", `/api/users/${mine.id}/status`, { token: manager.token, body: { active: false } })).status, 200);
 	const users = await h.api("GET", "/api/users", { token: manager.token });
 	assert.deepEqual(users.body.users.map((user) => user.id).sort(), [manager.id, mine.id].sort());
-	assert.equal((await h.api("PUT", "/api/settings/manager_team_scope", { token: manager.token, body: { value: true } })).status, 403, "configuracao de seguranca e so do administrador");
+	assert.equal(
+		(await h.api("PUT", "/api/settings/manager_team_scope", { token: manager.token, body: { value: true } })).status,
+		403,
+		"configuracao de seguranca e so do administrador"
+	);
 	assert.equal((await h.api("PUT", "/api/settings/auto_refresh", { token: manager.token, body: { value: false } })).status, 200);
 	assert.equal((await h.api("PUT", "/api/settings/manager_team_scope", { token: admin.token, body: { value: true } })).status, 200);
-	for (const key of ["constructor", "hasOwnProperty", "__proto__"]) assert.equal((await h.api("PUT", `/api/settings/${key}`, { token: admin.token, body: { value: true } })).status, 400, key);
+	for (const key of ["constructor", "hasOwnProperty", "__proto__"])
+		assert.equal((await h.api("PUT", `/api/settings/${key}`, { token: admin.token, body: { value: true } })).status, 400, key);
 });
 
 // ------------------------------------------------------------------ P1: webhooks (SSRF + segredo cifrado)
 test("enderecos internos sao bloqueados em qualquer forma", () => {
-	for (const address of ["127.0.0.1", "10.1.2.3", "172.16.0.9", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::a00:1", "::7f00:1", "::127.0.0.1", "2001:0:4136:e378::1"]) {
+	for (const address of [
+		"127.0.0.1",
+		"10.1.2.3",
+		"172.16.0.9",
+		"192.168.1.1",
+		"169.254.169.254",
+		"100.64.0.1",
+		"0.0.0.0",
+		"::1",
+		"fd00::1",
+		"fe80::1",
+		"::ffff:127.0.0.1",
+		"::ffff:7f00:1",
+		"64:ff9b::a00:1",
+		"::7f00:1",
+		"::127.0.0.1",
+		"2001:0:4136:e378::1"
+	]) {
 		assert.equal(isPrivateAddress(address), true, address);
 	}
 	for (const address of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) assert.equal(isPrivateAddress(address), false, address);
-	for (const host of ["localhost", "api.railway.internal", "2130706433", "0x7f000001", "017700000001", "[::1]", "printer.local"]) assert.equal(isPrivateHost(host), true, host);
+	for (const host of ["localhost", "api.railway.internal", "2130706433", "0x7f000001", "017700000001", "[::1]", "printer.local"])
+		assert.equal(isPrivateHost(host), true, host);
 	assert.match(validateEndpoint("http://example.com/hook"), /HTTPS/);
 	assert.match(validateEndpoint("https://user:pass@example.com/hook"), /usuario ou senha/);
 	assert.match(validateEndpoint("https://169.254.169.254/latest/meta-data"), /interno/);
@@ -282,14 +354,19 @@ test("webhook recusa destino interno e guarda o segredo cifrado", async () => {
 		const response = await h.api("POST", "/api/integrations/webhooks", { token: admin.token, body: { ...body, endpointUrl } });
 		assert.equal(response.status, 400, endpointUrl);
 	}
-	assert.equal((await h.api("POST", "/api/integrations/webhooks", { token: admin.token, body: { ...body, secret: "curto", endpointUrl: "https://8.8.8.8/hook" } })).status, 400);
+	assert.equal(
+		(await h.api("POST", "/api/integrations/webhooks", { token: admin.token, body: { ...body, secret: "curto", endpointUrl: "https://8.8.8.8/hook" } })).status,
+		400
+	);
 	const created = await h.api("POST", "/api/integrations/webhooks", { token: admin.token, body: { ...body, endpointUrl: "https://8.8.8.8/hook" } });
 	assert.equal(created.status, 201);
 	assert.equal(created.body.webhook.secret, undefined);
 	const { rows } = await h.database.query("SELECT secret FROM webhooks WHERE id = $1", [created.body.webhook.id]);
 	assert.match(rows[0].secret, /^enc:v1:/);
 	assert.equal(decrypt(rows[0].secret), body.secret);
-	await h.database.query("INSERT INTO webhooks (name, endpoint_url, secret, events) VALUES ('Antigo', 'https://8.8.4.4/x', 'segredo-em-texto-puro', '[\"case.created\"]')");
+	await h.database.query(
+		"INSERT INTO webhooks (name, endpoint_url, secret, events) VALUES ('Antigo', 'https://8.8.4.4/x', 'segredo-em-texto-puro', '[\"case.created\"]')"
+	);
 	assert.equal(await encryptLegacySecrets(), 1);
 	assert.equal(await encryptLegacySecrets(), 0, "idempotente");
 	const legacy = await h.database.query("SELECT secret FROM webhooks WHERE name = 'Antigo'");
@@ -372,7 +449,9 @@ test("sessao ociosa expira e a limpeza agendada remove sessoes vencidas", async 
 	assert.equal((await h.api("GET", "/api/auth/me", { token: operator.token })).status, 401);
 	const other = await h.createUser("operator");
 	await h.database.query("UPDATE sessions SET expires_at = NOW() - INTERVAL '1 minute' WHERE user_id = $1", [other.id]);
-	await h.database.query("INSERT INTO user_activity_log (user_id, action, path, created_at) VALUES ($1, 'navigation', '/', NOW() - INTERVAL '400 days')", [other.id]);
+	await h.database.query("INSERT INTO user_activity_log (user_id, action, path, created_at) VALUES ($1, 'navigation', '/', NOW() - INTERVAL '400 days')", [
+		other.id
+	]);
 	const removed = await runHousekeeping();
 	assert.ok(removed.sessions >= 1);
 	assert.equal(removed.activity, 1);
@@ -391,7 +470,15 @@ test("administrador encerra as sessoes de um usuario; gerente so do proprio time
 // ------------------------------------------------------------------ P2: LGPD (monitoramento)
 test("monitoramento de uso guarda so o caminho e pode ser desligado", async () => {
 	const operator = await h.createUser("operator");
-	assert.equal((await h.api("POST", "/api/activity", { token: operator.token, body: { action: "click", path: "/caso.html?id=GAR-2026-0001&cpf=123", label: "<b>João</b> 123.456.789-00" } })).status, 204);
+	assert.equal(
+		(
+			await h.api("POST", "/api/activity", {
+				token: operator.token,
+				body: { action: "click", path: "/caso.html?id=GAR-2026-0001&cpf=123", label: "<b>João</b> 123.456.789-00" }
+			})
+		).status,
+		204
+	);
 	const { rows } = await h.database.query("SELECT path, label FROM user_activity_log");
 	assert.equal(rows[0].path, "/caso.html");
 	assert.doesNotMatch(rows[0].label, /[<>]/);
@@ -441,13 +528,28 @@ test("MFA: ativar, entrar com codigo, codigo de recuperacao de uso unico e sem r
 	const ok = await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: first.body.challenge, code: nextCode } });
 	assert.equal(ok.status, 200);
 	assert.ok(h.readCookies(ok).session);
-	assert.equal((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: first.body.challenge, code: nextCode } })).status, 401, "desafio de uso unico");
+	assert.equal(
+		(await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: first.body.challenge, code: nextCode } })).status,
+		401,
+		"desafio de uso unico"
+	);
 
 	const second = await h.api("POST", "/api/auth/login", { body: { email: admin.email, password: h.PASSWORD } });
-	assert.equal((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: second.body.challenge, code: nextCode } })).status, 401, "mesmo codigo nao vale duas vezes");
-	assert.equal((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: second.body.challenge, recoveryCode: recoveryCodes[0].toUpperCase() } })).status, 200);
+	assert.equal(
+		(await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: second.body.challenge, code: nextCode } })).status,
+		401,
+		"mesmo codigo nao vale duas vezes"
+	);
+	assert.equal(
+		(await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: second.body.challenge, recoveryCode: recoveryCodes[0].toUpperCase() } })).status,
+		200
+	);
 	const third = await h.api("POST", "/api/auth/login", { body: { email: admin.email, password: h.PASSWORD } });
-	assert.equal((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: third.body.challenge, recoveryCode: recoveryCodes[0] } })).status, 401, "codigo de recuperacao e de uso unico");
+	assert.equal(
+		(await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: third.body.challenge, recoveryCode: recoveryCodes[0] } })).status,
+		401,
+		"codigo de recuperacao e de uso unico"
+	);
 	const status = await h.api("GET", "/api/auth/mfa", { cookies: h.readCookies(ok) });
 	assert.equal(status.body.enabled, true);
 	assert.equal(status.body.recoveryCodesRemaining, 9);
@@ -459,7 +561,8 @@ test("MFA: desafio expira apos 5 codigos errados e as falhas contam no bloqueio 
 	await enrollMfa(cookies);
 	const login = await h.api("POST", "/api/auth/login", { body: { email: admin.email, password: h.PASSWORD } });
 	const statuses = [];
-	for (let attempt = 0; attempt < 6; attempt += 1) statuses.push((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: login.body.challenge, code: "111111" } })).status);
+	for (let attempt = 0; attempt < 6; attempt += 1)
+		statuses.push((await h.api("POST", "/api/auth/mfa/verify", { body: { challenge: login.body.challenge, code: "111111" } })).status);
 	assert.deepEqual(statuses.slice(0, 4), [401, 401, 401, 401]);
 	assert.equal(statuses[4], 429, "5a falha bloqueia o e-mail");
 	assert.equal((await h.api("POST", "/api/auth/login", { body: { email: admin.email, password: h.PASSWORD } })).status, 429);

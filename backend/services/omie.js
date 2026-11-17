@@ -25,7 +25,12 @@ async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
 		let response;
 		try {
-			response = await fetchImplementation(`${BASE_URL}/${endpoint}/`, { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout(30000) });
+			response = await fetchImplementation(`${BASE_URL}/${endpoint}/`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body,
+				signal: AbortSignal.timeout(30000)
+			});
 		} catch (error) {
 			if (attempt === MAX_ATTEMPTS) throw new AppError(502, `Nao foi possivel falar com o Omie: ${error.message}`, "OMIE_UNREACHABLE");
 			await sleep(1000 * attempt);
@@ -37,12 +42,20 @@ async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
 		if (rateLimited) {
 			const hint = Number(/aguarde (\d+) segundos/i.exec(fault)?.[1]);
 			const delay = hint ? hint * 1000 + 500 : 2000 * attempt;
-			if (delay > maxWait) throw new AppError(429, `O Omie pediu para aguardar ${hint || Math.round(delay / 1000)} segundos. Tente novamente em instantes.`, "OMIE_RATE_LIMIT");
-			if (attempt < MAX_ATTEMPTS) { await sleep(delay); continue; }
+			if (delay > maxWait)
+				throw new AppError(429, `O Omie pediu para aguardar ${hint || Math.round(delay / 1000)} segundos. Tente novamente em instantes.`, "OMIE_RATE_LIMIT");
+			if (attempt < MAX_ATTEMPTS) {
+				await sleep(delay);
+				continue;
+			}
 		}
 		if (!response.ok || data.faultstring) {
 			const notFound = /nao encontrad|não encontrad|inexistente|nao cadastrad|não cadastrad/i.test(fault);
-			throw new AppError(notFound ? 404 : 502, notFound ? "Registro nao encontrado no Omie." : `Omie respondeu com erro: ${fault || response.status}`, notFound ? "OMIE_NOT_FOUND" : "OMIE_ERROR");
+			throw new AppError(
+				notFound ? 404 : 502,
+				notFound ? "Registro nao encontrado no Omie." : `Omie respondeu com erro: ${fault || response.status}`,
+				notFound ? "OMIE_NOT_FOUND" : "OMIE_ERROR"
+			);
 		}
 		return data;
 	}
@@ -62,7 +75,10 @@ async function* paginate(endpoint, method, extra, listKey) {
 }
 
 const omieDate = (date) => `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
-const clean = (value, max) => { const text = String(value ?? "").trim(); return text ? text.slice(0, max) : null; };
+const clean = (value, max) => {
+	const text = String(value ?? "").trim();
+	return text ? text.slice(0, max) : null;
+};
 
 function mapCustomer(record) {
 	const digits = onlyDigits(record.cnpj_cpf);
@@ -78,13 +94,26 @@ function mapCustomer(record) {
 
 async function upsertCustomer(item) {
 	const values = [item.name, item.email, item.phone, item.active];
-	let result = await database.query("UPDATE customers SET name = $2, email = COALESCE($3, email), phone = COALESCE($4, phone), active = $5, omie_synced_at = NOW(), updated_at = NOW() WHERE omie_code = $1 RETURNING id", [item.omieCode, ...values]);
+	let result = await database.query(
+		"UPDATE customers SET name = $2, email = COALESCE($3, email), phone = COALESCE($4, phone), active = $5, omie_synced_at = NOW(), updated_at = NOW() WHERE omie_code = $1 RETURNING id",
+		[item.omieCode, ...values]
+	);
 	if (result.rowCount) return "updated";
 	if (item.document) {
-		result = await database.query("UPDATE customers SET omie_code = $1, name = $3, email = COALESCE($4, email), phone = COALESCE($5, phone), active = $6, omie_synced_at = NOW(), updated_at = NOW() WHERE document = $2 AND omie_code IS NULL RETURNING id", [item.omieCode, item.document, ...values]);
+		result = await database.query(
+			"UPDATE customers SET omie_code = $1, name = $3, email = COALESCE($4, email), phone = COALESCE($5, phone), active = $6, omie_synced_at = NOW(), updated_at = NOW() WHERE document = $2 AND omie_code IS NULL RETURNING id",
+			[item.omieCode, item.document, ...values]
+		);
 		if (result.rowCount) return "updated";
 	}
-	await database.query("INSERT INTO customers (omie_code, name, document, email, phone, active, omie_synced_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())", [item.omieCode, item.name, item.document, item.email, item.phone, item.active]);
+	await database.query("INSERT INTO customers (omie_code, name, document, email, phone, active, omie_synced_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())", [
+		item.omieCode,
+		item.name,
+		item.document,
+		item.email,
+		item.phone,
+		item.active
+	]);
 	return "created";
 }
 
@@ -94,23 +123,50 @@ async function upsertProduct(record) {
 	const description = clean(record.descricao, 180);
 	if (!omieCode || !code || !description) return "skipped";
 	const active = record.inativo !== "S";
-	let result = await database.query("UPDATE products SET code = $2, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE omie_code = $1 RETURNING id", [omieCode, code, description, active]);
+	let result = await database.query(
+		"UPDATE products SET code = $2, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE omie_code = $1 RETURNING id",
+		[omieCode, code, description, active]
+	);
 	if (result.rowCount) return "updated";
-	result = await database.query("UPDATE products SET omie_code = $1, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE lower(code) = lower($2) AND omie_code IS NULL RETURNING id", [omieCode, code, description, active]);
+	result = await database.query(
+		"UPDATE products SET omie_code = $1, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE lower(code) = lower($2) AND omie_code IS NULL RETURNING id",
+		[omieCode, code, description, active]
+	);
 	if (result.rowCount) return "updated";
-	await database.query("INSERT INTO products (omie_code, code, description, active, omie_synced_at) VALUES ($1, $2, $3, $4, NOW())", [omieCode, code, description, active]);
+	await database.query("INSERT INTO products (omie_code, code, description, active, omie_synced_at) VALUES ($1, $2, $3, $4, NOW())", [
+		omieCode,
+		code,
+		description,
+		active
+	]);
 	return "created";
 }
 
 async function lastSuccess(kind) {
-	const { rows } = await database.query("SELECT started_at FROM omie_sync_runs WHERE kind = $1 AND status = 'success' ORDER BY started_at DESC LIMIT 1", [kind]);
+	const { rows } = await database.query("SELECT started_at FROM omie_sync_runs WHERE kind = $1 AND status = 'success' ORDER BY started_at DESC LIMIT 1", [
+		kind
+	]);
 	return rows[0]?.started_at || null;
 }
 
 const SYNCS = {
-	customers: { endpoint: "geral/clientes", method: "ListarClientes", key: "clientes_cadastro", handle: async (record) => { const item = mapCustomer(record); return item.omieCode && item.name ? upsertCustomer(item) : "skipped"; } },
+	customers: {
+		endpoint: "geral/clientes",
+		method: "ListarClientes",
+		key: "clientes_cadastro",
+		handle: async (record) => {
+			const item = mapCustomer(record);
+			return item.omieCode && item.name ? upsertCustomer(item) : "skipped";
+		}
+	},
 	// O Omie devolve 0 produtos se filtrar_apenas_omiepdv nao for enviado explicitamente (verificado com dados reais).
-	products: { endpoint: "geral/produtos", method: "ListarProdutos", key: "produto_servico_cadastro", extra: { filtrar_apenas_omiepdv: "N" }, handle: upsertProduct }
+	products: {
+		endpoint: "geral/produtos",
+		method: "ListarProdutos",
+		key: "produto_servico_cadastro",
+		extra: { filtrar_apenas_omiepdv: "N" },
+		handle: upsertProduct
+	}
 };
 
 // Sincroniza um tipo (customers | products). Depois da primeira carga, busca so o que mudou desde a ultima execucao.
@@ -118,7 +174,10 @@ async function runSync(kind, { trigger = "manual", userId = null } = {}) {
 	const spec = SYNCS[kind];
 	if (!spec) throw new AppError(400, "Tipo de sincronizacao invalido.", "BAD_KIND");
 	if (!isConfigured()) throw new AppError(503, "Integracao com o Omie nao configurada (OMIE_APP_KEY / OMIE_APP_SECRET).", "OMIE_NOT_CONFIGURED");
-	const { rows: running } = await database.query("SELECT id FROM omie_sync_runs WHERE kind = $1 AND status = 'running' AND started_at > NOW() - INTERVAL '30 minutes'", [kind]);
+	const { rows: running } = await database.query(
+		"SELECT id FROM omie_sync_runs WHERE kind = $1 AND status = 'running' AND started_at > NOW() - INTERVAL '30 minutes'",
+		[kind]
+	);
 	if (running[0]) throw new AppError(409, "Ja existe uma sincronizacao em andamento.", "SYNC_RUNNING");
 	const since = await lastSuccess(kind);
 	const filter = { ...spec.extra, ...(since ? { filtrar_por_data_de: omieDate(new Date(new Date(since).getTime() - 86400000)) } : {}) };
@@ -128,19 +187,34 @@ async function runSync(kind, { trigger = "manual", userId = null } = {}) {
 	try {
 		for await (const records of paginate(spec.endpoint, spec.method, filter, spec.key)) {
 			for (const record of records) {
-				try { counts[await spec.handle(record)] += 1; } catch (error) { errors += 1; counts.skipped += 1; logEvent("omie_sync_record_error", { kind, error: error.message }); }
+				try {
+					counts[await spec.handle(record)] += 1;
+				} catch (error) {
+					errors += 1;
+					counts.skipped += 1;
+					logEvent("omie_sync_record_error", { kind, error: error.message });
+				}
 			}
 		}
-		await database.query("UPDATE omie_sync_runs SET status = 'success', finished_at = NOW(), created = $2, updated = $3, skipped = $4, message = $5 WHERE id = $1", [rows[0].id, counts.created, counts.updated, counts.skipped, errors ? `${errors} registro(s) ignorado(s) por conflito de dados` : null]);
+		await database.query(
+			"UPDATE omie_sync_runs SET status = 'success', finished_at = NOW(), created = $2, updated = $3, skipped = $4, message = $5 WHERE id = $1",
+			[rows[0].id, counts.created, counts.updated, counts.skipped, errors ? `${errors} registro(s) ignorado(s) por conflito de dados` : null]
+		);
 	} catch (error) {
-		await database.query("UPDATE omie_sync_runs SET status = 'error', finished_at = NOW(), created = $2, updated = $3, skipped = $4, message = $5 WHERE id = $1", [rows[0].id, counts.created, counts.updated, counts.skipped, error.message.slice(0, 500)]);
+		await database.query(
+			"UPDATE omie_sync_runs SET status = 'error', finished_at = NOW(), created = $2, updated = $3, skipped = $4, message = $5 WHERE id = $1",
+			[rows[0].id, counts.created, counts.updated, counts.skipped, error.message.slice(0, 500)]
+		);
 		throw error;
 	}
 	return { id: rows[0].id, kind, ...counts, errors };
 }
 
 async function listRuns(limit = 20) {
-	const { rows } = await database.query("SELECT r.id, r.kind, r.trigger, r.status, r.created, r.updated, r.skipped, r.message, r.started_at AS \"startedAt\", r.finished_at AS \"finishedAt\", u.name AS \"startedBy\" FROM omie_sync_runs r LEFT JOIN users u ON u.id = r.started_by ORDER BY r.started_at DESC LIMIT $1", [limit]);
+	const { rows } = await database.query(
+		'SELECT r.id, r.kind, r.trigger, r.status, r.created, r.updated, r.skipped, r.message, r.started_at AS "startedAt", r.finished_at AS "finishedAt", u.name AS "startedBy" FROM omie_sync_runs r LEFT JOIN users u ON u.id = r.started_by ORDER BY r.started_at DESC LIMIT $1',
+		[limit]
+	);
 	return rows;
 }
 
@@ -163,12 +237,14 @@ async function lookupOrder(orderNumber, options) {
 			if (remote.name) customer = { id: null, name: remote.name, document: remote.document };
 		}
 	}
-	const items = (order.det || []).map((entry) => ({
-		productCode: clean(entry.produto?.codigo, 80) || "",
-		description: clean(entry.produto?.descricao, 180) || "",
-		quantity: Math.max(1, Math.round(Number(entry.produto?.quantidade) || 1)),
-		unitPrice: Number(entry.produto?.valor_unitario) || 0
-	})).filter((item) => item.productCode && item.description);
+	const items = (order.det || [])
+		.map((entry) => ({
+			productCode: clean(entry.produto?.codigo, 80) || "",
+			description: clean(entry.produto?.descricao, 180) || "",
+			quantity: Math.max(1, Math.round(Number(entry.produto?.quantidade) || 1)),
+			unitPrice: Number(entry.produto?.valor_unitario) || 0
+		}))
+		.filter((item) => item.productCode && item.description);
 	return { orderNumber: String(order.cabecalho.numero_pedido), omieOrderCode: Number(order.cabecalho.codigo_pedido) || null, customer, items };
 }
 
@@ -184,13 +260,22 @@ async function lookupInvoice(number) {
 		number: String(invoice.ide.nNF),
 		emittedAt: invoice.ide.dEmi || null,
 		omieOrderCode: Number(invoice.compl?.nIdPedido) || null,
-		customer: { name: clean(invoice.nfDestInt?.cRazao, 180), document: documentDigits && isValidDocument(documentDigits) ? documentDigits : null, omieCode: Number(invoice.nfDestInt?.nCodCli) || null }
+		customer: {
+			name: clean(invoice.nfDestInt?.cRazao, 180),
+			document: documentDigits && isValidDocument(documentDigits) ? documentDigits : null,
+			omieCode: Number(invoice.nfDestInt?.nCodCli) || null
+		}
 	};
 }
 
 // Compara as linhas do processo com as do pedido no Omie. Retorna a lista de divergencias (vazia = confere).
 function compareOrderLines(omieItems, localLines) {
-	const byCode = (lines) => lines.reduce((map, line) => map.set(line.productCode, { quantity: (map.get(line.productCode)?.quantity || 0) + Number(line.quantity), unitPrice: Number(line.unitPrice) || 0 }), new Map());
+	const byCode = (lines) =>
+		lines.reduce(
+			(map, line) =>
+				map.set(line.productCode, { quantity: (map.get(line.productCode)?.quantity || 0) + Number(line.quantity), unitPrice: Number(line.unitPrice) || 0 }),
+			new Map()
+		);
 	const remote = byCode(omieItems);
 	const local = byCode(localLines);
 	const issues = [];
@@ -199,7 +284,8 @@ function compareOrderLines(omieItems, localLines) {
 		if (!expected) issues.push({ code, kind: "item_fora_do_pedido", local: line });
 		else {
 			if (expected.quantity !== line.quantity) issues.push({ code, kind: "quantidade", omie: expected.quantity, local: line.quantity });
-			if (line.unitPrice && Math.abs(expected.unitPrice - line.unitPrice) > 0.009) issues.push({ code, kind: "preco", omie: expected.unitPrice, local: line.unitPrice });
+			if (line.unitPrice && Math.abs(expected.unitPrice - line.unitPrice) > 0.009)
+				issues.push({ code, kind: "preco", omie: expected.unitPrice, local: line.unitPrice });
 		}
 	}
 	for (const [code, line] of remote) if (!local.has(code)) issues.push({ code, kind: "item_ausente", omie: line });
@@ -215,7 +301,9 @@ function startOmieScheduler(intervalHours = Number(process.env.OMIE_SYNC_INTERVA
 			try {
 				const last = await lastSuccess(kind);
 				if (!last || Date.now() - new Date(last).getTime() >= intervalHours * 3600000) await runSync(kind, { trigger: "scheduled" });
-			} catch (error) { logEvent("omie_scheduled_sync_error", { kind, error: error.message }); }
+			} catch (error) {
+				logEvent("omie_scheduled_sync_error", { kind, error: error.message });
+			}
 		}
 	};
 	const timer = setInterval(tick, 3600000);
@@ -224,4 +312,16 @@ function startOmieScheduler(intervalHours = Number(process.env.OMIE_SYNC_INTERVA
 	return timer;
 }
 
-module.exports = { compareOrderLines, setTransport, isConfigured, call, runSync, status, listRuns, lookupOrder, lookupInvoice, mapCustomer, startOmieScheduler };
+module.exports = {
+	compareOrderLines,
+	setTransport,
+	isConfigured,
+	call,
+	runSync,
+	status,
+	listRuns,
+	lookupOrder,
+	lookupInvoice,
+	mapCustomer,
+	startOmieScheduler
+};

@@ -11,7 +11,7 @@ async function getSlaDays(type, executor = database) {
 }
 
 async function listSla() {
-	const { rows } = await database.query("SELECT type, days, updated_at AS \"updatedAt\" FROM case_sla_config ORDER BY type");
+	const { rows } = await database.query('SELECT type, days, updated_at AS "updatedAt" FROM case_sla_config ORDER BY type');
 	return rows;
 }
 

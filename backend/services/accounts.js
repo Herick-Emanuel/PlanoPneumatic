@@ -20,12 +20,16 @@ function assertPasswordPolicy(password, context) {
 }
 
 async function loadUser(userId, executor = database) {
-	const { rows } = await executor.query("SELECT id, name, email, role, password_hash, mfa_secret, mfa_pending_secret, mfa_enabled_at, mfa_last_step FROM users WHERE id = $1 AND active = TRUE", [userId]);
+	const { rows } = await executor.query(
+		"SELECT id, name, email, role, password_hash, mfa_secret, mfa_pending_secret, mfa_enabled_at, mfa_last_step FROM users WHERE id = $1 AND active = TRUE",
+		[userId]
+	);
 	return rows[0] || null;
 }
 
 async function verifyCurrentPassword(user, password) {
-	if (!password || !(await bcrypt.compare(String(password), user.password_hash))) throw new AppError(400, "Senha atual incorreta.", "INVALID_CURRENT_PASSWORD", { field: "currentPassword" });
+	if (!password || !(await bcrypt.compare(String(password), user.password_hash)))
+		throw new AppError(400, "Senha atual incorreta.", "INVALID_CURRENT_PASSWORD", { field: "currentPassword" });
 }
 
 // P1: troca de senha exige a senha atual, segue a politica e encerra as outras sessoes.
@@ -55,7 +59,7 @@ async function pruneSessions(userId, executor = database) {
 
 async function listSessions(userId, currentSessionId) {
 	const { rows } = await database.query(
-		"SELECT id, created_at AS \"createdAt\", last_seen_at AS \"lastSeenAt\", expires_at AS \"expiresAt\", ip, user_agent AS \"userAgent\" FROM sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY last_seen_at DESC, id DESC",
+		'SELECT id, created_at AS "createdAt", last_seen_at AS "lastSeenAt", expires_at AS "expiresAt", ip, user_agent AS "userAgent" FROM sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY last_seen_at DESC, id DESC',
 		[userId]
 	);
 	return rows.map((row) => ({ ...row, current: row.id === currentSessionId }));
@@ -75,7 +79,8 @@ async function startMfaSetup(user) {
 async function replaceRecoveryCodes(userId, executor) {
 	const codes = totp.recoveryCodes();
 	await executor.query("DELETE FROM mfa_recovery_codes WHERE user_id = $1", [userId]);
-	for (const code of codes) await executor.query("INSERT INTO mfa_recovery_codes (user_id, code_hash) VALUES ($1, $2)", [userId, sha256(totp.normalizeRecoveryCode(code))]);
+	for (const code of codes)
+		await executor.query("INSERT INTO mfa_recovery_codes (user_id, code_hash) VALUES ($1, $2)", [userId, sha256(totp.normalizeRecoveryCode(code))]);
 	return codes;
 }
 
@@ -87,7 +92,11 @@ async function enableMfa(user, code, currentSessionId) {
 	const step = totp.verify(secret, code);
 	if (step === null) throw new AppError(400, "Codigo invalido. Confira o horario do celular e use o codigo atual.", "MFA_INVALID_CODE", { field: "code" });
 	return withTransaction(async (db) => {
-		await db.query("UPDATE users SET mfa_secret = $1, mfa_pending_secret = NULL, mfa_enabled_at = NOW(), mfa_last_step = $2 WHERE id = $3", [encrypt(secret), step, user.id]);
+		await db.query("UPDATE users SET mfa_secret = $1, mfa_pending_secret = NULL, mfa_enabled_at = NOW(), mfa_last_step = $2 WHERE id = $3", [
+			encrypt(secret),
+			step,
+			user.id
+		]);
 		const { rowCount } = await db.query("DELETE FROM sessions WHERE user_id = $1 AND id IS DISTINCT FROM $2", [user.id, currentSessionId || null]);
 		const recoveryCodes = await replaceRecoveryCodes(user.id, db);
 		await audit("MFA_ENABLED", { actorId: user.id, entityType: "user", entityId: user.id, details: { otherSessionsEnded: rowCount }, executor: db });
@@ -104,13 +113,19 @@ async function verifySecondFactor(user, { code, recoveryCode }) {
 	if (code) {
 		const step = totp.verify(decrypt(user.mfa_secret), code, { lastUsedStep: user.mfa_last_step });
 		if (step === null) return null;
-		const { rowCount } = await database.query("UPDATE users SET mfa_last_step = $2 WHERE id = $1 AND (mfa_last_step IS NULL OR mfa_last_step < $2)", [user.id, step]);
+		const { rowCount } = await database.query("UPDATE users SET mfa_last_step = $2 WHERE id = $1 AND (mfa_last_step IS NULL OR mfa_last_step < $2)", [
+			user.id,
+			step
+		]);
 		return rowCount ? "totp" : null;
 	}
 	if (recoveryCode) {
 		const normalized = totp.normalizeRecoveryCode(recoveryCode);
 		if (normalized.length !== 10) return null;
-		const { rows } = await database.query("UPDATE mfa_recovery_codes SET used_at = NOW() WHERE id = (SELECT id FROM mfa_recovery_codes WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL LIMIT 1) RETURNING id", [user.id, sha256(normalized)]);
+		const { rows } = await database.query(
+			"UPDATE mfa_recovery_codes SET used_at = NOW() WHERE id = (SELECT id FROM mfa_recovery_codes WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL LIMIT 1) RETURNING id",
+			[user.id, sha256(normalized)]
+		);
 		if (!rows[0]) return null;
 		await audit("MFA_RECOVERY_USED", { actorId: user.id, entityType: "user", entityId: user.id });
 		return "recovery";
@@ -143,6 +158,19 @@ async function remainingRecoveryCodes(userId) {
 const randomToken = () => crypto.randomBytes(32).toString("hex");
 
 module.exports = {
-	BCRYPT_ROUNDS, hashPassword, assertPasswordPolicy, loadUser, verifyCurrentPassword, changePassword, pruneSessions, listSessions,
-	startMfaSetup, enableMfa, verifySecondFactor, disableMfa, regenerateRecoveryCodes, remainingRecoveryCodes, randomToken
+	BCRYPT_ROUNDS,
+	hashPassword,
+	assertPasswordPolicy,
+	loadUser,
+	verifyCurrentPassword,
+	changePassword,
+	pruneSessions,
+	listSessions,
+	startMfaSetup,
+	enableMfa,
+	verifySecondFactor,
+	disableMfa,
+	regenerateRecoveryCodes,
+	remainingRecoveryCodes,
+	randomToken
 };

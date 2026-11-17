@@ -17,7 +17,11 @@ const PAIR_FREE_ATTEMPTS = 5;
 const EMAIL_FREE_ATTEMPTS = 20;
 const MAX_LOCK_MINUTES = 60;
 
-const normalizeEmail = (email) => String(email || "").trim().toLowerCase().slice(0, 180);
+const normalizeEmail = (email) =>
+	String(email || "")
+		.trim()
+		.toLowerCase()
+		.slice(0, 180);
 const emailHash = (email) => sha256(normalizeEmail(email));
 const pairKey = (email, ip) => sha256(`pair:${normalizeEmail(email)}|${String(ip || "")}`);
 const emailKey = (email) => sha256(`email:${normalizeEmail(email)}`);
@@ -25,7 +29,10 @@ const emailKey = (email) => sha256(`email:${normalizeEmail(email)}`);
 const NEW_COUNT = "(CASE WHEN login_throttle.last_failed_at < NOW() - INTERVAL '24 hours' THEN 1 ELSE login_throttle.failed_count + 1 END)";
 
 async function secondsLocked(key, executor = database) {
-	const { rows } = await executor.query("SELECT GREATEST(1, CEIL(EXTRACT(EPOCH FROM (locked_until - NOW()))))::int AS seconds FROM login_throttle WHERE throttle_key = $1 AND locked_until > NOW()", [key]);
+	const { rows } = await executor.query(
+		"SELECT GREATEST(1, CEIL(EXTRACT(EPOCH FROM (locked_until - NOW()))))::int AS seconds FROM login_throttle WHERE throttle_key = $1 AND locked_until > NOW()",
+		[key]
+	);
 	return rows[0]?.seconds || 0;
 }
 
@@ -66,4 +73,17 @@ async function unlockEmail(email, executor = database) {
 	return rowCount;
 }
 
-module.exports = { PAIR_FREE_ATTEMPTS, EMAIL_FREE_ATTEMPTS, MAX_LOCK_MINUTES, normalizeEmail, emailHash, pairKey, emailKey, reserve, release, clear, unlockEmail, secondsLocked };
+module.exports = {
+	PAIR_FREE_ATTEMPTS,
+	EMAIL_FREE_ATTEMPTS,
+	MAX_LOCK_MINUTES,
+	normalizeEmail,
+	emailHash,
+	pairKey,
+	emailKey,
+	reserve,
+	release,
+	clear,
+	unlockEmail,
+	secondsLocked
+};

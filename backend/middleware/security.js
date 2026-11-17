@@ -53,7 +53,10 @@ function cors(request, response, next) {
 	return next();
 }
 
-const normalizeIp = (value) => String(value || "").trim().replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, "$1");
+const normalizeIp = (value) =>
+	String(value || "")
+		.trim()
+		.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, "$1");
 
 // IP do cliente. O Nginx do frontend envia X-Real-IP junto com o segredo compartilhado (PROXY_SHARED_SECRET);
 // sem o segredo, vale o calculo do Express a partir de X-Forwarded-For e do "trust proxy" (TRUST_PROXY).
@@ -90,7 +93,9 @@ function rateLimit({ windowMs, max, name }) {
 		const hits = (rateBuckets.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
 		if (hits.length >= max) {
 			response.setHeader("Retry-After", String(Math.ceil((windowMs - (now - hits[0])) / 1000)));
-			return response.status(429).json({ message: "Muitas tentativas. Aguarde alguns minutos e tente novamente.", code: "RATE_LIMITED", requestId: request.id });
+			return response
+				.status(429)
+				.json({ message: "Muitas tentativas. Aguarde alguns minutos e tente novamente.", code: "RATE_LIMITED", requestId: request.id });
 		}
 		hits.push(now);
 		rateBuckets.set(key, hits);
@@ -103,7 +108,8 @@ function startRateLimitCleanup() {
 		const now = Date.now();
 		for (const [key, timestamps] of rateBuckets) {
 			const kept = timestamps.filter((timestamp) => now - timestamp < 3600000);
-			if (kept.length) rateBuckets.set(key, kept); else rateBuckets.delete(key);
+			if (kept.length) rateBuckets.set(key, kept);
+			else rateBuckets.delete(key);
 		}
 	}, 600000);
 	if (typeof timer.unref === "function") timer.unref();
@@ -114,14 +120,38 @@ function startRateLimitCleanup() {
 // nuvem em 169.254.169.254), CGNAT, multicast, reservados e equivalentes IPv6.
 const blockedRanges = new net.BlockList();
 for (const [network, prefix] of [
-	["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12],
-	["192.0.0.0", 24], ["192.0.2.0", 24], ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24],
-	["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4]
-]) blockedRanges.addSubnet(network, prefix, "ipv4");
+	["0.0.0.0", 8],
+	["10.0.0.0", 8],
+	["100.64.0.0", 10],
+	["127.0.0.0", 8],
+	["169.254.0.0", 16],
+	["172.16.0.0", 12],
+	["192.0.0.0", 24],
+	["192.0.2.0", 24],
+	["192.88.99.0", 24],
+	["192.168.0.0", 16],
+	["198.18.0.0", 15],
+	["198.51.100.0", 24],
+	["203.0.113.0", 24],
+	["224.0.0.0", 4],
+	["240.0.0.0", 4]
+])
+	blockedRanges.addSubnet(network, prefix, "ipv4");
 for (const [network, prefix] of [
-	["::", 96], ["::1", 128], ["64:ff9b::", 96], ["2001::", 32], ["64:ff9b:1::", 48], ["100::", 64], ["2001:db8::", 32], ["2002::", 16],
-	["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8]
-]) blockedRanges.addSubnet(network, prefix, "ipv6");
+	["::", 96],
+	["::1", 128],
+	["64:ff9b::", 96],
+	["2001::", 32],
+	["64:ff9b:1::", 48],
+	["100::", 64],
+	["2001:db8::", 32],
+	["2002::", 16],
+	["fc00::", 7],
+	["fe80::", 10],
+	["fec0::", 10],
+	["ff00::", 8]
+])
+	blockedRanges.addSubnet(network, prefix, "ipv6");
 
 function isPrivateAddress(address) {
 	const ip = normalizeIp(address);
@@ -140,7 +170,10 @@ function isPrivateAddress(address) {
 
 // Checagem do nome antes de resolver DNS (a checagem definitiva acontece no IP resolvido, na entrega).
 function isPrivateHost(hostname) {
-	const host = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+	const host = String(hostname || "")
+		.toLowerCase()
+		.replace(/^\[|\]$/g, "")
+		.replace(/\.$/, "");
 	if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local")) return true;
 	if (net.isIP(host)) return isPrivateAddress(host);
 	// Formas numericas que o resolvedor aceita como IP (ex.: 2130706433, 0x7f.1, 017700000001).

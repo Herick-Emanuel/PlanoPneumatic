@@ -10,17 +10,35 @@
 	const PENDING_CODES = ["PASSWORD_CHANGE_REQUIRED", "MFA_ENROLLMENT_REQUIRED"];
 	const UNSAFE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
-	const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+	const esc = (value) =>
+		String(value == null ? "" : value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 	function getSession() {
 		try {
 			const stored = JSON.parse(localStorage.getItem(sessionKey));
 			// Versao antiga guardava o token aqui: descarta (o usuario entra de novo e passa a usar o cookie).
-			if (stored?.token) { localStorage.removeItem(sessionKey); return null; }
+			if (stored?.token) {
+				localStorage.removeItem(sessionKey);
+				return null;
+			}
 			return stored?.user ? stored : null;
-		} catch { return null; }
+		} catch {
+			return null;
+		}
 	}
-	const setSession = (session) => { try { localStorage.setItem(sessionKey, JSON.stringify({ user: session?.user || null })); } catch { /* sem armazenamento */ } };
-	const clearSession = () => { try { localStorage.removeItem(sessionKey); } catch { /* sem armazenamento */ } };
+	const setSession = (session) => {
+		try {
+			localStorage.setItem(sessionKey, JSON.stringify({ user: session?.user || null }));
+		} catch {
+			/* sem armazenamento */
+		}
+	};
+	const clearSession = () => {
+		try {
+			localStorage.removeItem(sessionKey);
+		} catch {
+			/* sem armazenamento */
+		}
+	};
 	const apiUrl = (url) => new URL(url, apiOrigin).toString();
 	// Token CSRF: cookie legivel criado no login (double submit), enviado no cabecalho X-CSRF-Token.
 	function csrfToken() {
@@ -32,12 +50,20 @@
 	}
 
 	class ApiError extends Error {
-		constructor(message, status, body) { super(message); this.status = status; this.body = body; }
+		constructor(message, status, body) {
+			super(message);
+			this.status = status;
+			this.body = body;
+		}
 	}
 
 	function sessionExpired(message = "Sua sessão expirou. Entre novamente.") {
 		clearSession();
-		try { sessionStorage.setItem(SESSION_EXPIRED_KEY, message); } catch { /* sem sessionStorage */ }
+		try {
+			sessionStorage.setItem(SESSION_EXPIRED_KEY, message);
+		} catch {
+			/* sem sessionStorage */
+		}
 		if (window.location.pathname !== "/") window.location.href = "/";
 	}
 
@@ -46,12 +72,25 @@
 		const { json, raw, ...fetchOptions } = options;
 		const method = String(fetchOptions.method || "GET").toUpperCase();
 		const headers = { ...(fetchOptions.headers || {}) };
-		if (UNSAFE_METHODS.includes(method)) { const token = csrfToken(); if (token) headers["X-CSRF-Token"] = token; }
-		if (json !== undefined) { headers["Content-Type"] = "application/json"; fetchOptions.body = JSON.stringify(json); }
+		if (UNSAFE_METHODS.includes(method)) {
+			const token = csrfToken();
+			if (token) headers["X-CSRF-Token"] = token;
+		}
+		if (json !== undefined) {
+			headers["Content-Type"] = "application/json";
+			fetchOptions.body = JSON.stringify(json);
+		}
 		let response;
-		try { response = await fetch(apiUrl(url), { ...fetchOptions, method, headers, credentials: "same-origin" }); } catch { throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente novamente.", 0); }
+		try {
+			response = await fetch(apiUrl(url), { ...fetchOptions, method, headers, credentials: "same-origin" });
+		} catch {
+			throw new ApiError("Sem conexão com o servidor. Verifique a internet e tente novamente.", 0);
+		}
 		const isAuthStep = /\/api\/auth\/(login|mfa\/verify)$/.test(url);
-		if (response.status === 401 && session?.user && !isAuthStep) { sessionExpired(); throw new ApiError("Sua sessão expirou. Entre novamente.", 401); }
+		if (response.status === 401 && session?.user && !isAuthStep) {
+			sessionExpired();
+			throw new ApiError("Sua sessão expirou. Entre novamente.", 401);
+		}
 		if (raw) return response;
 		if (!response.ok) {
 			const body = await response.json().catch(() => ({}));
@@ -72,9 +111,15 @@
 	// Exige sessao: sem usuario volta ao login. Atualiza capacidades do usuario (perfil pode ter mudado).
 	async function requireUser() {
 		const session = getSession();
-		if (!session?.user) { window.location.href = "/"; return null; }
+		if (!session?.user) {
+			window.location.href = "/";
+			return null;
+		}
 		const data = await api.get("/api/auth/me");
-		if (data.user.mustChangePassword || data.user.mfaEnrollmentRequired) { window.location.href = "/"; return null; }
+		if (data.user.mustChangePassword || data.user.mfaEnrollmentRequired) {
+			window.location.href = "/";
+			return null;
+		}
 		setSession({ user: data.user });
 		return data.user;
 	}
@@ -90,7 +135,9 @@
 				headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
 				body: JSON.stringify({ action, path: window.location.pathname, label: label ? String(label).slice(0, 60) : undefined })
 			}).catch(() => {});
-		} catch { /* o registro de uso nunca pode quebrar a navegacao */ }
+		} catch {
+			/* o registro de uso nunca pode quebrar a navegacao */
+		}
 	}
 
 	// CSP sem 'unsafe-inline' em estilos: barras e graficos marcam data-w / data-h (porcentagem) e o tamanho
@@ -103,8 +150,9 @@
 			if (element.dataset.h !== undefined) element.style.height = `${Math.max(0, Math.min(100, Number(element.dataset.h) || 0))}%`;
 		}
 	}
-	new MutationObserver((mutations) => { for (const mutation of mutations) for (const node of mutation.addedNodes) if (node.nodeType === 1) applyDynamicStyles(node); })
-		.observe(document.documentElement, { childList: true, subtree: true });
+	new MutationObserver((mutations) => {
+		for (const mutation of mutations) for (const node of mutation.addedNodes) if (node.nodeType === 1) applyDynamicStyles(node);
+	}).observe(document.documentElement, { childList: true, subtree: true });
 
 	// LGPD: CPF/CNPJ mascarado nas telas de consulta (o valor completo aparece so nos formularios de edicao).
 	function maskDocument(value) {
@@ -115,9 +163,17 @@
 	}
 
 	let metaPromise;
-	const meta = () => (metaPromise ||= api.get("/api/meta").catch((error) => { metaPromise = null; throw error; }));
+	const meta = () =>
+		(metaPromise ||= api.get("/api/meta").catch((error) => {
+			metaPromise = null;
+			throw error;
+		}));
 	let metaCache = null;
-	meta().then((value) => { metaCache = value; }).catch(() => {});
+	meta()
+		.then((value) => {
+			metaCache = value;
+		})
+		.catch(() => {});
 
 	const FALLBACK_LABELS = { Concluido: "Concluído", "Em analise": "Em análise" };
 	const statusLabel = (code) => metaCache?.statuses.find((status) => status.code === code)?.label || FALLBACK_LABELS[code] || code;
@@ -127,20 +183,42 @@
 		if (["Improcedente", "Cancelado"].includes(code)) return "red";
 		return "blue";
 	};
-	const roleLabel = (role) => ({ admin: "Administrador", manager: "Gerente", supervisor: "Supervisor", operator: "Operador", technician: "Técnico", logistics: "Logística", auditor: "Auditor" }[role] || role);
+	const roleLabel = (role) =>
+		({
+			admin: "Administrador",
+			manager: "Gerente",
+			supervisor: "Supervisor",
+			operator: "Operador",
+			technician: "Técnico",
+			logistics: "Logística",
+			auditor: "Auditor"
+		})[role] || role;
 	const can = (capability) => Boolean(getSession()?.user?.capabilities?.includes(capability));
 
-	const SLA_TEXT = { ok: ["No prazo", "green"], warning: ["Vence em breve", "orange"], overdue: ["Atrasado", "red"], paused: ["Prazo pausado", "blue"], done: ["Finalizado", "blue"] };
+	const SLA_TEXT = {
+		ok: ["No prazo", "green"],
+		warning: ["Vence em breve", "orange"],
+		overdue: ["Atrasado", "red"],
+		paused: ["Prazo pausado", "blue"],
+		done: ["Finalizado", "blue"]
+	};
 	const slaBadge = (item) => {
 		const [text, tone] = SLA_TEXT[item.sla] || SLA_TEXT.ok;
 		return `<span class="table-status ${tone}">${text}${item.dueAt && !["done", "paused"].includes(item.sla) ? ` · ${esc(formatDate(item.dueAt))}` : ""}</span>`;
 	};
 
 	const formatDate = (value) => (value ? new Date(value).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }) : "");
-	const formatDateTime = (value) => (value ? new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }) : "");
+	const formatDateTime = (value) =>
+		value ? new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }) : "";
 	const money = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 	const fileSize = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
-	const initials = (name) => String(name || "").split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+	const initials = (name) =>
+		String(name || "")
+			.split(" ")
+			.map((part) => part[0])
+			.slice(0, 2)
+			.join("")
+			.toUpperCase();
 
 	// --- CPF/CNPJ -----------------------------------------------------------------
 	const digits = (value) => String(value || "").replace(/\D/g, "");
@@ -164,17 +242,31 @@
 		}
 		return true;
 	}
-	const isValidDocument = (value) => { const numbers = digits(value); return isValidCpf(numbers) || isValidCnpj(numbers); };
+	const isValidDocument = (value) => {
+		const numbers = digits(value);
+		return isValidCpf(numbers) || isValidCnpj(numbers);
+	};
 	function formatDocument(value) {
 		const numbers = digits(value).slice(0, 14);
-		if (numbers.length <= 11) return numbers.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-		return numbers.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2");
+		if (numbers.length <= 11)
+			return numbers
+				.replace(/(\d{3})(\d)/, "$1.$2")
+				.replace(/(\d{3})(\d)/, "$1.$2")
+				.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+		return numbers
+			.replace(/^(\d{2})(\d)/, "$1.$2")
+			.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+			.replace(/\.(\d{3})(\d)/, ".$1/$2")
+			.replace(/(\d{4})(\d)/, "$1-$2");
 	}
 
 	// Mascara + validacao de documento em um input; mostra o erro ao lado do campo.
 	function bindDocumentInput(input) {
 		input.setAttribute("inputmode", "numeric");
-		input.addEventListener("input", () => { input.value = formatDocument(input.value); setFieldError(input, ""); });
+		input.addEventListener("input", () => {
+			input.value = formatDocument(input.value);
+			setFieldError(input, "");
+		});
 		input.addEventListener("blur", () => setFieldError(input, input.value && !isValidDocument(input.value) ? "CPF ou CNPJ inválido." : ""));
 	}
 	function bindMoneyInput(input) {
@@ -183,25 +275,45 @@
 			input.value = Number.isFinite(parsed) ? parsed.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
 		});
 	}
-	const parseMoney = (value) => { const text = String(value || "").trim(); if (!text) return NaN; return Number(text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text); };
+	const parseMoney = (value) => {
+		const text = String(value || "").trim();
+		if (!text) return NaN;
+		return Number(text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text);
+	};
 
 	// --- Mensagens de erro ao lado do campo -----------------------------------------
 	function setFieldError(input, message) {
 		const label = input.closest("label") || input.parentElement;
 		let hint = label.querySelector(":scope > .field-error");
-		if (!message) { hint?.remove(); input.removeAttribute("aria-invalid"); input.removeAttribute("aria-describedby"); return; }
-		if (!hint) { hint = document.createElement("small"); hint.className = "field-error"; hint.id = `err-${Math.random().toString(36).slice(2, 8)}`; label.appendChild(hint); }
+		if (!message) {
+			hint?.remove();
+			input.removeAttribute("aria-invalid");
+			input.removeAttribute("aria-describedby");
+			return;
+		}
+		if (!hint) {
+			hint = document.createElement("small");
+			hint.className = "field-error";
+			hint.id = `err-${Math.random().toString(36).slice(2, 8)}`;
+			label.appendChild(hint);
+		}
 		hint.textContent = message;
 		input.setAttribute("aria-invalid", "true");
 		input.setAttribute("aria-describedby", hint.id);
 	}
-	function clearFieldErrors(form) { form.querySelectorAll(".field-error").forEach((hint) => hint.remove()); form.querySelectorAll("[aria-invalid]").forEach((input) => input.removeAttribute("aria-invalid")); }
+	function clearFieldErrors(form) {
+		form.querySelectorAll(".field-error").forEach((hint) => hint.remove());
+		form.querySelectorAll("[aria-invalid]").forEach((input) => input.removeAttribute("aria-invalid"));
+	}
 	// Aplica os erros de validacao devolvidos pela API (errors: [{ field, message }]) aos campos.
 	function applyServerErrors(form, error) {
 		let applied = 0;
 		for (const issue of error.body?.errors || []) {
 			const input = form.elements[issue.field.split(".")[0]];
-			if (input && input.nodeType === 1) { setFieldError(input, issue.message); applied += 1; }
+			if (input && input.nodeType === 1) {
+				setFieldError(input, issue.message);
+				applied += 1;
+			}
 		}
 		if (applied) form.querySelector("[aria-invalid]")?.focus();
 		return applied;
@@ -210,13 +322,22 @@
 	// --- Toast e dialogo de confirmacao --------------------------------------------
 	function toast(message, tone = "info", actionLabel, onAction) {
 		let host = document.querySelector("#toast-host");
-		if (!host) { host = document.createElement("div"); host.id = "toast-host"; host.setAttribute("role", "status"); host.setAttribute("aria-live", "polite"); document.body.appendChild(host); }
+		if (!host) {
+			host = document.createElement("div");
+			host.id = "toast-host";
+			host.setAttribute("role", "status");
+			host.setAttribute("aria-live", "polite");
+			document.body.appendChild(host);
+		}
 		const item = document.createElement("div");
 		item.className = `toast ${tone}`;
 		item.innerHTML = `<span>${esc(message)}</span>${actionLabel ? `<button type="button" class="toast-action">${esc(actionLabel)}</button>` : ""}`;
 		host.appendChild(item);
 		const remove = () => item.remove();
-		item.querySelector(".toast-action")?.addEventListener("click", () => { onAction?.(); remove(); });
+		item.querySelector(".toast-action")?.addEventListener("click", () => {
+			onAction?.();
+			remove();
+		});
 		setTimeout(remove, actionLabel ? 8000 : 4500);
 	}
 
@@ -231,20 +352,33 @@
 			modal.innerHTML = `<form class="modal-card dialog-card form" novalidate><div class="panel-heading"><div><h2>${esc(title)}</h2></div><button class="close-button" type="button" aria-label="Fechar" data-cancel>&times;</button></div><div class="dialog-body">${body}</div><p class="feedback" role="alert"></p><div class="form-actions"><button class="button button-secondary" type="button" data-cancel>${esc(cancelLabel)}</button><button class="button ${danger ? "button-danger" : "button-primary"}" type="submit">${esc(confirmLabel)}</button></div></form>`;
 			document.body.appendChild(modal);
 			const form = modal.querySelector("form");
-			const close = (value) => { modal.remove(); document.removeEventListener("keydown", onKey); previous?.focus?.(); resolve(value); };
+			const close = (value) => {
+				modal.remove();
+				document.removeEventListener("keydown", onKey);
+				previous?.focus?.();
+				resolve(value);
+			};
 			const onKey = (event) => {
 				if (event.key === "Escape") close(null);
 				if (event.key === "Tab") {
 					const focusable = [...form.querySelectorAll("button, input, select, textarea, [href]")].filter((element) => !element.disabled);
 					if (!focusable.length) return;
-					const first = focusable[0]; const last = focusable[focusable.length - 1];
-					if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-					else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+					const first = focusable[0];
+					const last = focusable[focusable.length - 1];
+					if (event.shiftKey && document.activeElement === first) {
+						event.preventDefault();
+						last.focus();
+					} else if (!event.shiftKey && document.activeElement === last) {
+						event.preventDefault();
+						first.focus();
+					}
 				}
 			};
 			document.addEventListener("keydown", onKey);
 			modal.querySelectorAll("[data-cancel]").forEach((button) => button.addEventListener("click", () => close(null)));
-			modal.addEventListener("mousedown", (event) => { if (event.target === modal) close(null); });
+			modal.addEventListener("mousedown", (event) => {
+				if (event.target === modal) close(null);
+			});
 			form.addEventListener("submit", (event) => {
 				event.preventDefault();
 				if (!form.reportValidity()) return;
@@ -257,20 +391,37 @@
 
 	// --- Perfil / logout ------------------------------------------------------------
 	function fillProfile(user) {
-		const set = (selector, value) => { const element = document.querySelector(selector); if (element) element.textContent = value; };
+		const set = (selector, value) => {
+			const element = document.querySelector(selector);
+			if (element) element.textContent = value;
+		};
 		set("#profile-name", user.name);
 		set("#profile-role", roleLabel(user.role));
 		set("#profile-initials", initials(user.name));
 	}
 	async function logout() {
-		try { await api.post("/api/auth/logout"); } catch { /* sessao ja encerrada */ }
+		try {
+			await api.post("/api/auth/logout");
+		} catch {
+			/* sessao ja encerrada */
+		}
 		clearSession();
 		// Rascunhos com dados de clientes nao ficam no aparelho depois de sair (a fila offline e mantida).
-		try { Object.keys(localStorage).filter((key) => /draft/i.test(key)).forEach((key) => localStorage.removeItem(key)); } catch { /* sem armazenamento */ }
+		try {
+			Object.keys(localStorage)
+				.filter((key) => /draft/i.test(key))
+				.forEach((key) => localStorage.removeItem(key));
+		} catch {
+			/* sem armazenamento */
+		}
 		window.location.href = "/";
 	}
 	function bindLogout() {
-		document.querySelectorAll("#logout-button, [data-logout]").forEach((button) => { if (button.dataset.boundLogout) return; button.dataset.boundLogout = "1"; button.addEventListener("click", logout); });
+		document.querySelectorAll("#logout-button, [data-logout]").forEach((button) => {
+			if (button.dataset.boundLogout) return;
+			button.dataset.boundLogout = "1";
+			button.addEventListener("click", logout);
+		});
 	}
 
 	// Download autenticado (o token nao vai na URL): baixa como blob e abre/salva.
@@ -298,9 +449,23 @@
 	// id de quem preencheu e so e enviado na sessao dessa mesma pessoa (aparelho compartilhado).
 	const OUTBOX_KEY = "pp-outbox";
 	const outbox = {
-		list() { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || []; } catch { return []; } },
-		save(list) { try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list)); } catch { /* sem armazenamento */ } },
-		add(payload) { this.save([...this.list(), { payload, userId: getSession()?.user?.id ?? null, queuedAt: new Date().toISOString() }]); },
+		list() {
+			try {
+				return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || [];
+			} catch {
+				return [];
+			}
+		},
+		save(list) {
+			try {
+				localStorage.setItem(OUTBOX_KEY, JSON.stringify(list));
+			} catch {
+				/* sem armazenamento */
+			}
+		},
+		add(payload) {
+			this.save([...this.list(), { payload, userId: getSession()?.user?.id ?? null, queuedAt: new Date().toISOString() }]);
+		},
 		async flush() {
 			const userId = getSession()?.user?.id;
 			if (!userId || outbox.flushing) return;
@@ -320,20 +485,32 @@
 					pending = pending.slice(1);
 					outbox.save(outbox.list().filter((entry) => entry.queuedAt !== item.queuedAt || !mine(entry)));
 				}
-			} finally { outbox.flushing = false; }
+			} finally {
+				outbox.flushing = false;
+			}
 		}
 	};
 	window.addEventListener("online", () => outbox.flush());
 	window.addEventListener("load", () => outbox.flush());
 
-	const debounce = (fn, wait = 250) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
-	const skeleton = (rows = 4) => `<div class="skeleton-list" aria-busy="true" aria-label="Carregando">${Array.from({ length: rows }, () => '<div class="skeleton-row"></div>').join("")}</div>`;
-	const emptyState = (title, hint, action) => `<div class="empty-state"><strong>${esc(title)}</strong>${hint ? `<p class="muted">${esc(hint)}</p>` : ""}${action || ""}</div>`;
-	const errorState = (message) => `<div class="empty-state error-state" role="alert"><strong>${esc(message)}</strong><button class="button button-secondary" type="button" data-retry>Tentar novamente</button></div>`;
+	const debounce = (fn, wait = 250) => {
+		let timer;
+		return (...args) => {
+			clearTimeout(timer);
+			timer = setTimeout(() => fn(...args), wait);
+		};
+	};
+	const skeleton = (rows = 4) =>
+		`<div class="skeleton-list" aria-busy="true" aria-label="Carregando">${Array.from({ length: rows }, () => '<div class="skeleton-row"></div>').join("")}</div>`;
+	const emptyState = (title, hint, action) =>
+		`<div class="empty-state"><strong>${esc(title)}</strong>${hint ? `<p class="muted">${esc(hint)}</p>` : ""}${action || ""}</div>`;
+	const errorState = (message) =>
+		`<div class="empty-state error-state" role="alert"><strong>${esc(message)}</strong><button class="button button-secondary" type="button" data-retry>Tentar novamente</button></div>`;
 
 	// Icones SVG (traço, 24x24) usados no menu e nas ferramentas do topo.
 	const ICONS = {
-		dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+		dashboard:
+			'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
 		triage: '<path d="M3 4h18l-7 8.5V18l-4 2v-7.5z"/>',
 		order: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
 		exchange: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
@@ -342,10 +519,12 @@
 		reports: '<path d="M3 3v18h18"/><path d="M8 17v-4M13 17V8M18 17v-7"/>',
 		registry: '<path d="m21 8-9-5-9 5 9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
 		import: '<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
-		users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+		users:
+			'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
 		audit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11h6M9 15h6M9 19h3"/>',
 		integrations: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
-		settings: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+		settings:
+			'<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
 		account: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.6 18.6a6 6 0 0 1 10.8 0"/>',
 		bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
 		search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -359,21 +538,81 @@
 		plus: '<path d="M12 5v14M5 12h14"/>',
 		close: '<path d="M18 6 6 18M6 6l12 12"/>'
 	};
-	const icon = (name, className = "icon") => `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ""}</svg>`;
+	const icon = (name, className = "icon") =>
+		`<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ""}</svg>`;
 
 	// Tema: "auto" segue o sistema; "light"/"dark" ficam salvos no navegador.
 	const THEME_KEY = "pp-theme";
-	const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || "auto"; } catch { return "auto"; } };
+	const getTheme = () => {
+		try {
+			return localStorage.getItem(THEME_KEY) || "auto";
+		} catch {
+			return "auto";
+		}
+	};
 	function setTheme(theme) {
-		try { if (theme === "auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, theme); } catch { /* sem armazenamento */ }
-		if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme;
+		try {
+			if (theme === "auto") localStorage.removeItem(THEME_KEY);
+			else localStorage.setItem(THEME_KEY, theme);
+		} catch {
+			/* sem armazenamento */
+		}
+		if (theme === "auto") delete document.documentElement.dataset.theme;
+		else document.documentElement.dataset.theme = theme;
 		window.dispatchEvent(new CustomEvent("pp-theme-changed", { detail: theme }));
 	}
 
 	window.PP = {
-		sessionKey, apiOrigin, esc, getSession, setSession, clearSession, api, ApiError, requireUser, meta, getMeta: () => metaCache, csrfToken, track, applyDynamicStyles, maskDocument,
-		statusLabel, statusTone, roleLabel, can, slaBadge, formatDate, formatDateTime, money, fileSize, initials,
-		digits, isValidDocument, formatDocument, bindDocumentInput, bindMoneyInput, parseMoney, setFieldError, clearFieldErrors, applyServerErrors,
-		icon, getTheme, setTheme, outbox, toast, dialog, confirmAction, fillProfile, logout, bindLogout, download, openFile, debounce, skeleton, emptyState, errorState, SESSION_EXPIRED_KEY
+		sessionKey,
+		apiOrigin,
+		esc,
+		getSession,
+		setSession,
+		clearSession,
+		api,
+		ApiError,
+		requireUser,
+		meta,
+		getMeta: () => metaCache,
+		csrfToken,
+		track,
+		applyDynamicStyles,
+		maskDocument,
+		statusLabel,
+		statusTone,
+		roleLabel,
+		can,
+		slaBadge,
+		formatDate,
+		formatDateTime,
+		money,
+		fileSize,
+		initials,
+		digits,
+		isValidDocument,
+		formatDocument,
+		bindDocumentInput,
+		bindMoneyInput,
+		parseMoney,
+		setFieldError,
+		clearFieldErrors,
+		applyServerErrors,
+		icon,
+		getTheme,
+		setTheme,
+		outbox,
+		toast,
+		dialog,
+		confirmAction,
+		fillProfile,
+		logout,
+		bindLogout,
+		download,
+		openFile,
+		debounce,
+		skeleton,
+		emptyState,
+		errorState,
+		SESSION_EXPIRED_KEY
 	};
 })();

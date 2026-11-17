@@ -23,7 +23,9 @@ function base32Encode(buffer) {
 }
 
 function base32Decode(text) {
-	const clean = String(text).toUpperCase().replace(/[^A-Z2-7]/g, "");
+	const clean = String(text)
+		.toUpperCase()
+		.replace(/[^A-Z2-7]/g, "");
 	let bits = 0;
 	let value = 0;
 	const bytes = [];
@@ -80,6 +82,9 @@ function recoveryCodes(count = 10) {
 	});
 }
 
-const normalizeRecoveryCode = (code) => String(code || "").toLowerCase().replace(/[^a-z2-7]/g, "");
+const normalizeRecoveryCode = (code) =>
+	String(code || "")
+		.toLowerCase()
+		.replace(/[^a-z2-7]/g, "");
 
 module.exports = { generateSecret, verify, codeAt, currentStep, otpauthUri, recoveryCodes, normalizeRecoveryCode, base32Encode, base32Decode };

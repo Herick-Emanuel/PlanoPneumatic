@@ -20,7 +20,12 @@
 		const text = `Plano Pneumatic - códigos de recuperação da verificação em duas etapas\nCada código vale uma única vez.\n\n${codes.join("\n")}\n`;
 		container.innerHTML = `<div class="mfa-step"><p><strong>Guarde estes códigos de recuperação.</strong> Se perder o celular, cada código permite entrar uma única vez. Eles não serão mostrados de novo.</p><ol class="recovery-codes">${codes.map((code) => `<li><code>${esc(code)}</code></li>`).join("")}</ol><div class="form-actions"><button class="button button-secondary" type="button" data-copy>Copiar</button><button class="button button-secondary" type="button" data-download>Baixar .txt</button><button class="button button-primary" type="button" data-done>${esc(doneLabel)}</button></div></div>`;
 		container.querySelector("[data-copy]").addEventListener("click", async () => {
-			try { await navigator.clipboard.writeText(text); PP.toast("Códigos copiados.", "success"); } catch { PP.toast("Não foi possível copiar. Use o botão Baixar.", "error"); }
+			try {
+				await navigator.clipboard.writeText(text);
+				PP.toast("Códigos copiados.", "success");
+			} catch {
+				PP.toast("Não foi possível copiar. Use o botão Baixar.", "error");
+			}
 		});
 		container.querySelector("[data-download]").addEventListener("click", () => downloadText("plano-pneumatic-codigos-de-recuperacao.txt", text));
 		container.querySelector("[data-done]").addEventListener("click", () => onDone?.());
@@ -49,9 +54,14 @@
 					try {
 						const result = await api.post("/api/auth/mfa/enable", { code: codeForm.code.value.trim() });
 						showRecoveryCodes(container, result.recoveryCodes, onDone);
-					} catch (error) { codeFeedback.textContent = error.message; codeForm.code.select(); }
+					} catch (error) {
+						codeFeedback.textContent = error.message;
+						codeForm.code.select();
+					}
 				});
-			} catch (error) { feedback.textContent = error.message; }
+			} catch (error) {
+				feedback.textContent = error.message;
+			}
 		});
 	}
 

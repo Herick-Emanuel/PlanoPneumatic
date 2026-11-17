@@ -12,7 +12,11 @@ function decodeKey(value) {
 	let key = null;
 	if (/^[0-9a-f]{64}$/i.test(text)) key = Buffer.from(text, "hex");
 	else {
-		try { key = Buffer.from(text, "base64"); } catch { key = null; }
+		try {
+			key = Buffer.from(text, "base64");
+		} catch {
+			key = null;
+		}
 	}
 	if (!key || key.length !== 32) throw new Error("APP_ENCRYPTION_KEY deve ter 32 bytes (64 caracteres hex ou 44 em base64).");
 	return key;

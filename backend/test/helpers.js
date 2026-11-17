@@ -36,9 +36,13 @@ async function teardown() {
 }
 
 async function resetDatabase() {
-	await database.query("TRUNCATE users, cases, customers, products, case_sequences, webhooks, case_sla_config, app_settings, login_throttle, audit_log RESTART IDENTITY CASCADE");
+	await database.query(
+		"TRUNCATE users, cases, customers, products, case_sequences, webhooks, case_sla_config, app_settings, login_throttle, audit_log RESTART IDENTITY CASCADE"
+	);
 	await database.query("INSERT INTO case_sla_config (type, days) VALUES ('Pedido de venda', 3), ('Base de troca', 5), ('Garantia', 7)");
-	await database.query("INSERT INTO app_settings (key, value) VALUES ('alerts_enabled', 'true'), ('auto_refresh', 'true'), ('require_documents', 'true'), ('manager_team_scope', 'false'), ('mfa_required', 'false'), ('activity_tracking', 'true')");
+	await database.query(
+		"INSERT INTO app_settings (key, value) VALUES ('alerts_enabled', 'true'), ('auto_refresh', 'true'), ('require_documents', 'true'), ('manager_team_scope', 'false'), ('mfa_required', 'false'), ('activity_tracking', 'true')"
+	);
 	settings.invalidate();
 	resetRateLimits();
 }
@@ -56,10 +60,17 @@ async function createUser(role = "operator", overrides = {}) {
 
 // `cookies` simula o navegador: { session, csrf } vindos de loginWithCookies (csrf vai no X-CSRF-Token).
 async function api(method, path, { body, token, cookies, csrf = true, headers = {}, raw } = {}) {
-	const cookieHeaders = cookies ? { Cookie: `${SESSION_COOKIE}=${cookies.session}; ${CSRF_COOKIE}=${cookies.csrf}`, ...(csrf && cookies.csrf ? { "X-CSRF-Token": cookies.csrf } : {}) } : {};
+	const cookieHeaders = cookies
+		? { Cookie: `${SESSION_COOKIE}=${cookies.session}; ${CSRF_COOKIE}=${cookies.csrf}`, ...(csrf && cookies.csrf ? { "X-CSRF-Token": cookies.csrf } : {}) }
+		: {};
 	const response = await fetch(`${baseUrl}${path}`, {
 		method,
-		headers: { ...(raw ? {} : body !== undefined ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...cookieHeaders, ...headers },
+		headers: {
+			...(raw ? {} : body !== undefined ? { "Content-Type": "application/json" } : {}),
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...cookieHeaders,
+			...headers
+		},
 		body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined)
 	});
 	const contentType = response.headers.get("content-type") || "";
@@ -84,7 +95,11 @@ async function loginWithCookies(email, password = PASSWORD, headers = {}) {
 }
 
 const basePayload = (type = "Garantia", extra = {}) => ({
-	type, client: "Cliente Teste", product: "Compressor", productCode: "CP-01", quantity: 1,
+	type,
+	client: "Cliente Teste",
+	product: "Compressor",
+	productCode: "CP-01",
+	quantity: 1,
 	...(type === "Base de troca" ? { exchangeReason: "Erro de pedido", itemCondition: "Perfeito estado" } : {}),
 	...extra
 });
@@ -95,6 +110,24 @@ async function createCase(token, type = "Garantia", extra = {}) {
 	return response.body.case.id;
 }
 
-const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082", "hex");
+const PNG = Buffer.from(
+	"89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082",
+	"hex"
+);
 
-module.exports = { resetRateLimitsForTest: resetRateLimits, setup, teardown, resetDatabase, createUser, api, basePayload, createCase, database, PNG, PASSWORD, readCookies, loginWithCookies, baseUrl: () => baseUrl };
+module.exports = {
+	resetRateLimitsForTest: resetRateLimits,
+	setup,
+	teardown,
+	resetDatabase,
+	createUser,
+	api,
+	basePayload,
+	createCase,
+	database,
+	PNG,
+	PASSWORD,
+	readCookies,
+	loginWithCookies,
+	baseUrl: () => baseUrl
+};

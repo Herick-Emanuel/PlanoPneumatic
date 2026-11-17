@@ -33,7 +33,11 @@ function safeLookup(hostname, options, callback) {
 // Validacao na criacao: HTTPS, sem usuario/senha na URL e sem host interno literal.
 function validateEndpoint(value) {
 	let target;
-	try { target = new URL(String(value || "").trim()); } catch { return "Endpoint invalido."; }
+	try {
+		target = new URL(String(value || "").trim());
+	} catch {
+		return "Endpoint invalido.";
+	}
 	if (target.protocol !== "https:") return "O endpoint precisa usar HTTPS.";
 	if (target.username || target.password) return "Nao inclua usuario ou senha na URL do webhook; use o segredo de assinatura.";
 	if (isPrivateHost(target.hostname)) return "Endpoint aponta para um endereco interno e foi bloqueado.";
@@ -52,19 +56,28 @@ function postJson(target, body, signature) {
 	return new Promise((resolve, reject) => {
 		// IP literal nao passa pelo lookup: confere aqui.
 		const literal = target.hostname.replace(/^\[|\]$/g, "");
-		if (net.isIP(literal) && isPrivateAddress(literal)) return reject(Object.assign(new Error("Destino bloqueado (host interno)"), { code: "WEBHOOK_PRIVATE_ADDRESS" }));
-		const request = https.request({
-			hostname: literal,
-			port: target.port || 443,
-			path: `${target.pathname}${target.search}`,
-			method: "POST",
-			lookup: safeLookup,
-			// Redirecionamentos nao sao seguidos (https.request nao segue): um 3xx conta como falha.
-			headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), "X-Webhook-Signature": signature, "User-Agent": "PlanoPneumatic-Webhook/1" }
-		}, (response) => {
-			response.resume();
-			response.on("end", () => resolve(response.statusCode));
-		});
+		if (net.isIP(literal) && isPrivateAddress(literal))
+			return reject(Object.assign(new Error("Destino bloqueado (host interno)"), { code: "WEBHOOK_PRIVATE_ADDRESS" }));
+		const request = https.request(
+			{
+				hostname: literal,
+				port: target.port || 443,
+				path: `${target.pathname}${target.search}`,
+				method: "POST",
+				lookup: safeLookup,
+				// Redirecionamentos nao sao seguidos (https.request nao segue): um 3xx conta como falha.
+				headers: {
+					"Content-Type": "application/json",
+					"Content-Length": Buffer.byteLength(body),
+					"X-Webhook-Signature": signature,
+					"User-Agent": "PlanoPneumatic-Webhook/1"
+				}
+			},
+			(response) => {
+				response.resume();
+				response.on("end", () => resolve(response.statusCode));
+			}
+		);
 		request.on("error", reject);
 		request.setTimeout(5000, () => request.destroy(new Error("Webhook timeout")));
 		request.end(body);
@@ -72,12 +85,25 @@ function postJson(target, body, signature) {
 }
 
 async function recordDelivery(webhookId, event, attempt, { statusCode = null, success = false, error = null }) {
-	await database.query("INSERT INTO webhook_deliveries (webhook_id, event, attempt, status_code, success, error) VALUES ($1, $2, $3, $4, $5, $6)", [webhookId, event, attempt, statusCode, success, error ? String(error).slice(0, 500) : null]).catch(() => {});
+	await database
+		.query("INSERT INTO webhook_deliveries (webhook_id, event, attempt, status_code, success, error) VALUES ($1, $2, $3, $4, $5, $6)", [
+			webhookId,
+			event,
+			attempt,
+			statusCode,
+			success,
+			error ? String(error).slice(0, 500) : null
+		])
+		.catch(() => {});
 }
 
 async function deliver(webhook, event, body, signature) {
 	let target;
-	try { target = new URL(webhook.endpoint_url); } catch { return recordDelivery(webhook.id, event, 1, { error: "URL invalida" }); }
+	try {
+		target = new URL(webhook.endpoint_url);
+	} catch {
+		return recordDelivery(webhook.id, event, 1, { error: "URL invalida" });
+	}
 	const problem = validateEndpoint(webhook.endpoint_url);
 	if (problem) {
 		logEvent("webhook_blocked", { webhookId: webhook.id, reason: problem });
@@ -103,7 +129,9 @@ async function deliver(webhook, event, body, signature) {
 function dispatchWebhook(event, payload) {
 	if (process.env.DISABLE_WEBHOOKS === "true") return;
 	void (async () => {
-		const { rows } = await database.query("SELECT id, endpoint_url, secret FROM webhooks WHERE active = TRUE AND events @> $1::jsonb", [JSON.stringify([event])]);
+		const { rows } = await database.query("SELECT id, endpoint_url, secret FROM webhooks WHERE active = TRUE AND events @> $1::jsonb", [
+			JSON.stringify([event])
+		]);
 		for (const webhook of rows) {
 			const body = JSON.stringify({ event, payload, sentAt: new Date().toISOString() });
 			const signature = crypto.createHmac("sha256", decrypt(webhook.secret)).update(body).digest("hex");

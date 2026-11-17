@@ -6,7 +6,11 @@ const DEFAULT_FRONTEND_ORIGIN = "https://planopneumatic-production.up.railway.ap
 const DEFAULT_API_ORIGIN = "https://planopneumaticapi-production.up.railway.app";
 
 const bool = (value, fallback) => (value === undefined || value === "" ? fallback : ["1", "true", "yes", "on"].includes(String(value).toLowerCase()));
-const list = (value) => String(value || "").split(",").map((item) => item.trim().replace(/\/$/, "")).filter(Boolean);
+const list = (value) =>
+	String(value || "")
+		.split(",")
+		.map((item) => item.trim().replace(/\/$/, ""))
+		.filter(Boolean);
 
 // "trust proxy" do Express: quantos saltos de proxy na frente da API sao confiaveis para ler o IP do cliente.
 // Aceita numero ("1", "2"), "true"/"false" ou uma lista de IPs/CIDRs ("loopback, 10.0.0.0/8").
@@ -49,14 +53,19 @@ const config = {
 function validateConfig() {
 	const warnings = [];
 	if ((isProduction || process.env.NODE_ENV === "staging") && !config.encryptionKey) {
-		throw new Error("APP_ENCRYPTION_KEY e obrigatoria em producao e homologacao (gere com: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\").");
+		throw new Error(
+			"APP_ENCRYPTION_KEY e obrigatoria em producao e homologacao (gere com: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\")."
+		);
 	}
 	if (isProduction) {
 		if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL e obrigatoria em producao.");
 		if (!process.env.FRONTEND_ORIGIN) warnings.push("FRONTEND_ORIGIN nao definida; usando o valor padrao embutido.");
 		if (!process.env.API_PUBLIC_URL) warnings.push("API_PUBLIC_URL nao definida; usando o valor padrao embutido.");
 		if (!config.cookieSecure) warnings.push("COOKIE_SECURE=false em producao: o cookie de sessao pode trafegar sem HTTPS.");
-		if (!config.proxySharedSecret) warnings.push("PROXY_SHARED_SECRET nao definida: acessos que passam pelo Nginx do frontend chegam todos com o IP dele, e o limite de 20 tentativas por IP vale para a empresa inteira. Defina o mesmo segredo na API e no frontend.");
+		if (!config.proxySharedSecret)
+			warnings.push(
+				"PROXY_SHARED_SECRET nao definida: acessos que passam pelo Nginx do frontend chegam todos com o IP dele, e o limite de 20 tentativas por IP vale para a empresa inteira. Defina o mesmo segredo na API e no frontend."
+			);
 	}
 	if (config.encryptionKey) {
 		const { decodeKey } = require("./security/crypto");

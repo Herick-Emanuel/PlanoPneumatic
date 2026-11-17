@@ -3,7 +3,9 @@ const { test } = require("node:test");
 const { Client } = require("pg");
 
 // Banco dedicado: precisa existir e ficar vazio entre execucoes (o teste recria o schema).
-const url = process.env.MIGRATIONS_TEST_DATABASE_URL || (process.env.TEST_DATABASE_URL || "postgres://postgres:postgres@localhost:5432/plano_pneumatic_test").replace(/\/[^/]+$/, "/plano_pneumatic_migrations_test");
+const url =
+	process.env.MIGRATIONS_TEST_DATABASE_URL ||
+	(process.env.TEST_DATABASE_URL || "postgres://postgres:postgres@localhost:5432/plano_pneumatic_test").replace(/\/[^/]+$/, "/plano_pneumatic_migrations_test");
 
 test("migrations run on an empty database, are idempotent and safe under concurrency", async () => {
 	assert.match(new URL(url).pathname, /test/);
@@ -22,8 +24,11 @@ test("migrations run on an empty database, are idempotent and safe under concurr
 		const { rows } = await db.database.query("SELECT version FROM schema_migrations ORDER BY version");
 		assert.ok(rows.length >= 9);
 		assert.equal(rows[0].version, "000_initial_schema.sql");
-		const tables = (await db.database.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")).rows.map((row) => row.table_name);
-		for (const table of ["cases", "case_sequences", "customers", "products", "case_items", "app_settings", "webhook_deliveries", "saved_filters"]) assert.ok(tables.includes(table), `falta a tabela ${table}`);
+		const tables = (await db.database.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")).rows.map(
+			(row) => row.table_name
+		);
+		for (const table of ["cases", "case_sequences", "customers", "products", "case_items", "app_settings", "webhook_deliveries", "saved_filters"])
+			assert.ok(tables.includes(table), `falta a tabela ${table}`);
 		const { rows: sla } = await db.database.query("SELECT COUNT(*)::int AS count FROM case_sla_config");
 		assert.equal(sla[0].count, 3);
 	} finally {

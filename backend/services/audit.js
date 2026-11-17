@@ -50,7 +50,16 @@ const AUDIT_ACTIONS = Object.freeze({
  */
 async function audit(action, { actorId = null, entityType = null, entityId = null, details = null, executor = null } = {}) {
 	const context = currentContext();
-	const values = [actorId, action, entityType, entityId === null || entityId === undefined ? null : String(entityId), context.ip || null, context.userAgent || null, context.requestId || null, details ? JSON.stringify(details) : null];
+	const values = [
+		actorId,
+		action,
+		entityType,
+		entityId === null || entityId === undefined ? null : String(entityId),
+		context.ip || null,
+		context.userAgent || null,
+		context.requestId || null,
+		details ? JSON.stringify(details) : null
+	];
 	const sql = "INSERT INTO audit_log (actor_id, action, entity_type, entity_id, ip, user_agent, request_id, details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
 	if (executor) return executor.query(sql, values);
 	try {

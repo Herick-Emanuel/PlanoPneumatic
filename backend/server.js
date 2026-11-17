@@ -38,6 +38,10 @@ async function start() {
 	return server;
 }
 
-if (require.main === module) start().catch((error) => { logEvent("startup_error", { error: error.message }); process.exit(1); });
+if (require.main === module)
+	start().catch((error) => {
+		logEvent("startup_error", { error: error.message });
+		process.exit(1);
+	});
 
 module.exports = { app, roles, hasRole, start, database };

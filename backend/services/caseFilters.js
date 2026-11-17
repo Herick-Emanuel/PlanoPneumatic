@@ -6,7 +6,9 @@ const FINISHED_SQL = FINISHED_STATUSES.map((status) => `'${status}'`).join(", ")
 const TEAM_SQL = "SELECT team.id FROM users team WHERE team.id = $V OR team.manager_id = $V";
 
 function likeTerm(value) {
-	return `%${String(value).trim().replace(/[\\%_]/g, "\\$&")}%`;
+	return `%${String(value)
+		.trim()
+		.replace(/[\\%_]/g, "\\$&")}%`;
 }
 
 /**
@@ -34,7 +36,11 @@ function buildCaseFilters(user, query = {}) {
 	if (query.product) add("c.product ILIKE $V", likeTerm(query.product));
 	if (query.productCode) add("c.product_code ILIKE $V", likeTerm(query.productCode));
 	if (query.document) add("(c.document_reference ILIKE $V OR c.client_document ILIKE $V OR c.origin_order ILIKE $V)", likeTerm(query.document));
-	if (query.serial) add("(c.serial_number ILIKE $V OR c.lot_number ILIKE $V OR EXISTS (SELECT 1 FROM case_items i WHERE i.case_id = c.id AND (i.serial_number ILIKE $V OR i.lot_number ILIKE $V)))", likeTerm(query.serial));
+	if (query.serial)
+		add(
+			"(c.serial_number ILIKE $V OR c.lot_number ILIKE $V OR EXISTS (SELECT 1 FROM case_items i WHERE i.case_id = c.id AND (i.serial_number ILIKE $V OR i.lot_number ILIKE $V)))",
+			likeTerm(query.serial)
+		);
 	if (query.responsible) add("c.responsible ILIKE $V", likeTerm(query.responsible));
 	if (query.assignedTo) add("c.assigned_to = $V", query.assignedTo);
 	if (query.type) add("c.type = $V", query.type);

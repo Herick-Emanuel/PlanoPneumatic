@@ -8,7 +8,8 @@ const MAX_BYTES = 72;
 
 // Senhas mais usadas (listas publicas de vazamentos) + variacoes comuns em portugues e do proprio sistema.
 // A comparacao e feita sobre a senha normalizada (minusculas, sem numeros/simbolos nas pontas, sem "leet").
-const COMMON = new Set(`
+const COMMON = new Set(
+	`
 123456 password 12345678 qwerty 123456789 12345 1234 111111 1234567 dragon 123123 baseball abc123 football monkey
 letmein 696969 shadow master 666666 qwertyuiop 123321 mustang 1234567890 michael 654321 superman 1qaz2wsx 7777777
 121212 000000 qazwsx 123qwe killer trustno1 jordan jennifer zxcvbnm asdfgh hunter buster soccer harley batman andrew
@@ -32,7 +33,10 @@ palmeiras santos gremio cruzeiro vasco botafogo fluminense internacional amor am
 jesuscristo meuamor teamo felicidade benfica futebol garantia pedido troca operador operacao gerente supervisor
 tecnico logistica auditor usuario usuarios empresa sistema plano pneumatic planopneumatic pneumatica pneumatico
 qwerty123 qwertyui asdfghjkl zaq12wsx 1qazxsw2 abcd1234 abcdef abcdefgh 1q2w3e 1q2w3e4r5t aa123456 a123456 iloveu
-`.trim().split(/\s+/));
+`
+		.trim()
+		.split(/\s+/)
+);
 
 // Valores de exemplo que ja apareceram em arquivos do repositorio: nunca aceitos como senha real.
 const KNOWN_EXAMPLES = new Set(["admin123!", "operador123!", "seedpass123!", "strongpass123!", "e2eadminpass1", "e2eoperadorpass1"]);
@@ -48,9 +52,16 @@ function normalize(password) {
 
 function contextWords({ email, name } = {}) {
 	const words = new Set(["planopneumatic", "pneumatic"]);
-	const local = String(email || "").toLowerCase().split("@")[0];
+	const local = String(email || "")
+		.toLowerCase()
+		.split("@")[0];
 	for (const part of local.split(/[^a-z0-9]+/)) if (part.length >= 4) words.add(part);
-	for (const part of String(name || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/)) if (part.length >= 4) words.add(part);
+	for (const part of String(name || "")
+		.toLowerCase()
+		.normalize("NFD")
+		.replace(/[̀-ͯ]/g, "")
+		.split(/[^a-z0-9]+/))
+		if (part.length >= 4) words.add(part);
 	return words;
 }
 
@@ -64,7 +75,8 @@ function passwordProblem(password, context = {}) {
 	if (Buffer.byteLength(value, "utf8") > MAX_BYTES) return `A senha deve ter no maximo ${MAX_BYTES} bytes.`;
 	if (/^<.*>$/.test(value.trim())) return "Use uma senha real, nao o texto de exemplo.";
 	if (new Set(value.toLowerCase()).size < 5) return "A senha repete poucos caracteres diferentes. Use uma frase ou combinacao mais variada.";
-	if (/^[\d\W_]+$/.test(value) && /0123|1234|2345|3456|4567|5678|6789|9876|8765|7654|6543|5432|4321/.test(value)) return "A senha e uma sequencia numerica. Escolha outra.";
+	if (/^[\d\W_]+$/.test(value) && /0123|1234|2345|3456|4567|5678|6789|9876|8765|7654|6543|5432|4321/.test(value))
+		return "A senha e uma sequencia numerica. Escolha outra.";
 	if (KNOWN_EXAMPLES.has(value.toLowerCase())) return "Essa senha aparece nos exemplos do sistema e nao pode ser usada.";
 	const variants = normalize(value);
 	if (variants.some((variant) => COMMON.has(variant))) return "Essa senha e muito comum. Escolha outra (uma frase com varias palavras funciona bem).";

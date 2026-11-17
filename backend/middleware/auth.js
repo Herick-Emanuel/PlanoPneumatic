@@ -35,7 +35,11 @@ function parseCookies(request) {
 		if (index < 0) continue;
 		const name = part.slice(0, index).trim();
 		if (!name || name in cookies) continue;
-		try { cookies[name] = decodeURIComponent(part.slice(index + 1).trim()); } catch { /* cookie malformado */ }
+		try {
+			cookies[name] = decodeURIComponent(part.slice(index + 1).trim());
+		} catch {
+			/* cookie malformado */
+		}
 	}
 	return cookies;
 }
@@ -63,7 +67,10 @@ function clearSessionCookies(response) {
 async function isTrustedDevice(request, userId) {
 	const token = parseCookies(request)[DEVICE_COOKIE];
 	if (!token || token.length > 200 || !userId) return false;
-	const { rows } = await database.query("UPDATE trusted_devices SET last_used_at = NOW() WHERE user_id = $1 AND token_hash = $2 AND expires_at > NOW() RETURNING id", [userId, hashToken(token)]);
+	const { rows } = await database.query(
+		"UPDATE trusted_devices SET last_used_at = NOW() WHERE user_id = $1 AND token_hash = $2 AND expires_at > NOW() RETURNING id",
+		[userId, hashToken(token)]
+	);
 	return Boolean(rows[0]);
 }
 
@@ -71,23 +78,36 @@ async function isTrustedDevice(request, userId) {
 async function rememberDevice(request, response, userId, executor = database) {
 	const current = parseCookies(request)[DEVICE_COOKIE];
 	if (current && current.length <= 200) {
-		const { rowCount } = await executor.query("UPDATE trusted_devices SET last_used_at = NOW(), expires_at = NOW() + make_interval(days => $3) WHERE user_id = $1 AND token_hash = $2", [userId, hashToken(current), DEVICE_DAYS]);
+		const { rowCount } = await executor.query(
+			"UPDATE trusted_devices SET last_used_at = NOW(), expires_at = NOW() + make_interval(days => $3) WHERE user_id = $1 AND token_hash = $2",
+			[userId, hashToken(current), DEVICE_DAYS]
+		);
 		if (rowCount) return;
 	}
 	const token = crypto.randomBytes(32).toString("hex");
-	await executor.query("INSERT INTO trusted_devices (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + make_interval(days => $3))", [userId, hashToken(token), DEVICE_DAYS]);
+	await executor.query("INSERT INTO trusted_devices (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + make_interval(days => $3))", [
+		userId,
+		hashToken(token),
+		DEVICE_DAYS
+	]);
 	// Mantem no maximo 20 aparelhos por usuario.
-	await executor.query("DELETE FROM trusted_devices WHERE user_id = $1 AND id NOT IN (SELECT id FROM trusted_devices WHERE user_id = $1 ORDER BY last_used_at DESC LIMIT 20)", [userId]);
+	await executor.query(
+		"DELETE FROM trusted_devices WHERE user_id = $1 AND id NOT IN (SELECT id FROM trusted_devices WHERE user_id = $1 ORDER BY last_used_at DESC LIMIT 20)",
+		[userId]
+	);
 	response.append("Set-Cookie", serializeCookie(DEVICE_COOKIE, token, { maxAgeSeconds: DEVICE_DAYS * 86400, httpOnly: true }));
 }
 
 async function createSession(userId, { ip = null, userAgent = null, executor = database } = {}) {
 	const token = crypto.randomBytes(32).toString("hex");
 	const expiresAt = new Date(Date.now() + config.sessionDurationInDays * 86400000);
-	const { rows } = await executor.query(
-		"INSERT INTO sessions (user_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		[userId, hashToken(token), expiresAt, ip, userAgent ? String(userAgent).slice(0, 300) : null]
-	);
+	const { rows } = await executor.query("INSERT INTO sessions (user_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5) RETURNING id", [
+		userId,
+		hashToken(token),
+		expiresAt,
+		ip,
+		userAgent ? String(userAgent).slice(0, 300) : null
+	]);
 	return { id: rows[0].id, token, csrfToken: csrfTokenFor(token), expiresAt: expiresAt.toISOString() };
 }
 
@@ -159,12 +179,14 @@ function authenticate({ allowPending }) {
 		try {
 			const result = await getSessionUser(request);
 			if (!result) return next(new AppError(401, "Sessao invalida ou expirada.", "UNAUTHENTICATED"));
-			if (!checkCsrf(request, result.session)) return next(new AppError(403, "Token de seguranca (CSRF) ausente ou invalido. Recarregue a pagina.", "CSRF_INVALID"));
+			if (!checkCsrf(request, result.session))
+				return next(new AppError(403, "Token de seguranca (CSRF) ausente ou invalido. Recarregue a pagina.", "CSRF_INVALID"));
 			request.user = result.user;
 			request.session = result.session;
 			if (!allowPending) {
 				if (result.user.mustChangePassword) return next(new AppError(403, "Troque sua senha para continuar.", "PASSWORD_CHANGE_REQUIRED"));
-				if (result.user.mfaEnrollmentRequired) return next(new AppError(403, "Ative a verificacao em duas etapas (MFA) para continuar.", "MFA_ENROLLMENT_REQUIRED"));
+				if (result.user.mfaEnrollmentRequired)
+					return next(new AppError(403, "Ative a verificacao em duas etapas (MFA) para continuar.", "MFA_ENROLLMENT_REQUIRED"));
 			}
 			return next();
 		} catch (error) {
@@ -181,6 +203,21 @@ function requireCapability(capability) {
 }
 
 module.exports = {
-	SESSION_COOKIE, CSRF_COOKIE, DEVICE_COOKIE, MFA_ROLES, hashToken, isTrustedDevice, rememberDevice, csrfTokenFor, parseCookies, createSession, setSessionCookies, clearSessionCookies,
-	bearerToken, sessionToken, getSessionUser, requireAuth, requireCapability
+	SESSION_COOKIE,
+	CSRF_COOKIE,
+	DEVICE_COOKIE,
+	MFA_ROLES,
+	hashToken,
+	isTrustedDevice,
+	rememberDevice,
+	csrfTokenFor,
+	parseCookies,
+	createSession,
+	setSessionCookies,
+	clearSessionCookies,
+	bearerToken,
+	sessionToken,
+	getSessionUser,
+	requireAuth,
+	requireCapability
 };
