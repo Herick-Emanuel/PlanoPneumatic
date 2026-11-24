@@ -44,7 +44,12 @@ const AUDIT_ACTIONS = Object.freeze({
 	SETTING_CHANGED: "Configuração alterada",
 	WEBHOOK_CREATED: "Webhook criado",
 	WEBHOOK_UPDATED: "Webhook alterado",
-	CASE_EVENT: "Evento de processo"
+	CASE_EVENT: "Evento de processo",
+	OMIE_PRODUCT_APPROVED: "Peça aprovada para envio ao Omie",
+	OMIE_PRODUCT_SENT: "Peça cadastrada no Omie",
+	OMIE_PRODUCT_LINKED: "Peça já existia no Omie (cadastros ligados)",
+	OMIE_PRODUCT_FAILED: "Erro ao enviar peça ao Omie",
+	OMIE_PRODUCT_RETRY: "Reenvio de peça ao Omie"
 });
 
 /**

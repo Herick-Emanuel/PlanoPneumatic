@@ -23,16 +23,13 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
 	event.waitUntil(
-		caches
-			.open(CACHE_VERSION)
-			.then((cache) => cache.addAll(APP_SHELL))
-			// Esta versao muda a forma de sessao (cookie) e a CSP: assume o controle na hora, para que a pagina
-			// nunca misture scripts antigos do cache com o HTML novo (a pagina recarrega sozinha uma vez).
-			.then(() => self.skipWaiting())
+		caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL))
+		// Sem skipWaiting aqui: a versao nova espera. Na abertura do app a splash a ativa na hora (pwa.js);
+		// durante o uso, o aviso "Nova versao disponivel" deixa a pessoa escolher o momento.
 	);
 });
 
-// A nova versao fica em espera ate o usuario aceitar o aviso "nova versao disponivel".
+// Ativa a versao em espera (splash de abertura ou clique em "Atualizar agora").
 self.addEventListener("message", (event) => {
 	if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });

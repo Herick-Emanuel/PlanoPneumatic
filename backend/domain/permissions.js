@@ -25,7 +25,8 @@ const capabilities = Object.freeze({
 	VIEW_TEAM_REPORTS: "reports.team.view",
 	VIEW_MANAGER_PERFORMANCE: "reports.managers.view",
 	EXPORT_REPORTS: "reports.export",
-	BUILD_REPORTS: "reports.builder"
+	BUILD_REPORTS: "reports.builder",
+	APPROVE_OMIE_PRODUCTS: "registry.omie.approve"
 });
 
 const c = capabilities;
@@ -41,6 +42,7 @@ const permissionMatrix = Object.freeze({
 		c.ASSIGN_CASES,
 		c.VIEW_TEAM_REPORTS,
 		c.BUILD_REPORTS,
+		c.APPROVE_OMIE_PRODUCTS,
 		c.EDIT_USER,
 		c.DECIDE_CASE,
 		c.TECHNICAL_ANALYSIS,
@@ -53,7 +55,7 @@ const permissionMatrix = Object.freeze({
 		c.MANAGE_SETTINGS,
 		...everyone
 	],
-	[roles.SUPERVISOR]: [c.ASSIGN_CASES, c.IMPORT_CASES, c.VIEW_ALL_CASES, c.MANAGE_REGISTRY, ...everyone],
+	[roles.SUPERVISOR]: [c.ASSIGN_CASES, c.IMPORT_CASES, c.VIEW_ALL_CASES, c.MANAGE_REGISTRY, c.APPROVE_OMIE_PRODUCTS, ...everyone],
 	[roles.OPERATOR]: [...everyone],
 	[roles.TECHNICIAN]: [c.DECIDE_CASE, c.TECHNICAL_ANALYSIS, c.VIEW_ALL_CASES, ...everyone],
 	[roles.LOGISTICS]: [c.MANAGE_LOGISTICS, c.VIEW_ALL_CASES, ...everyone],

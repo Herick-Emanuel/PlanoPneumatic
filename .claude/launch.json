@@ -19,6 +19,8 @@
       "env": {
         "DATABASE_URL": "postgres://postgres:postgres@localhost:55432/plano_pneumatic",
         "PORT": "3100",
+        "SEED_ADMIN_PASSWORD": "",
+        "OMIE_SCHEDULER": "off",
         "APP_PORT": "3100"
       },
       "port": 3100

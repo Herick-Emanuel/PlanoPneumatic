@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { before, after, beforeEach, afterEach, test } = require("node:test");
 const h = require("./helpers");
 const omie = require("../services/omie");
+const omieImport = require("../services/omieImport");
 
 const calls = [];
 let handlers = {};
@@ -23,13 +24,14 @@ before(async () => {
 after(h.teardown);
 beforeEach(async () => {
 	await h.resetDatabase();
-	await h.database.query("TRUNCATE omie_sync_runs RESTART IDENTITY");
+	await h.database.query("TRUNCATE omie_sync_runs, omie_orders, omie_invoices, omie_webhook_events RESTART IDENTITY");
 	calls.length = 0;
 	handlers = {};
 	process.env.OMIE_APP_KEY = "key";
 	process.env.OMIE_APP_SECRET = "secret";
 });
-afterEach(() => {
+afterEach(async () => {
+	await omieImport.idle();
 	delete process.env.OMIE_APP_KEY;
 	delete process.env.OMIE_APP_SECRET;
 });
@@ -79,7 +81,7 @@ test("customer sync paginates, links by document, ignores invalid documents and 
 
 test("product sync matches by code, creates new ones and skips incomplete records", async () => {
 	const manager = await h.createUser("manager");
-	await h.api("POST", "/api/products", { token: manager.token, body: { code: "CP-01", description: "Antigo" } });
+	await h.api("POST", "/api/products", { token: manager.token, body: { code: "CP-01", description: "Antigo", unit: "UN" } });
 	handlers.ListarProdutos = () =>
 		jsonResponse({
 			total_de_paginas: 1,
@@ -238,7 +240,7 @@ test("Omie pedindo para aguardar muito tempo nao trava a consulta de tela", asyn
 	assert.match(response.body.message, /35 segundos/);
 });
 
-test("selecao Omie: lista os pedidos mais recentes primeiro, abre so os escolhidos e nao duplica", async () => {
+test("selecao Omie: lista do espelho (mais recentes primeiro), abre so os escolhidos e nao duplica", async () => {
 	const manager = await h.createUser("manager");
 	const operator = await h.createUser("operator");
 	await h.database.query("INSERT INTO customers (name, document, omie_code) VALUES ('Oficina Central', '11222333000181', 77)");
@@ -257,16 +259,29 @@ test("selecao Omie: lista os pedidos mais recentes primeiro, abre so os escolhid
 		);
 	handlers.ConsultarPedido = (param) => jsonResponse({ pedido_venda_produto: order(param.codigo_pedido, `100${param.codigo_pedido}`) });
 
-	const list = await h.api("GET", "/api/omie/orders?from=2026-11-01&to=2026-11-15", { token: manager.token });
-	assert.equal(list.status, 200);
-	assert.equal(list.body.page, 2, "abre a ultima pagina (mais recentes)");
+	// Espelho vazio: a primeira consulta vai ao vivo (pagina mais recente) e dispara a carga em segundo plano.
+	const live = await h.api("GET", "/api/omie/orders?from=2026-11-01&to=2026-11-15", { token: manager.token });
+	assert.equal(live.body.source, "live");
 	assert.deepEqual(
-		list.body.orders.map((row) => row.number),
+		live.body.orders.map((row) => row.number),
 		["1003", "1002"]
 	);
+	assert.equal(calls.find((call) => call.call === "ListarPedidos").param[0].filtrar_por_data_de, "01/11/2026");
+	// A carga disparada em segundo plano preenche o espelho.
+	await omieImport.idle();
+	assert.equal((await h.api("GET", "/api/omie/mirror", { token: manager.token })).body.orders.count, 3);
+	calls.length = 0;
+	const list = await h.api("GET", "/api/omie/orders?from=2026-11-01&to=2026-11-15", { token: manager.token });
+	assert.equal(list.status, 200);
+	assert.equal(list.body.source, "mirror");
+	assert.equal(list.body.page, 1, "pagina 1 = mais recentes");
+	assert.deepEqual(
+		list.body.orders.map((row) => row.number),
+		["1003", "1002", "1001"]
+	);
 	assert.equal(list.body.orders[0].customerName, "Oficina Central");
-	const listCall = calls.find((call) => call.call === "ListarPedidos");
-	assert.equal(listCall.param[0].filtrar_por_data_de, "01/11/2026");
+	assert.equal(calls.length, 0, "a lista do espelho nao consulta o Omie");
+	assert.equal((await h.api("GET", "/api/omie/orders?from=2026-12-01", { token: manager.token })).body.total, 0);
 
 	assert.equal((await h.api("GET", "/api/omie/orders", { token: operator.token })).status, 403, "operador nao importa");
 	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
@@ -280,7 +295,7 @@ test("selecao Omie: lista os pedidos mais recentes primeiro, abre so os escolhid
 
 	const again = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "orders", type: "Pedido de venda", refs: ["3"] } });
 	assert.equal(again.body.results[0].status, "skipped");
-	const relisted = await h.api("GET", "/api/omie/orders?page=2", { token: manager.token });
+	const relisted = await h.api("GET", "/api/omie/orders", { token: manager.token });
 	assert.deepEqual(relisted.body.orders[0].cases, [caseNumber]);
 	assert.equal(
 		(

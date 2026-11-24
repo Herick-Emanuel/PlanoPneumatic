@@ -574,3 +574,42 @@ button.builder-template {
 		margin-left: 0;
 	}
 }
+
+/* Omie: barra de situacao do espelho (tempo real). */
+.omie-sync-bar {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-bottom: 20px;
+	padding: 12px 16px;
+}
+.omie-sync-bar > span:nth-child(2) {
+	flex: 1 1 260px;
+}
+.omie-sync-dot {
+	background: var(--text-3);
+	border-radius: 50%;
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 10px;
+	width: 10px;
+}
+.omie-sync-dot.live {
+	background: var(--green);
+	box-shadow: 0 0 0 4px var(--green-soft);
+}
+.omie-sync-dot.busy {
+	animation: pp-omie-pulse 1s ease-in-out infinite;
+	background: var(--accent);
+}
+@keyframes pp-omie-pulse {
+	50% {
+		opacity: 0.3;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.omie-sync-dot.busy {
+		animation: none;
+	}
+}

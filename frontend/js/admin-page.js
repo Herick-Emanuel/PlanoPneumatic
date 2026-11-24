@@ -1546,23 +1546,83 @@ document.head.appendChild(sharedShellScript);
 	}
 
 	// -------------------------------------------------- Cadastro de clientes/produtos
+	// Envio de pecas ao Omie: rotulos, cor e unidades aceitas.
+	const OMIE_UNITS = ["UN", "PC", "KIT", "CJ", "M", "L"];
+	const OMIE_STATUS = {
+		pending_approval: ["orange", "Aguardando aprovação"],
+		sending: ["blue", "Enviando…"],
+		synced: ["green", "No Omie"],
+		error: ["red", "Erro no envio"],
+		none: ["", "Não enviada"]
+	};
+	const unitOptions = (selected) => OMIE_UNITS.map((unit) => `<option value="${unit}" ${unit === selected ? "selected" : ""}>${unit}</option>`).join("");
+	const formatNcm = (value) => {
+		const digits = String(value || "")
+			.replace(/\D/g, "")
+			.slice(0, 8);
+		return digits.length > 6
+			? `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6)}`
+			: digits.length > 4
+				? `${digits.slice(0, 4)}.${digits.slice(4)}`
+				: digits;
+	};
+	const bindNcmInputs = (root) =>
+		root.querySelectorAll("[data-ncm]").forEach((input) =>
+			input.addEventListener("input", () => {
+				input.value = formatNcm(input.value);
+			})
+		);
+
 	async function registryPage() {
 		const canManage = PP.can("registry.manage");
+		const canApprove = PP.can("registry.omie.approve");
 		let tab = "customers";
+		let pollCount = 0;
+		const selectedProducts = new Set();
 		const render = async () => {
 			const isCustomers = tab === "customers";
 			const q = document.querySelector("#registry-search")?.value || "";
-			const data = await api.get(`/api/${tab}?limit=100&includeInactive=${canManage}${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+			const omieFilter = document.querySelector("#registry-omie-filter")?.value || "";
+			const data = await api.get(
+				`/api/${tab}?limit=100&includeInactive=${canManage}${q ? `&q=${encodeURIComponent(q)}` : ""}${!isCustomers && omieFilter ? `&omie=${omieFilter}` : ""}`
+			);
 			const rows = isCustomers ? data.customers : data.products;
+			const omieOn = !isCustomers && Boolean(data.omieConfigured);
+			const selectable = omieOn && canApprove;
+			const omieCell = (row) => {
+				const [tone, label] = OMIE_STATUS[row.omieStatus || "none"] || OMIE_STATUS.none;
+				const extra =
+					row.omieStatus === "error"
+						? `<br><small class="feedback">${esc(row.omieError || "")}</small>${row.omieNextAttemptAt ? `<br><small class="muted">Nova tentativa automática ${esc(PP.formatDateTime(row.omieNextAttemptAt))}</small>` : ""}`
+						: "";
+				return `<span class="table-status ${tone}">${label}</span>${extra}`;
+			};
+			const omieActions = (row) => {
+				if (!selectable || !row.active) return "";
+				if (row.omieStatus === "error")
+					return `<button class="button button-secondary compact-button" type="button" data-omie-retry="${esc(row.id)}">Reenviar ao Omie</button>`;
+				if (!row.omieStatus || row.omieStatus === "pending_approval")
+					return `<button class="button button-primary compact-button" type="button" data-omie-approve="${esc(row.id)}">${row.omieStatus ? "Aprovar e enviar" : "Enviar ao Omie"}</button>`;
+				return "";
+			};
+			const canSelect = (row) => selectable && row.active && (!row.omieStatus || row.omieStatus === "pending_approval");
 			set(
 				`<nav class="tabs" role="tablist"><button role="tab" class="${isCustomers ? "active" : ""}" data-tab="customers">Clientes</button><button role="tab" class="${isCustomers ? "" : "active"}" data-tab="products">Produtos</button></nav>${section(
 					isCustomers ? "Clientes" : "Produtos",
 					isCustomers ? "Cadastro de clientes" : "Cadastro de produtos",
-					`<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? '<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>' : '<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>'}</div><div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label></div>${table(
-						isCustomers ? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Status", ""] : ["Código", "Descrição", "Status", ""],
+					`<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? '<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>' : `<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>${omieOn ? `<label>Unidade (Omie)<select name="unit" required><option value="">Escolha</option>${unitOptions("")}</select></label><label>Valor de referência (opcional)<input name="referencePrice" inputmode="decimal" placeholder="0,00" /></label>` : ""}`}</div>${omieOn ? '<p class="muted">A peça nova fica <strong>Aguardando aprovação</strong>. Gerente, supervisor ou administrador informa o NCM e envia ao Omie.</p>' : ""}<div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label>${
+						omieOn
+							? `<label>Situação no Omie<select id="registry-omie-filter"><option value="">Todas</option>${Object.entries(OMIE_STATUS)
+									.map(([key, [, label]]) => `<option value="${key}" ${key === omieFilter ? "selected" : ""}>${label}</option>`)
+									.join("")}</select></label>`
+							: ""
+					}${selectable ? `<button class="button button-primary compact-button" type="button" id="omie-batch" ${selectedProducts.size ? "" : "disabled"}>Aprovar e enviar selecionadas${selectedProducts.size ? ` (${selectedProducts.size})` : ""}</button>` : ""}</div>${table(
+						isCustomers
+							? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Status", ""]
+							: [...(selectable ? [""] : []), "Código", "Descrição", ...(omieOn ? ["Unidade", "NCM", "Omie"] : []), "Status", ""],
 						rows.map(
 							(row) =>
-								`<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td>` : `<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td>`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td>${canManage ? `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button></div>` : ""}</td></tr>`
+								`<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td>` : `${selectable ? `<td>${canSelect(row) ? `<input type="checkbox" data-select-product="${esc(row.id)}" aria-label="Selecionar ${esc(row.code)}" ${selectedProducts.has(row.id) ? "checked" : ""} />` : ""}</td>` : ""}<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td>${omieOn ? `<td>${esc(row.unit || "—")}</td><td>${esc(row.ncm || "—")}</td><td>${omieCell(row)}</td>` : ""}`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td><div class="actions-cell">${isCustomers ? "" : omieActions(row)}${canManage ? `<button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button>` : ""}</div></td></tr>`
 						),
 						"Nada cadastrado ainda."
 					)}`
@@ -1618,9 +1678,12 @@ document.head.appendChild(sharedShellScript);
 						const row = rows.find((entry) => String(entry.id) === button.dataset.edit);
 						const body = isCustomers
 							? `<label>Nome<input name="name" value="${esc(row.name)}" required /></label><label>CPF ou CNPJ<input name="document" value="${esc(PP.formatDocument(row.document || ""))}" /></label><label>E-mail<input name="email" value="${esc(row.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(row.phone || "")}" /></label>`
-							: `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>`;
+							: `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>${omieOn ? `<label>Unidade<select name="unit"><option value="">—</option>${unitOptions(row.unit)}</select></label><label>NCM<input name="ncm" data-ncm inputmode="numeric" placeholder="0000.00.00" value="${esc(row.ncm || "")}" /></label><label>Valor de referência<input name="referencePrice" inputmode="decimal" value="${row.referencePrice ? esc(String(row.referencePrice).replace(".", ",")) : ""}" /></label>` : ""}`;
+						setTimeout(() => bindNcmInputs(document), 0);
 						const answer = await PP.dialog({ title: "Editar cadastro", body, confirmLabel: "Salvar" });
 						if (!answer) return;
+						if (!isCustomers && "referencePrice" in answer) answer.referencePrice = answer.referencePrice ? PP.parseMoney(answer.referencePrice) : null;
+						if (!isCustomers && answer.unit === "") delete answer.unit;
 						try {
 							await api.patch(`/api/${tab}/${row.id}`, answer);
 							PP.toast("Atualizado.", "success");
@@ -1630,7 +1693,91 @@ document.head.appendChild(sharedShellScript);
 						}
 					})
 				);
+			if (!isCustomers) bindOmie(rows);
 		};
+		// Aprovar e enviar (uma ou varias): quem aprova informa o NCM de cada peca e confere a unidade.
+		const approveDialog = async (items) => {
+			const body = `<p class="muted">Confira a unidade e informe o NCM (8 dígitos). As peças vão para o Omie com o mesmo código; se o código já existir lá, os cadastros só são ligados.</p>${items
+				.map(
+					(row) =>
+						`<fieldset class="plain-fieldset"><legend><strong>${esc(row.code)}</strong> · ${esc(row.description)}</legend><div class="editor-grid"><label>Unidade<select name="unit-${row.id}" required>${unitOptions(row.unit || "UN")}</select></label><label>NCM<input name="ncm-${row.id}" data-ncm required inputmode="numeric" placeholder="0000.00.00" pattern="[0-9]{4}[.][0-9]{2}[.][0-9]{2}" title="8 dígitos: 0000.00.00" value="${esc(row.ncm || "")}" /></label></div></fieldset>`
+				)
+				.join("")}`;
+			setTimeout(() => bindNcmInputs(document), 0);
+			const answer = await PP.dialog({
+				title: items.length > 1 ? `Aprovar e enviar ${items.length} peças ao Omie` : "Aprovar e enviar ao Omie",
+				body,
+				confirmLabel: "Aprovar e enviar"
+			});
+			if (!answer) return;
+			try {
+				const result = await api.post("/api/omie/products/approve", {
+					items: items.map((row) => ({ id: row.id, ncm: answer[`ncm-${row.id}`], unit: answer[`unit-${row.id}`] }))
+				});
+				const problems = result.results.filter((entry) => entry.status === "error");
+				PP.toast(
+					problems.length
+						? `${result.queued} enviada(s). ${problems.map((entry) => `${entry.code || entry.id}: ${entry.message}`).join(" ")}`
+						: `${result.queued} peça(s) a caminho do Omie.`,
+					problems.length ? "error" : "success"
+				);
+				selectedProducts.clear();
+				pollCount = 0;
+				await render();
+			} catch (error) {
+				PP.toast(error.message, "error");
+			}
+		};
+		function bindOmie(rows) {
+			const byId = new Map(rows.map((row) => [String(row.id), row]));
+			document.querySelector("#registry-omie-filter")?.addEventListener("change", () => {
+				selectedProducts.clear();
+				render();
+			});
+			content()
+				.querySelectorAll("[data-select-product]")
+				.forEach((box) =>
+					box.addEventListener("change", () => {
+						const id = Number(box.dataset.selectProduct);
+						if (box.checked) selectedProducts.add(id);
+						else selectedProducts.delete(id);
+						const batch = document.querySelector("#omie-batch");
+						batch.disabled = !selectedProducts.size;
+						batch.textContent = `Aprovar e enviar selecionadas${selectedProducts.size ? ` (${selectedProducts.size})` : ""}`;
+					})
+				);
+			document.querySelector("#omie-batch")?.addEventListener("click", () => {
+				const items = [...selectedProducts].map((id) => byId.get(String(id))).filter(Boolean);
+				if (items.length) approveDialog(items);
+			});
+			content()
+				.querySelectorAll("[data-omie-approve]")
+				.forEach((button) => button.addEventListener("click", () => approveDialog([byId.get(button.dataset.omieApprove)])));
+			content()
+				.querySelectorAll("[data-omie-retry]")
+				.forEach((button) =>
+					button.addEventListener("click", async () => {
+						button.disabled = true;
+						try {
+							const result = await api.post(`/api/omie/products/${button.dataset.omieRetry}/retry`, {});
+							const failed = result.results.find((entry) => entry.status === "error");
+							PP.toast(failed ? failed.message : "Reenvio iniciado.", failed ? "error" : "success");
+							pollCount = 0;
+							await render();
+						} catch (error) {
+							PP.toast(error.message, "error");
+							button.disabled = false;
+						}
+					})
+				);
+			// Enquanto houver envio em andamento, atualiza a lista sozinha (ate ~1 min).
+			if (rows.some((row) => row.omieStatus === "sending") && pollCount < 15) {
+				pollCount += 1;
+				setTimeout(() => {
+					if (document.querySelector("#registry-form") && tab === "products") render();
+				}, 4000);
+			}
+		}
 		await render();
 	}
 
@@ -1750,7 +1897,7 @@ document.head.appendChild(sharedShellScript);
 	// ------------------------------------------------- Pedidos e NF-e do Omie
 	// Nada e criado sozinho: a pessoa escolhe os registros e o tipo de processo.
 	async function omiePage() {
-		const status = await api.get("/api/omie/sync").catch(() => ({ configured: false }));
+		let status = await api.get("/api/omie/mirror").catch(() => ({ configured: false }));
 		if (!status.configured) {
 			set(section("ERP", "Omie", '<p class="feedback">Integração não configurada: defina OMIE_APP_KEY e OMIE_APP_SECRET no servidor.</p>'));
 			return;
@@ -1760,7 +1907,8 @@ document.head.appendChild(sharedShellScript);
 		const monthAgo = new Date(today.getTime() - 30 * 86400000);
 		const state = { kind: "orders", page: null, selected: new Map(), rows: [] };
 		set(`<nav class="tabs" role="tablist" aria-label="Origem no Omie"><button class="active" role="tab" aria-selected="true" data-kind="orders">Pedidos de venda</button><button role="tab" aria-selected="false" data-kind="invoices">Notas fiscais (NF-e)</button></nav>
-		<form id="omie-filters" class="history-filters panel"><label>De<input name="from" type="date" value="${iso(monthAgo)}" /></label><label>Até<input name="to" type="date" value="${iso(today)}" /></label><label data-invoice-only hidden>Notas<select name="type"><option value="todas">Entrada e saída</option><option value="saida">Saída</option><option value="entrada">Entrada (devoluções)</option></select></label><div class="filter-actions"><button class="button button-primary" type="submit">Buscar no Omie</button></div></form>
+		<form id="omie-filters" class="history-filters panel"><label>De<input name="from" type="date" value="${iso(monthAgo)}" /></label><label>Até<input name="to" type="date" value="${iso(today)}" /></label><label data-invoice-only hidden>Notas<select name="type"><option value="todas">Entrada e saída</option><option value="saida">Saída</option><option value="entrada">Entrada (devoluções)</option></select></label><div class="filter-actions"><button class="button button-primary" type="submit">Filtrar</button></div></form>
+		<div class="omie-sync-bar panel" id="omie-sync" role="status" aria-live="polite"></div>
 		<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Seleção</p><h2 id="omie-list-title">Pedidos de venda</h2></div><div class="actions-cell"><label>Abrir como<select id="omie-case-type"><option>Pedido de venda</option><option>Base de troca</option><option>Garantia</option></select></label><button class="button button-primary compact-button" type="button" id="omie-import" disabled>Abrir processos</button></div></div><p class="muted">Os mais recentes aparecem primeiro. Marque até 20 registros por vez; o que já virou processo aparece com o número e não pode ser marcado de novo.</p><div id="omie-list" aria-live="polite"></div><div id="omie-pager" class="form-actions"></div><div id="omie-result"></div></section>`);
 		const form = document.querySelector("#omie-filters");
 		const importButton = document.querySelector("#omie-import");
@@ -1769,6 +1917,48 @@ document.head.appendChild(sharedShellScript);
 			importButton.textContent = state.selected.size ? `Abrir ${state.selected.size} processo(s)` : "Abrir processos";
 		};
 		const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+		// Barra de situacao: os dados vem do espelho local; o Omie avisa as mudancas (webhook) e a cada
+		// poucos minutos o servidor busca o que mudou. A tela confere a cada 30 s e se atualiza sozinha.
+		const ago = (value) => {
+			if (!value) return "nunca";
+			const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60000);
+			return minutes < 1 ? "agora há pouco" : minutes < 60 ? `há ${minutes} min` : PP.formatDateTime(value);
+		};
+		const renderSync = () => {
+			const info = status[state.kind] || {};
+			document.querySelector("#omie-sync").innerHTML =
+				`<span class="omie-sync-dot ${status.syncing ? "busy" : status.webhook ? "live" : ""}" aria-hidden="true"></span><span><strong>${status.syncing ? "Atualizando com o Omie…" : status.webhook ? "Em tempo real com o Omie" : "Atualização automática"}</strong> · ${esc(info.count || 0)} registro(s) no app · última busca ${esc(ago(info.lastSyncAt))}${status.webhook ? ` · último aviso do Omie ${esc(ago(status.lastWebhookAt))}` : ""}</span><button class="chip" type="button" id="omie-refresh" ${status.syncing ? "disabled" : ""}>Atualizar agora</button>`;
+			document.querySelector("#omie-refresh").addEventListener("click", refreshNow);
+		};
+		let lastChange = null;
+		const pollStatus = async () => {
+			if (!document.querySelector("#omie-sync")) return clearInterval(pollTimer);
+			if (document.hidden) return;
+			try {
+				status = await api.get("/api/omie/mirror");
+				renderSync();
+				const changed = status[state.kind]?.lastChangeAt;
+				if (lastChange && changed && changed !== lastChange && !state.selected.size) await load(true);
+				lastChange = changed;
+			} catch {
+				/* sem conexao: tenta no proximo ciclo */
+			}
+		};
+		const pollTimer = setInterval(pollStatus, 30000);
+		async function refreshNow() {
+			const button = document.querySelector("#omie-refresh");
+			button.disabled = true;
+			button.textContent = "Atualizando…";
+			try {
+				const answer = await api.post("/api/omie/mirror/refresh", { kind: state.kind });
+				if (answer.running) PP.toast(answer.message, "info");
+				else PP.toast(`Atualizado: ${answer.result.created} novo(s), ${answer.result.updated} alterado(s).`, "success");
+				await load(true);
+			} catch (error) {
+				PP.toast(error.message, "error");
+			}
+			await pollStatus();
+		}
 		const render = (data) => {
 			const list = document.querySelector("#omie-list");
 			const rows = state.kind === "orders" ? data.orders : data.invoices;
@@ -1809,9 +1999,12 @@ document.head.appendChild(sharedShellScript);
 			);
 			const pager = document.querySelector("#omie-pager");
 			pager.innerHTML =
-				data.totalPages > 1
-					? `<span class="muted">Página ${data.totalPages - data.page + 1} de ${data.totalPages} · ${data.total} registro(s)</span><button class="button button-secondary compact-button" type="button" data-page="${data.page + 1}" ${data.page >= data.totalPages ? "disabled" : ""}>Mais recentes</button><button class="button button-secondary compact-button" type="button" data-page="${data.page - 1}" ${data.page <= 1 ? "disabled" : ""}>Mais antigos</button>`
-					: `<span class="muted">${data.total} registro(s)</span>`;
+				(data.source === "live"
+					? '<span class="muted">Primeira carga do Omie em andamento: mostrando os mais recentes direto do Omie. Em alguns minutos a lista completa fica disponível aqui.</span>'
+					: "") +
+				(data.totalPages > 1
+					? `<span class="muted">Página ${data.page} de ${data.totalPages} · ${data.total} registro(s)</span><button class="button button-secondary compact-button" type="button" data-page="${data.page - 1}" ${data.page <= 1 ? "disabled" : ""}>Mais recentes</button><button class="button button-secondary compact-button" type="button" data-page="${data.page + 1}" ${data.page >= data.totalPages ? "disabled" : ""}>Mais antigos</button>`
+					: `<span class="muted">${data.total} registro(s)</span>`);
 			pager.querySelectorAll("[data-page]").forEach((button) =>
 				button.addEventListener("click", () => {
 					state.page = Number(button.dataset.page);
@@ -1819,9 +2012,10 @@ document.head.appendChild(sharedShellScript);
 				})
 			);
 		};
-		const load = async () => {
+		const load = async (quiet = false) => {
 			const list = document.querySelector("#omie-list");
-			list.innerHTML = PP.skeleton(4);
+			if (!list) return;
+			if (!quiet) list.innerHTML = PP.skeleton(4);
 			const params = new URLSearchParams({ from: form.from.value, to: form.to.value });
 			if (state.page) params.set("page", state.page);
 			if (state.kind === "invoices") params.set("type", form.type.value);
@@ -1849,6 +2043,8 @@ document.head.appendChild(sharedShellScript);
 					content().querySelector("[data-invoice-only]").hidden = state.kind !== "invoices";
 					document.querySelector("#omie-list-title").textContent = state.kind === "orders" ? "Pedidos de venda" : "Notas fiscais";
 					document.querySelector("#omie-case-type").value = state.kind === "orders" ? "Pedido de venda" : "Base de troca";
+					lastChange = null;
+					renderSync();
 					load();
 				})
 			);
@@ -1886,6 +2082,8 @@ document.head.appendChild(sharedShellScript);
 				refreshButton();
 			}
 		});
+		renderSync();
+		lastChange = status[state.kind]?.lastChangeAt || null;
 		await load();
 	}
 

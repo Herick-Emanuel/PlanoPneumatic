@@ -1,9 +1,11 @@
 // F14: pedidos e notas fiscais do Omie listados para a pessoa escolher quais viram processos.
+// As listas vem do espelho local (omieMirror); so enquanto o espelho ainda esta vazio (primeira carga
+// em andamento) a tela consulta o Omie ao vivo.
 const { database } = require("../db");
 const { AppError } = require("../middleware/errors");
 const { CASE_TYPES } = require("../domain/constants");
-const { isValidDocument, onlyDigits } = require("../validators/document");
 const omie = require("./omie");
+const mirror = require("./omieMirror");
 const cases = require("./cases");
 
 const PAGE_SIZE = 50;
@@ -11,15 +13,6 @@ const MAX_IMPORT = 20;
 
 // "AAAA-MM-DD" (input date) -> "DD/MM/AAAA" (Omie).
 const toOmieDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : null);
-const clean = (value, max) => {
-	const text = String(value ?? "").trim();
-	return text ? text.slice(0, max) : "";
-};
-const validDocument = (value) => {
-	const digits = onlyDigits(value);
-	return digits && isValidDocument(digits) ? digits : "";
-};
-
 function dateFilter(from, to) {
 	const filter = {};
 	if (toOmieDate(from)) filter.filtrar_por_data_de = toOmieDate(from);
@@ -35,107 +28,62 @@ async function fetchPage(endpoint, method, base, listKey, page) {
 	return { list: [...(data[listKey] || [])].reverse(), page: page || totalPages, totalPages, total: data.total_de_registros || 0 };
 }
 
-function mapOrder(order) {
-	const header = order.cabecalho || {};
-	const info = order.infoCadastro || {};
-	const items = (order.det || [])
-		.map((entry) => ({
-			productCode: clean(entry.produto?.codigo, 80),
-			description: clean(entry.produto?.descricao, 180),
-			quantity: Math.max(1, Math.round(Number(entry.produto?.quantidade) || 1)),
-			unitPrice: Number(entry.produto?.valor_unitario) || 0
-		}))
-		.filter((item) => item.productCode && item.description);
-	return {
-		ref: String(header.codigo_pedido),
-		omieOrderCode: Number(header.codigo_pedido) || null,
-		number: String(header.numero_pedido || ""),
-		date: info.dInc || header.data_previsao || "",
-		customerCode: Number(header.codigo_cliente) || null,
-		stage: String(header.etapa || ""),
-		invoiced: info.faturado === "S",
-		cancelled: info.cancelado === "S",
-		total: Number(order.total_pedido?.valor_total_pedido) || items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-		items
-	};
-}
+const { mapOrder, mapInvoice, attachCustomers, attachExisting } = mirror;
 
-function mapInvoice(invoice) {
-	const ide = invoice.ide || {};
-	const items = (invoice.det || [])
-		.map((entry) => ({
-			productCode: clean(entry.prod?.cProd, 80),
-			description: clean(entry.prod?.xProd, 180),
-			quantity: Math.max(1, Math.round(Number(entry.prod?.qCom) || 1)),
-			unitPrice: Number(entry.prod?.vUnCom) || 0
-		}))
-		.filter((item) => item.productCode && item.description);
-	return {
-		ref: String(ide.nNF || "").replace(/^0+/, ""),
-		number: String(ide.nNF || ""),
-		series: String(ide.serie || ""),
-		date: ide.dEmi || "",
-		type: ide.tpNF === "0" ? "entrada" : "saida",
-		purpose: String(ide.finNFe || ""),
-		isReturn: String(ide.finNFe) === "4",
-		omieOrderCode: Number(invoice.compl?.nIdPedido) || null,
-		customerCode: Number(invoice.nfDestInt?.nCodCli) || null,
-		customerName: clean(invoice.nfDestInt?.cRazao, 180),
-		customerDocument: validDocument(invoice.nfDestInt?.cnpj_cpf),
-		total: Number(invoice.total?.ICMSTot?.vNF) || 0,
-		items
-	};
+// Primeira carga completa ainda nao terminou: consulta ao vivo e dispara a carga em segundo plano
+// (se ja estiver rodando, a nova tentativa so e ignorada).
+async function mirrorEmpty(kind) {
+	if (await omie.lastSuccess(kind)) return false;
+	firstLoad = Promise.all([firstLoad, omie.runSync(kind, { trigger: "first-load" }).catch(() => {})]);
+	return true;
 }
+let firstLoad = Promise.resolve();
+// Promessa da carga inicial em segundo plano (os testes esperam por ela).
+const idle = () => firstLoad;
 
-// Completa nome e documento do cliente pelo cadastro sincronizado (sem chamar o Omie de novo).
-async function attachCustomers(rows) {
-	const codes = [...new Set(rows.map((row) => row.customerCode).filter(Boolean))];
-	if (!codes.length) return rows;
-	const { rows: customers } = await database.query("SELECT omie_code, name, document FROM customers WHERE omie_code = ANY($1::bigint[])", [codes]);
-	const byCode = new Map(customers.map((customer) => [Number(customer.omie_code), customer]));
-	return rows.map((row) => {
-		const local = byCode.get(row.customerCode);
-		return { ...row, customerName: row.customerName || local?.name || "", customerDocument: row.customerDocument || local?.document || "" };
-	});
-}
-
-// Marca o que ja virou processo, para a tela nao deixar importar duas vezes.
-async function attachExisting(rows, kind) {
-	if (!rows.length) return rows;
-	const column = kind === "orders" ? "omie_order_code::text" : "ltrim(omie_invoice_number, '0')";
-	const { rows: found } = await database.query(`SELECT ${column} AS ref, case_number FROM cases WHERE ${column} = ANY($1::text[])`, [
-		rows.map((row) => row.ref)
-	]);
-	const byRef = new Map();
-	for (const item of found) byRef.set(item.ref, [...(byRef.get(item.ref) || []), item.case_number]);
-	return rows.map((row) => ({ ...row, cases: byRef.get(row.ref) || [] }));
-}
-
-async function listOrders({ from, to, page }) {
-	const result = await fetchPage("produtos/pedido", "ListarPedidos", { apenas_importado_api: "N", ...dateFilter(from, to) }, "pedido_venda_produto", page);
+// Ao vivo mostra so a pagina mais recente (a paginacao completa fica para quando o espelho carregar).
+async function listOrdersLive({ from, to }) {
+	const result = await fetchPage("produtos/pedido", "ListarPedidos", { apenas_importado_api: "N", ...dateFilter(from, to) }, "pedido_venda_produto");
 	const orders = await attachExisting(await attachCustomers(result.list.map(mapOrder)), "orders");
-	return { orders, page: result.page, totalPages: result.totalPages, total: result.total };
+	return { orders, page: 1, totalPages: 1, total: result.total, source: "live" };
 }
 
-async function listInvoices({ from, to, page, type }) {
+async function listInvoicesLive({ from, to, type }) {
 	const base = { ...dateFilter(from, to), ...(type === "entrada" ? { tpNF: "0" } : type === "saida" ? { tpNF: "1" } : {}) };
-	const result = await fetchPage("produtos/nfconsultar", "ListarNF", base, "nfCadastro", page);
+	const result = await fetchPage("produtos/nfconsultar", "ListarNF", base, "nfCadastro");
 	const invoices = await attachExisting(await attachCustomers(result.list.map(mapInvoice)), "invoices");
-	return { invoices, page: result.page, totalPages: result.totalPages, total: result.total };
+	return { invoices, page: 1, totalPages: 1, total: result.total, source: "live" };
 }
 
+async function listOrders(query) {
+	if (await mirrorEmpty("orders")) return listOrdersLive(query);
+	return { ...(await mirror.list("orders", query)), source: "mirror" };
+}
+
+async function listInvoices(query) {
+	if (await mirrorEmpty("invoices")) return listInvoicesLive(query);
+	return { ...(await mirror.list("invoices", query)), source: "mirror" };
+}
+
+// Do espelho quando ja estiver la; senao consulta o Omie e guarda no espelho.
 async function loadOrder(ref) {
+	const cached = await mirror.findOrder(ref);
+	if (cached) return cached;
 	const data = await omie.call("produtos/pedido", "ConsultarPedido", { codigo_pedido: Number(ref) });
 	if (!data.pedido_venda_produto?.cabecalho) throw new AppError(404, "Pedido nao encontrado no Omie.", "OMIE_NOT_FOUND");
+	await mirror.upsertOrder(data.pedido_venda_produto);
 	const [order] = await attachCustomers([mapOrder(data.pedido_venda_produto)]);
 	return order;
 }
 
 async function loadInvoice(ref) {
-	const number = Number(String(ref).replace(/\D/g, ""));
+	const cached = await mirror.findInvoice(ref);
+	if (cached) return cached;
+	const number = Number(String(ref).replace(/D/g, ""));
 	const data = await omie.call("produtos/nfconsultar", "ListarNF", { pagina: 1, registros_por_pagina: 5, nNFInicial: number, nNFFinal: number });
 	const invoice = (data.nfCadastro || []).find((entry) => String(entry.ide?.nNF).replace(/^0+/, "") === String(number));
 	if (!invoice) throw new AppError(404, "Nota fiscal nao encontrada no Omie.", "OMIE_NOT_FOUND");
+	await mirror.upsertInvoice(invoice);
 	const [mapped] = await attachCustomers([mapInvoice(invoice)]);
 	return mapped;
 }
@@ -196,4 +144,4 @@ async function importRecords(user, { kind, type, refs }) {
 	return { results, created: results.filter((entry) => entry.status === "created").length };
 }
 
-module.exports = { listOrders, listInvoices, importRecords, mapOrder, mapInvoice, toOmieDate };
+module.exports = { listOrders, listInvoices, importRecords, mapOrder, mapInvoice, toOmieDate, idle };

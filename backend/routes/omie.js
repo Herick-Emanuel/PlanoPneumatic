@@ -2,11 +2,32 @@ const express = require("express");
 const { z } = require("zod");
 const { capabilities } = require("../domain/permissions");
 const { requireAuth, requireCapability } = require("../middleware/auth");
-const { wrap } = require("../middleware/errors");
+const { wrap, notFound } = require("../middleware/errors");
+const { rateLimit } = require("../middleware/security");
+const { safeEqual } = require("../security/crypto");
 const omie = require("../services/omie");
 const omieImport = require("../services/omieImport");
+const omieMirror = require("../services/omieMirror");
+const omieWebhook = require("../services/omieWebhook");
+const omieProducts = require("../services/omieProducts");
 
 const router = express.Router();
+
+// Webhook do Omie (sem sessao): autenticado pelo token secreto na URL e pela app_key do aviso.
+// Responde na hora; o processamento acontece em seguida, em fila.
+router.post(
+	"/webhook/:token",
+	rateLimit({ windowMs: 60000, max: 600, name: "omie-webhook" }),
+	wrap(async (request, response) => {
+		const expected = process.env.OMIE_WEBHOOK_TOKEN || "";
+		if (!expected || !omie.isConfigured() || !safeEqual(String(request.params.token), expected)) throw notFound("Rota nao encontrada.");
+		const body = request.body || {};
+		if (body.appKey && String(body.appKey).trim() !== String(process.env.OMIE_APP_KEY || "").trim()) throw notFound("Rota nao encontrada.");
+		const result = await omieWebhook.receive(body);
+		return response.json({ ok: true, ...result });
+	})
+);
+
 router.use(requireAuth);
 
 router.get(
@@ -23,12 +44,58 @@ router.post(
 	"/sync",
 	requireCapability(capabilities.MANAGE_REGISTRY),
 	wrap(async (request, response) => {
-		const { kind } = z.object({ kind: z.enum(["customers", "products", "all"]).default("all") }).parse(request.body || {});
+		const { kind } = z.object({ kind: z.enum(["customers", "products", "orders", "invoices", "all"]).default("all") }).parse(request.body || {});
 		const kinds = kind === "all" ? ["customers", "products"] : [kind];
 		const results = [];
 		for (const item of kinds) results.push(await omie.runSync(item, { userId: request.user.id }));
 		return response.json({ results });
 	})
+);
+
+// Espelho de pedidos/notas: situacao (a tela consulta a cada 30 s para se atualizar sozinha) e
+// "Atualizar agora" (busca no Omie so o que mudou desde a ultima sincronizacao).
+router.get(
+	"/mirror",
+	requireCapability(capabilities.IMPORT_CASES),
+	wrap(async (request, response) =>
+		response.json({ configured: omie.isConfigured(), webhook: Boolean(process.env.OMIE_WEBHOOK_TOKEN), ...(await omieMirror.mirrorStatus()) })
+	)
+);
+router.post(
+	"/mirror/refresh",
+	requireCapability(capabilities.IMPORT_CASES),
+	wrap(async (request, response) => {
+		const { kind } = z.object({ kind: z.enum(["orders", "invoices"]) }).parse(request.body || {});
+		try {
+			return response.json({ result: await omie.runSync(kind, { trigger: "manual", userId: request.user.id }) });
+		} catch (error) {
+			if (error.code === "SYNC_RUNNING") return response.status(202).json({ running: true, message: "Uma atualização já está em andamento." });
+			throw error;
+		}
+	})
+);
+
+// Envio de pecas ao Omie: aprovar (individual ou em lote, com NCM) e reenviar.
+const productIds = z.coerce.number().int().positive();
+router.post(
+	"/products/approve",
+	requireCapability(capabilities.APPROVE_OMIE_PRODUCTS),
+	wrap(async (request, response) => {
+		const { items } = z
+			.object({
+				items: z
+					.array(z.object({ id: productIds, ncm: z.string().trim().max(12), unit: z.string().trim().max(10).optional() }))
+					.min(1)
+					.max(100)
+			})
+			.parse(request.body);
+		return response.json(await omieProducts.approve(request.user, items));
+	})
+);
+router.post(
+	"/products/:id/retry",
+	requireCapability(capabilities.APPROVE_OMIE_PRODUCTS),
+	wrap(async (request, response) => response.json(await omieProducts.retry(request.user, productIds.parse(request.params.id))))
 );
 
 // F14: listas para escolher o que vira processo (abrem nos registros mais recentes).
@@ -41,7 +108,7 @@ const listQuery = z.object({
 		.string()
 		.regex(/^\d{4}-\d{2}-\d{2}$/)
 		.optional(),
-	page: z.coerce.number().int().min(1).optional(),
+	page: z.coerce.number().int().min(1).max(100000).optional(),
 	type: z.enum(["entrada", "saida", "todas"]).optional()
 });
 router.get(

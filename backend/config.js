@@ -1,4 +1,10 @@
 const path = require("node:path");
+const fs = require("node:fs");
+
+// Fora de producao e de testes, le o .env da raiz do projeto (npm run dev / npm start). Variaveis ja
+// definidas no ambiente tem prioridade. Em producao as variaveis vem da plataforma (Railway/Docker).
+const envFile = path.join(__dirname, "..", ".env");
+if (!["production", "test"].includes(process.env.NODE_ENV) && fs.existsSync(envFile)) process.loadEnvFile(envFile);
 
 const isProduction = process.env.NODE_ENV === "production";
 const isTest = process.env.NODE_ENV === "test";

@@ -1384,3 +1384,42 @@ td:has(> .table-link) {
 		color: #1a0b0c;
 	}
 }
+
+/* Splash de abertura do app (theme.js liga, pwa.js desliga depois de checar/aplicar versao nova). */
+html.pp-booting body {
+	visibility: hidden;
+}
+html.pp-booting::before {
+	animation: pp-splash-pulse 1.4s ease-in-out infinite;
+	background: #092d57 url("/icons/icon-192.png") center calc(50% - 28px) / 96px 96px no-repeat;
+	content: "";
+	inset: 0;
+	position: fixed;
+	z-index: 2147483646;
+}
+html.pp-booting::after {
+	color: #dbe7f3;
+	content: "Verificando atualizações…";
+	font:
+		600 14px/1.4 system-ui,
+		sans-serif;
+	left: 0;
+	position: fixed;
+	right: 0;
+	text-align: center;
+	top: calc(50% + 44px);
+	z-index: 2147483647;
+}
+html.pp-booting.pp-updating::after {
+	content: "Atualizando para a nova versão…";
+}
+@keyframes pp-splash-pulse {
+	50% {
+		background-size: 88px 88px;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	html.pp-booting::before {
+		animation: none;
+	}
+}

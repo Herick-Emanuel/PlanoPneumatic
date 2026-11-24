@@ -36,6 +36,12 @@ services:
       PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
       TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
       # Antivirus opcional: suba com `docker compose --profile antivirus up` e defina CLAMAV_HOST=clamav.
+      # Integracao Omie (sem estas linhas o container nunca recebia as chaves do .env).
+      OMIE_APP_KEY: ${OMIE_APP_KEY:-}
+      OMIE_APP_SECRET: ${OMIE_APP_SECRET:-}
+      OMIE_SYNC_INTERVAL_HOURS: ${OMIE_SYNC_INTERVAL_HOURS:-24}
+      OMIE_MIRROR_INTERVAL_MINUTES: ${OMIE_MIRROR_INTERVAL_MINUTES:-10}
+      OMIE_WEBHOOK_TOKEN: ${OMIE_WEBHOOK_TOKEN:-}
       CLAMAV_HOST: ${CLAMAV_HOST:-}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
     depends_on:

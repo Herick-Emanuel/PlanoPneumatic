@@ -1772,6 +1772,42 @@
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
         "429":
           "description": "Muitas tentativas (Retry-After)"
+  "/api/omie/mirror":
+    "get":
+      "tags":
+        - "Omie"
+      "summary": "GET /api/omie/mirror"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/omie/mirror/refresh":
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/mirror/refresh"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/omie/orders":
     "get":
       "tags":
@@ -1801,6 +1837,48 @@
           "required": true
           "schema":
             "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/omie/products/{id}/retry":
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/products/{id}/retry"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/omie/products/approve":
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/products/approve"
       "responses":
         "200":
           "description": "Sucesso"
@@ -1854,6 +1932,30 @@
       "tags":
         - "Omie"
       "summary": "POST /api/omie/sync"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/omie/webhook/{token}":
+    "post":
+      "tags":
+        - "Omie"
+      "summary": "POST /api/omie/webhook/{token}"
+      "parameters":
+        - "name": "token"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
       "responses":
         "200":
           "description": "Sucesso"

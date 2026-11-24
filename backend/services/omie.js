@@ -3,6 +3,7 @@ const { database } = require("../db");
 const { AppError } = require("../middleware/errors");
 const { logEvent } = require("../middleware/errors");
 const { isValidDocument, onlyDigits } = require("../validators/document");
+const mirror = require("./omieMirror");
 
 const BASE_URL = process.env.OMIE_BASE_URL || "https://app.omie.com.br/api/v1";
 const PAGE_SIZE = 200;
@@ -16,12 +17,29 @@ function setTransport({ fetch: nextFetch, sleep: nextSleep }) {
 	if (nextSleep) sleep = nextSleep;
 }
 
-const isConfigured = () => Boolean(process.env.OMIE_APP_KEY && process.env.OMIE_APP_SECRET);
+// Espacos nas pontas (comuns ao colar a chave no .env) invalidam a autenticacao no Omie: sempre aparados.
+const credentials = () => ({ key: String(process.env.OMIE_APP_KEY || "").trim(), secret: String(process.env.OMIE_APP_SECRET || "").trim() });
+const isConfigured = () => Boolean(credentials().key && credentials().secret);
+
+// O Omie recusa duas chamadas simultaneas do mesmo metodo com a mesma chave ("Ja existe uma requisicao
+// desse metodo sendo executada"). Por isso as chamadas de cada metodo saem em fila, uma por vez.
+const methodQueues = new Map();
+function call(endpoint, method, param, options) {
+	const previous = methodQueues.get(method) || Promise.resolve();
+	const current = previous.catch(() => {}).then(() => callNow(endpoint, method, param, options));
+	const tail = current.catch(() => {});
+	methodQueues.set(method, tail);
+	tail.then(() => {
+		if (methodQueues.get(method) === tail) methodQueues.delete(method);
+	});
+	return current;
+}
 
 // `maxWait`: maior espera aceita por pedido de "aguarde N segundos" do Omie (consultas de tela usam pouco; rotinas em segundo plano usam mais).
-async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
+async function callNow(endpoint, method, param, { maxWait = 8000 } = {}) {
 	if (!isConfigured()) throw new AppError(503, "Integracao com o Omie nao configurada (OMIE_APP_KEY / OMIE_APP_SECRET).", "OMIE_NOT_CONFIGURED");
-	const body = JSON.stringify({ call: method, app_key: process.env.OMIE_APP_KEY, app_secret: process.env.OMIE_APP_SECRET, param: [param] });
+	const { key, secret } = credentials();
+	const body = JSON.stringify({ call: method, app_key: key, app_secret: secret, param: [param] });
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
 		let response;
 		try {
@@ -38,10 +56,12 @@ async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
 		}
 		const data = await response.json().catch(() => ({}));
 		const fault = data.faultstring || "";
-		const rateLimited = response.status === 429 || response.status === 425 || /consumo redundante|aguarde|muitas requisi/i.test(fault);
+		// Outro processo (outra instancia, outro sistema com a mesma chave) ainda executa este metodo: espera e tenta de novo.
+		const busy = /requisi[cç][aã]o desse m[eé]todo sendo executada/i.test(fault);
+		const rateLimited = busy || response.status === 429 || response.status === 425 || /consumo redundante|aguarde|muitas requisi/i.test(fault);
 		if (rateLimited) {
 			const hint = Number(/aguarde (\d+) segundos/i.exec(fault)?.[1]);
-			const delay = hint ? hint * 1000 + 500 : 2000 * attempt;
+			const delay = hint ? hint * 1000 + 500 : busy ? 1500 * attempt : 2000 * attempt;
 			if (delay > maxWait)
 				throw new AppError(429, `O Omie pediu para aguardar ${hint || Math.round(delay / 1000)} segundos. Tente novamente em instantes.`, "OMIE_RATE_LIMIT");
 			if (attempt < MAX_ATTEMPTS) {
@@ -62,16 +82,22 @@ async function call(endpoint, method, param, { maxWait = 8000 } = {}) {
 	throw new AppError(502, "Omie indisponivel.", "OMIE_UNREACHABLE");
 }
 
-// Percorre todas as paginas de uma listagem.
-async function* paginate(endpoint, method, extra, listKey) {
-	let page = 1;
-	let totalPages = 1;
-	do {
-		const data = await call(endpoint, method, { pagina: page, registros_por_pagina: PAGE_SIZE, apenas_importado_api: "N", ...extra });
-		totalPages = data.total_de_paginas || 1;
-		yield data[listKey] || [];
-		page += 1;
-	} while (page <= totalPages);
+// Rotinas em segundo plano aceitam esperar o "aguarde N segundos" do Omie (consumo redundante = 60 s).
+const BACKGROUND_WAIT = 65000;
+
+// Percorre todas as paginas de uma listagem. `newestFirst`: o Omie lista do mais antigo para o mais novo;
+// na carga inicial do espelho comecamos pela ultima pagina para os registros recentes chegarem primeiro.
+async function* paginate(endpoint, method, extra, listKey, { newestFirst = false } = {}) {
+	const fetchPage = (page) => call(endpoint, method, { pagina: page, registros_por_pagina: PAGE_SIZE, ...extra }, { maxWait: BACKGROUND_WAIT });
+	const first = await fetchPage(1);
+	const totalPages = first.total_de_paginas || 1;
+	if (!newestFirst || totalPages === 1) {
+		yield first[listKey] || [];
+		for (let page = 2; page <= totalPages; page += 1) yield (await fetchPage(page))[listKey] || [];
+		return;
+	}
+	for (let page = totalPages; page >= 2; page -= 1) yield (await fetchPage(page))[listKey] || [];
+	yield first[listKey] || [];
 }
 
 const omieDate = (date) => `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
@@ -123,22 +149,29 @@ async function upsertProduct(record) {
 	const description = clean(record.descricao, 180);
 	if (!omieCode || !code || !description) return "skipped";
 	const active = record.inativo !== "S";
-	let result = await database.query(
-		"UPDATE products SET code = $2, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE omie_code = $1 RETURNING id",
-		[omieCode, code, description, active]
-	);
-	if (result.rowCount) return "updated";
-	result = await database.query(
-		"UPDATE products SET omie_code = $1, description = $3, active = $4, omie_synced_at = NOW(), updated_at = NOW() WHERE lower(code) = lower($2) AND omie_code IS NULL RETURNING id",
-		[omieCode, code, description, active]
-	);
-	if (result.rowCount) return "updated";
-	await database.query("INSERT INTO products (omie_code, code, description, active, omie_synced_at) VALUES ($1, $2, $3, $4, NOW())", [
+	// Unidade e NCM tambem vem do Omie (o app usa os mesmos ao enviar pecas novas).
+	const unit = clean(record.unidade, 10)?.toUpperCase() || null;
+	const ncmDigits = String(record.ncm || "").replace(/D/g, "");
+	const ncm = ncmDigits.length === 8 ? `${ncmDigits.slice(0, 4)}.${ncmDigits.slice(4, 6)}.${ncmDigits.slice(6)}` : null;
+	const synced = "omie_status = 'synced', omie_error = NULL, unit = COALESCE($5, unit), ncm = COALESCE($6, ncm), omie_synced_at = NOW(), updated_at = NOW()";
+	let result = await database.query(`UPDATE products SET code = $2, description = $3, active = $4, ${synced} WHERE omie_code = $1 RETURNING id`, [
 		omieCode,
 		code,
 		description,
-		active
+		active,
+		unit,
+		ncm
 	]);
+	if (result.rowCount) return "updated";
+	result = await database.query(
+		`UPDATE products SET omie_code = $1, description = $3, active = $4, ${synced} WHERE lower(code) = lower($2) AND omie_code IS NULL RETURNING id`,
+		[omieCode, code, description, active, unit, ncm]
+	);
+	if (result.rowCount) return "updated";
+	await database.query(
+		"INSERT INTO products (omie_code, code, description, active, unit, ncm, omie_status, omie_synced_at) VALUES ($1, $2, $3, $4, $5, $6, 'synced', NOW())",
+		[omieCode, code, description, active, unit, ncm]
+	);
 	return "created";
 }
 
@@ -149,11 +182,15 @@ async function lastSuccess(kind) {
 	return rows[0]?.started_at || null;
 }
 
+// intervalMinutes: de quanto em quanto tempo a rotina agendada roda (o webhook cobre o tempo real entre elas).
+// incremental: filtro extra quando ha sincronizacao anterior (o Omie filtra por data de inclusao OU alteracao).
 const SYNCS = {
 	customers: {
 		endpoint: "geral/clientes",
 		method: "ListarClientes",
 		key: "clientes_cadastro",
+		extra: { apenas_importado_api: "N" },
+		intervalMinutes: () => Number(process.env.OMIE_SYNC_INTERVAL_HOURS || 24) * 60,
 		handle: async (record) => {
 			const item = mapCustomer(record);
 			return item.omieCode && item.name ? upsertCustomer(item) : "skipped";
@@ -164,8 +201,30 @@ const SYNCS = {
 		endpoint: "geral/produtos",
 		method: "ListarProdutos",
 		key: "produto_servico_cadastro",
-		extra: { filtrar_apenas_omiepdv: "N" },
+		extra: { filtrar_apenas_omiepdv: "N", apenas_importado_api: "N" },
+		intervalMinutes: () => Number(process.env.OMIE_SYNC_INTERVAL_HOURS || 24) * 60,
 		handle: upsertProduct
+	},
+	// Espelho de pedidos e notas: incremental frequente (padrao 10 min).
+	orders: {
+		endpoint: "produtos/pedido",
+		method: "ListarPedidos",
+		key: "pedido_venda_produto",
+		extra: { apenas_importado_api: "N" },
+		incremental: { filtrar_apenas_alteracao: "S" },
+		newestFirst: true,
+		intervalMinutes: () => Number(process.env.OMIE_MIRROR_INTERVAL_MINUTES || 10),
+		handle: (record) => mirror.upsertOrder(record)
+	},
+	invoices: {
+		endpoint: "produtos/nfconsultar",
+		method: "ListarNF",
+		key: "nfCadastro",
+		extra: {},
+		incremental: { filtrar_apenas_alteracao: "S" },
+		newestFirst: true,
+		intervalMinutes: () => Number(process.env.OMIE_MIRROR_INTERVAL_MINUTES || 10),
+		handle: (record) => mirror.upsertInvoice(record)
 	}
 };
 
@@ -180,12 +239,15 @@ async function runSync(kind, { trigger = "manual", userId = null } = {}) {
 	);
 	if (running[0]) throw new AppError(409, "Ja existe uma sincronizacao em andamento.", "SYNC_RUNNING");
 	const since = await lastSuccess(kind);
-	const filter = { ...spec.extra, ...(since ? { filtrar_por_data_de: omieDate(new Date(new Date(since).getTime() - 86400000)) } : {}) };
+	const filter = {
+		...spec.extra,
+		...(since ? { filtrar_por_data_de: omieDate(new Date(new Date(since).getTime() - 86400000)), ...(spec.incremental || {}) } : {})
+	};
 	const { rows } = await database.query("INSERT INTO omie_sync_runs (kind, trigger, started_by) VALUES ($1, $2, $3) RETURNING id", [kind, trigger, userId]);
 	const counts = { created: 0, updated: 0, skipped: 0 };
 	let errors = 0;
 	try {
-		for await (const records of paginate(spec.endpoint, spec.method, filter, spec.key)) {
+		for await (const records of paginate(spec.endpoint, spec.method, filter, spec.key, { newestFirst: Boolean(spec.newestFirst && !since) })) {
 			for (const record of records) {
 				try {
 					counts[await spec.handle(record)] += 1;
@@ -292,21 +354,42 @@ function compareOrderLines(omieItems, localLines) {
 	return issues;
 }
 
-// Rotina agendada: sincroniza clientes e produtos quando a ultima execucao bem-sucedida passou do intervalo.
-function startOmieScheduler(intervalHours = Number(process.env.OMIE_SYNC_INTERVAL_HOURS || 24)) {
-	if (!intervalHours || intervalHours <= 0) return null;
+// Rotina agendada: cada tipo roda quando a ultima execucao bem-sucedida passou do seu intervalo
+// (clientes/produtos: OMIE_SYNC_INTERVAL_HOURS, padrao 24 h; pedidos/notas: OMIE_MIRROR_INTERVAL_MINUTES, padrao 10 min).
+// Tambem reenvia as pecas cujo envio ao Omie falhou por instabilidade (tentativas com intervalo crescente).
+let schedulerHooks = [];
+const onSchedulerTick = (hook) => schedulerHooks.push(hook);
+// Sincronizacoes que ficaram "em andamento" porque o servidor parou no meio nao bloqueiam as proximas.
+async function releaseInterruptedRuns() {
+	await database.query(
+		"UPDATE omie_sync_runs SET status = 'error', finished_at = NOW(), message = 'Interrompida: o servidor reiniciou durante a sincronizacao.' WHERE status = 'running'"
+	);
+}
+
+function startOmieScheduler() {
+	releaseInterruptedRuns().catch((error) => logEvent("omie_release_runs_error", { error: error.message }));
+	if (process.env.OMIE_SCHEDULER === "off") return null;
+	let busy = false;
 	const tick = async () => {
-		if (!isConfigured()) return;
-		for (const kind of Object.keys(SYNCS)) {
-			try {
-				const last = await lastSuccess(kind);
-				if (!last || Date.now() - new Date(last).getTime() >= intervalHours * 3600000) await runSync(kind, { trigger: "scheduled" });
-			} catch (error) {
-				logEvent("omie_scheduled_sync_error", { kind, error: error.message });
+		if (!isConfigured() || busy) return;
+		busy = true;
+		try {
+			for (const kind of Object.keys(SYNCS)) {
+				try {
+					const minutes = SYNCS[kind].intervalMinutes();
+					if (!minutes || minutes <= 0) continue;
+					const last = await lastSuccess(kind);
+					if (!last || Date.now() - new Date(last).getTime() >= minutes * 60000) await runSync(kind, { trigger: "scheduled" });
+				} catch (error) {
+					if (error.code !== "SYNC_RUNNING") logEvent("omie_scheduled_sync_error", { kind, error: error.message });
+				}
 			}
+			for (const hook of schedulerHooks) await hook().catch((error) => logEvent("omie_scheduler_hook_error", { error: error.message }));
+		} finally {
+			busy = false;
 		}
 	};
-	const timer = setInterval(tick, 3600000);
+	const timer = setInterval(tick, 60000);
 	if (typeof timer.unref === "function") timer.unref();
 	setTimeout(tick, 30000).unref?.();
 	return timer;
@@ -323,5 +406,11 @@ module.exports = {
 	lookupOrder,
 	lookupInvoice,
 	mapCustomer,
-	startOmieScheduler
+	upsertCustomer,
+	upsertProduct,
+	lastSuccess,
+	startOmieScheduler,
+	onSchedulerTick,
+	SYNCS,
+	BACKGROUND_WAIT
 };

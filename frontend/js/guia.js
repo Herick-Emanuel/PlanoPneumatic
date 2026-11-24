@@ -180,11 +180,19 @@ window.PPGuide = [
 		icon: "registry",
 		capability: "cases.create",
 		paths: ["/cadastro-base.html"],
-		summary: "Cadastro de clientes e produtos usado para preencher os formulários automaticamente.",
+		summary: "Cadastro de clientes e produtos usado para preencher os formulários automaticamente. Peças novas também são enviadas ao Omie, com aprovação.",
 		steps: [
 			"Alterne entre as abas Clientes e Produtos.",
 			"Pesquise, inclua ou edite um registro (supervisor, gerente e administrador).",
+			"Peça nova: informe código, descrição e unidade. Ela fica “Aguardando aprovação”.",
+			"Gerente, supervisor ou administrador clica em “Aprovar e enviar” (ou marca várias e envia em lote), informa o NCM e a peça vai ao Omie com o mesmo código.",
+			"Acompanhe a coluna Omie: Enviando → No Omie, ou Erro no envio com a mensagem do Omie.",
 			"Nos formulários, digite 2 letras do cliente ou do código do produto para puxar daqui."
+		],
+		tips: [
+			"Se o código já existir no Omie, o app só liga os cadastros, sem duplicar.",
+			"Erro de dados (ex.: NCM inválido): corrija em Editar e clique em “Reenviar ao Omie”. Se o Omie estiver fora do ar, o app tenta de novo sozinho.",
+			"Peças antigas aparecem como “Não enviada” e podem ser enviadas em lote."
 		]
 	},
 	{
@@ -207,13 +215,20 @@ window.PPGuide = [
 		icon: "integrations",
 		capability: "cases.import",
 		paths: ["/omie.html"],
-		summary: "Traz pedidos e notas fiscais do ERP Omie para abrir processos sem redigitar.",
+		summary:
+			"Pedidos e notas fiscais do ERP Omie para abrir processos sem redigitar. Os dados ficam guardados no app e o Omie avisa quando algo muda, então a tela abre na hora e se atualiza sozinha.",
 		steps: [
-			"Os registros mais recentes aparecem primeiro.",
+			"A barra de situação mostra quantos registros estão no app, quando foi a última busca e o último aviso do Omie.",
+			"Filtre pelo período; a página 1 traz os mais recentes.",
 			"Marque até 20 registros por vez e escolha o tipo de processo a criar.",
-			"O que já virou processo aparece com o número e não pode ser marcado de novo."
+			"O que já virou processo aparece com o número e não pode ser marcado de novo.",
+			"“Atualizar agora” busca no Omie só o que mudou desde a última vez."
 		],
-		tips: ["Clientes e produtos do Omie são sincronizados automaticamente a cada 24 horas."]
+		tips: [
+			"A tela confere novidades a cada 30 segundos e recarrega a lista sozinha (se você não tiver nada marcado).",
+			"Na primeira vez a carga completa leva alguns minutos; enquanto isso, a lista mostra os mais recentes direto do Omie.",
+			"Clientes e produtos do Omie também são sincronizados automaticamente."
+		]
 	},
 	{
 		id: "notificacoes",

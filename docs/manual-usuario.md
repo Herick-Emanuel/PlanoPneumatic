@@ -31,6 +31,13 @@ Resumo, por cliente, por produto (reincidência) e por processo, com os mesmos f
 ## Cadastros (conforme o perfil)
 Clientes e produtos, importação de pedidos por CSV (modelo para baixar), usuários, auditoria, integrações (webhooks) e configurações (alertas, atualização automática, exigir documentação e SLA por tipo).
 
+## Omie (ERP)
+- **Pedidos e notas do Omie:** os dados ficam guardados no app e são atualizados pelo próprio Omie (aviso em tempo real por webhook) e por uma busca automática a cada 10 minutos. A tela abre na hora, se atualiza sozinha a cada 30 segundos e tem o botão "Atualizar agora".
+- **Peça nova vai para o Omie:** ao cadastrar, informe a unidade; a peça fica "Aguardando aprovação". Gerente, supervisor ou administrador aprova (uma ou várias de uma vez), informa o NCM e a peça é criada no Omie com o mesmo código. Se o código já existir lá, os cadastros só são ligados. Erros de dados aparecem na peça para corrigir e reenviar; se o Omie estiver fora do ar, o app tenta de novo sozinho (até 3 vezes).
+
+## Atualização do app
+Ao abrir o app (aba ou janela nova), uma tela de abertura verifica se há versão nova e já atualiza, sem depender do aviso. Durante o uso, uma versão nova aparece como aviso "Nova versão disponível", para não interromper o que você está fazendo.
+
 ## Perfis
 | Perfil | O que faz |
 |--------|-----------|

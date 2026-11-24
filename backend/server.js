@@ -22,6 +22,7 @@ async function start() {
 	startHousekeeping();
 	startSlaScheduler(config.slaCheckIntervalMs);
 	startOmieScheduler();
+	require("./services/omie").onSchedulerTick(require("./services/omieProducts").retryDue);
 	startReportScheduler();
 	const server = app.listen(config.port, config.host, () => logEvent("server_started", { host: config.host, port: config.port }));
 
