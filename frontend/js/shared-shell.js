@@ -14,6 +14,8 @@
 		"/relatorios.html": "Relatórios",
 		"/relatorios-time.html": "Desempenho por time",
 		"/relatorios-gerentes.html": "Desempenho de gerentes",
+		"/relatorios-personalizados.html": "Construtor de relatórios",
+		"/guia.html": "Guia do app",
 		"/cadastros.html": "Usuários",
 		"/cadastro-base.html": "Clientes e produtos",
 		"/importar.html": "Importar pedidos",
@@ -190,7 +192,9 @@
 			"Acompanhamento",
 			[
 				["/historico.html", "history", "Histórico", "historico"],
-				["/relatorios.html", "reports", "Relatórios", "relatorios"]
+				["/relatorios.html", "reports", "Relatórios", "relatorios"],
+				["/relatorios-personalizados.html", "builder", "Construtor de relatórios", "construtor", "reports.builder"],
+				["/guia.html", "guide", "Guia do app", "guia"]
 			]
 		],
 		[

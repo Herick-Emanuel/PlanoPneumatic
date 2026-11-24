@@ -440,6 +440,18 @@
 		link.remove();
 		setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 	}
+	// Download de arquivo gerado a partir de dados enviados (POST JSON), ex.: exportar a tabela da tela.
+	async function downloadPost(url, json, fileName) {
+		const response = await request(url, { method: "POST", json, raw: true });
+		if (!response.ok) throw new ApiError((await response.json().catch(() => ({}))).message || "Não foi possível gerar o arquivo.", response.status);
+		const link = document.createElement("a");
+		link.href = URL.createObjectURL(await response.blob());
+		link.download = fileName;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+	}
 	async function openFile(url) {
 		const { blob } = await fetchBlob(url);
 		window.open(URL.createObjectURL(blob), "_blank", "noopener");
@@ -571,6 +583,9 @@
 		moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
 		monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
 		plus: '<path d="M12 5v14M5 12h14"/>',
+		guide: '<path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v18"/><path d="M11.5 8h4M11.5 12h4"/>',
+		builder: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><path d="M13 13h5M13 17h3"/>',
+		download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
 		close: '<path d="M18 6 6 18M6 6l12 12"/>'
 	};
 	const icon = (name, className = "icon") =>
@@ -643,6 +658,7 @@
 		logout,
 		bindLogout,
 		download,
+		downloadPost,
 		openFile,
 		debounce,
 		skeleton,

@@ -4,7 +4,8 @@ const { z } = require("zod");
 const { database } = require("../db");
 const { capabilities, can } = require("../domain/permissions");
 const { requireAuth, requireCapability } = require("../middleware/auth");
-const { wrap, forbidden } = require("../middleware/errors");
+const { wrap, forbidden, badRequest, notFound } = require("../middleware/errors");
+const customReports = require("../services/customReports");
 const { buildCaseFilters } = require("../services/caseFilters");
 const reports = require("../services/reports");
 const exportsService = require("../services/exports");
@@ -141,6 +142,117 @@ router.get(
 		);
 	})
 );
+// Exportar a tabela que esta na tela (cada relatorio): os dados ja vieram da API com o escopo da pessoa;
+// aqui so viram arquivo. Celulas sao texto/numero curtos e as formulas sao neutralizadas na exportacao.
+const cellSchema = z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]);
+const tableExportSchema = z.object({
+	title: z.string().trim().min(1).max(120),
+	format: z.enum(["xlsx", "pdf", "csv"]),
+	columns: z
+		.array(z.object({ key: z.string().min(1).max(60), header: z.string().max(120), width: z.number().int().min(4).max(80).optional() }))
+		.min(1)
+		.max(40),
+	rows: z.array(z.record(z.string(), cellSchema)).max(5000)
+});
+const fileSlug = (title) =>
+	String(title)
+		.normalize("NFD")
+		.replace(/[̀-ͯ]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "")
+		.slice(0, 60) || "relatorio";
+async function sendTable(response, format, columns, rows, title) {
+	const file = await exportsService.exportTable(format, columns, rows, title);
+	response.setHeader("Content-Type", file.type);
+	response.setHeader("Content-Disposition", `attachment; filename=${fileSlug(title)}.${format}`);
+	return response.send(file.buffer);
+}
+router.post(
+	"/table-export",
+	requireExport,
+	wrap(async (request, response) => {
+		const data = tableExportSchema.parse(request.body);
+		return sendTable(response, data.format, data.columns, data.rows, data.title);
+	})
+);
+
+// Abrir planilha exportada antes (somente leitura, para conferir/comparar na tela). CSV e lido no navegador.
+router.post(
+	"/import-sheet",
+	requireExport,
+	wrap(async (request, response) => {
+		const { content } = z.object({ fileName: z.string().max(200).optional(), content: z.string().min(1).max(8_000_000) }).parse(request.body);
+		const buffer = Buffer.from(content, "base64");
+		// XLSX e um ZIP: confere a assinatura antes de entregar ao leitor.
+		if (buffer.length < 4 || buffer.readUInt32LE(0) !== 0x04034b50) throw badRequest("Arquivo invalido: envie uma planilha .xlsx ou .csv.");
+		try {
+			return response.json(await exportsService.readXlsx(buffer));
+		} catch {
+			throw badRequest("Nao foi possivel ler a planilha. Confira se o arquivo e um .xlsx valido.");
+		}
+	})
+);
+
+// Construtor de relatorios (administrador e gerente) com modelos salvos.
+const requireBuilder = requireCapability(capabilities.BUILD_REPORTS);
+const templateId = (request) => z.coerce.number().int().positive().parse(request.params.id);
+router.get(
+	"/custom/catalog",
+	requireBuilder,
+	wrap(async (request, response) => response.json({ sources: customReports.catalog() }))
+);
+router.post(
+	"/custom/preview",
+	requireBuilder,
+	wrap(async (request, response) => {
+		const result = await customReports.run(request.user, request.body?.definition, { limit: 200 });
+		return response.json({ columns: result.columns, rows: result.rows, truncated: result.truncated });
+	})
+);
+router.post(
+	"/custom/export",
+	requireBuilder,
+	requireExport,
+	wrap(async (request, response) => {
+		const { format, title } = z
+			.object({ format: z.enum(["xlsx", "pdf", "csv"]), title: z.string().trim().max(120).optional() })
+			.parse({ format: request.body?.format, title: request.body?.title });
+		const result = await customReports.run(request.user, request.body?.definition, { limit: 5000 });
+		return sendTable(response, format, result.columns, result.rows, title || "Relatorio personalizado");
+	})
+);
+router.get(
+	"/templates",
+	requireBuilder,
+	wrap(async (request, response) => response.json({ templates: await customReports.listTemplates(request.user) }))
+);
+router.post(
+	"/templates",
+	requireBuilder,
+	wrap(async (request, response) => {
+		if ((await customReports.countTemplates(request.user)) >= 50) throw forbidden("Limite de 50 modelos por pessoa.");
+		return response.status(201).json({ template: await customReports.createTemplate(request.user, request.body) });
+	})
+);
+router.put(
+	"/templates/:id",
+	requireBuilder,
+	wrap(async (request, response) => {
+		const template = await customReports.updateTemplate(request.user, templateId(request), request.body);
+		if (!template) throw notFound("Modelo nao encontrado (so quem criou pode alterar).");
+		return response.json({ template });
+	})
+);
+router.delete(
+	"/templates/:id",
+	requireBuilder,
+	wrap(async (request, response) => {
+		if (!(await customReports.removeTemplate(request.user, templateId(request)))) throw notFound("Modelo nao encontrado (so quem criou pode excluir).");
+		return response.status(204).send();
+	})
+);
+
 // F11: envios agendados por e-mail (cada pessoa gerencia os proprios).
 const scheduleSchema = z.object({
 	name: z.string().trim().min(1, "Informe um nome.").max(80),

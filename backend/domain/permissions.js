@@ -24,7 +24,8 @@ const capabilities = Object.freeze({
 	MANAGE_INTEGRATIONS: "integrations.manage",
 	VIEW_TEAM_REPORTS: "reports.team.view",
 	VIEW_MANAGER_PERFORMANCE: "reports.managers.view",
-	EXPORT_REPORTS: "reports.export"
+	EXPORT_REPORTS: "reports.export",
+	BUILD_REPORTS: "reports.builder"
 });
 
 const c = capabilities;
@@ -39,6 +40,7 @@ const permissionMatrix = Object.freeze({
 		c.VIEW_AUDIT,
 		c.ASSIGN_CASES,
 		c.VIEW_TEAM_REPORTS,
+		c.BUILD_REPORTS,
 		c.EDIT_USER,
 		c.DECIDE_CASE,
 		c.TECHNICAL_ANALYSIS,

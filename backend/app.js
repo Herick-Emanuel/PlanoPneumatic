@@ -21,6 +21,8 @@ app.use(metrics.metricsMiddleware);
 app.use(securityHeaders);
 app.use(cors);
 app.use("/api", originCheck);
+// Exportar a tabela que esta na tela e abrir uma planilha exportada antes podem passar de 1 MB.
+app.use(["/api/reports/table-export", "/api/reports/import-sheet", "/api/reports/custom/export"], express.json({ limit: "8mb" }));
 app.use(express.json({ limit: "1mb" }));
 // O service worker leva o ID do build: cada deploy invalida o cache do app.
 app.get("/sw.js", (request, response) => {

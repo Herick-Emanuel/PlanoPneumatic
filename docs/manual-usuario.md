@@ -19,8 +19,14 @@ Mostra status, prazo (SLA), responsável, etapas, checklist, anexos, linha do te
 ## Histórico
 Filtre por processo, cliente, produto, código, documento, série/lote, tipo, status, responsável e período; marque "Somente meus casos" ou "Somente atrasados". Ordene clicando nos títulos, salve filtros, exporte em XLSX, PDF ou CSV e (supervisor/gerente) atribua vários processos de uma vez.
 
+## Guia do app
+O ícone de **caderno** no topo de toda tela (ou a tecla **F1**) abre o Guia do app já na explicação da tela atual: para que serve, passo a passo e dicas. O guia tem busca e mostra só as telas que o seu perfil acessa.
+
 ## Relatórios
 Resumo, por cliente, por produto (reincidência) e por processo, com os mesmos filtros e exportação. **Desempenho por time** permite definir a meta mensal (gerente/administrador).
+- **Exportar em cada relatório:** toda tabela tem os botões Excel, CSV e PDF, que baixam exatamente o que está na tela.
+- **Abrir planilha (importar para comparar):** carrega um .xlsx ou .csv exportado antes e compara com a tabela atual pela primeira coluna, mostrando o que mudou, o que é novo e o que só existe na planilha. Nada é gravado no sistema.
+- **Construtor de relatórios (gerente/administrador):** escolha a fonte (processos ou eventos), lista ou totais agrupados, colunas/métricas, filtros e ordenação; pré-visualize, salve como modelo (opcionalmente compartilhado com outros gerentes e administradores) e baixe em Excel, CSV ou PDF (até 5.000 linhas). Modelos podem ser exportados e importados como arquivo .json.
 
 ## Cadastros (conforme o perfil)
 Clientes e produtos, importação de pedidos por CSV (modelo para baixar), usuários, auditoria, integrações (webhooks) e configurações (alertas, atualização automática, exigir documentação e SLA por tipo).

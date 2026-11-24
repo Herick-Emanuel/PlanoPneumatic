@@ -2022,6 +2022,60 @@
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
         "429":
           "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/custom/catalog":
+    "get":
+      "tags":
+        - "Relatorios"
+      "summary": "GET /api/reports/custom/catalog"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/custom/export":
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/custom/export"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/custom/preview":
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/custom/preview"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/export.csv":
     "get":
       "tags":
@@ -2081,6 +2135,24 @@
       "tags":
         - "Relatorios"
       "summary": "GET /api/reports/export.xlsx"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/import-sheet":
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/import-sheet"
       "responses":
         "200":
           "description": "Sucesso"
@@ -2236,6 +2308,24 @@
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
         "429":
           "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/table-export":
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/table-export"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/reports/team-goals/{managerId}":
     "put":
       "tags":
@@ -2265,6 +2355,88 @@
       "tags":
         - "Relatorios"
       "summary": "GET /api/reports/team-performance"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/templates":
+    "get":
+      "tags":
+        - "Relatorios"
+      "summary": "GET /api/reports/templates"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+    "post":
+      "tags":
+        - "Relatorios"
+      "summary": "POST /api/reports/templates"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/reports/templates/{id}":
+    "delete":
+      "tags":
+        - "Relatorios"
+      "summary": "DELETE /api/reports/templates/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+    "put":
+      "tags":
+        - "Relatorios"
+      "summary": "PUT /api/reports/templates/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
       "responses":
         "200":
           "description": "Sucesso"

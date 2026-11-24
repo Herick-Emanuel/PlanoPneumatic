@@ -32,6 +32,171 @@ document.head.appendChild(sharedShellScript);
 		return params.toString();
 	};
 
+	// ------------------------------------------------ Importar / exportar em cada relatorio
+	// Cada tabela de relatorio registra os dados que mostra; os botoes exportam exatamente isso (XLSX, CSV ou
+	// PDF) e "Abrir planilha" carrega um arquivo exportado antes para comparar com o que esta na tela.
+	// O mapa e global: a navegacao sem recarregar executa este script de novo, mas o clique ja esta ligado.
+	const datasets = (window.__ppDatasets ||= new Map());
+	let datasetSeq = datasets.size + Date.now();
+	const dataTools = (title, columns, rows) => {
+		if (!PP.can("reports.export")) return "";
+		const id = `ds${(datasetSeq += 1)}`;
+		datasets.set(id, { title, columns, rows });
+		return `<div class="data-tools" data-dataset="${id}" role="group" aria-label="Exportar ou importar: ${esc(title)}"><button class="chip" type="button" data-table-export="xlsx" title="Baixar em Excel">${PP.icon("download")}Excel</button><button class="chip" type="button" data-table-export="csv" title="Baixar em CSV">CSV</button><button class="chip" type="button" data-table-export="pdf" title="Baixar em PDF">PDF</button><button class="chip" type="button" data-table-import title="Abrir uma planilha exportada antes para comparar">${PP.icon("import")}Abrir planilha</button></div>`;
+	};
+	const fileSlug = (title) =>
+		String(title)
+			.normalize("NFD")
+			.replace(/[̀-ͯ]/g, "")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-|-$/g, "") || "relatorio";
+	const plainCell = (value) => (value === null || value === undefined ? "" : typeof value === "number" || typeof value === "boolean" ? value : String(value));
+	const normalizeHeader = (value) =>
+		String(value || "")
+			.normalize("NFD")
+			.replace(/[̀-ͯ]/g, "")
+			.trim()
+			.toLowerCase();
+	const toNumber = (value) => {
+		if (typeof value === "number") return value;
+		const text = String(value ?? "")
+			.trim()
+			.replace(/\s/g, "");
+		if (!text) return null;
+		const parsed = Number(text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text);
+		return Number.isFinite(parsed) ? parsed : null;
+	};
+	const readAsBase64 = (file) =>
+		new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+			reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+			reader.readAsDataURL(file);
+		});
+	async function readSheet(file) {
+		if (file.size > 6 * 1024 * 1024) throw new Error("Arquivo grande demais (máximo 6 MB).");
+		if (/\.xlsx$/i.test(file.name)) return api.post("/api/reports/import-sheet", { fileName: file.name, content: await readAsBase64(file) });
+		if (!/\.csv$/i.test(file.name) && file.type !== "text/csv") throw new Error("Envie uma planilha .xlsx ou .csv exportada pelo sistema.");
+		const rows = parseCsv((await file.text()).replace(new RegExp(`^${String.fromCharCode(0xfeff)}`), ""));
+		const columns = (rows.shift() || []).map((name) => name.trim());
+		return { columns, rows: rows.slice(0, 5000), truncated: rows.length > 5000 };
+	}
+	// Compara a planilha com a tabela atual pela primeira coluna (ex.: Processo, Cliente, Tipo).
+	function compareSheet(dataset, sheet, fileName) {
+		const headerIndex = new Map(sheet.columns.map((header, index) => [normalizeHeader(header), index]));
+		const keyColumn = dataset.columns[0];
+		const keyIndex = headerIndex.get(normalizeHeader(keyColumn.header));
+		const shared = dataset.columns.slice(1).filter((column) => headerIndex.has(normalizeHeader(column.header)));
+		const intro = `<p class="muted">Arquivo <strong>${esc(fileName)}</strong>: ${sheet.rows.length} linha(s)${sheet.truncated ? " (somente as 5.000 primeiras)" : ""}. Nada é gravado no sistema; a planilha só é lida para conferência.</p>`;
+		if (keyIndex === undefined || !shared.length) {
+			const preview = sheet.rows.slice(0, 200).map((row) => `<tr>${sheet.columns.map((_, index) => `<td>${esc(row[index] ?? "")}</td>`).join("")}</tr>`);
+			return `${intro}<p class="feedback">As colunas não batem com esta tabela (esperado: ${esc(dataset.columns.map((column) => column.header).join(", "))}). Mostrando o conteúdo da planilha.</p>${table(sheet.columns, preview, "Planilha vazia.")}`;
+		}
+		const imported = new Map(sheet.rows.map((row) => [String(row[keyIndex] ?? "").trim(), row]));
+		const current = new Map(dataset.rows.map((row) => [String(plainCell(row[keyColumn.key])).trim(), row]));
+		const keys = [...new Set([...current.keys(), ...imported.keys()])].filter(Boolean);
+		const counts = { changed: 0, added: 0, removed: 0, same: 0 };
+		const lines = keys.map((key) => {
+			const now = current.get(key);
+			const before = imported.get(key);
+			let state = "same";
+			const cells = shared.map((column) => {
+				const nowValue = now ? plainCell(now[column.key]) : "";
+				const beforeValue = before ? (before[headerIndex.get(normalizeHeader(column.header))] ?? "") : "";
+				const nowNumber = toNumber(nowValue);
+				const beforeNumber = toNumber(beforeValue);
+				const numeric = typeof now?.[column.key] === "number" && nowNumber !== null && beforeNumber !== null;
+				const differs = numeric ? nowNumber !== beforeNumber : String(nowValue).trim() !== String(beforeValue).trim();
+				if (!now || !before) return `<td>${esc(now ? nowValue : beforeValue)}</td>`;
+				if (!differs) return `<td>${esc(nowValue)}</td>`;
+				state = "changed";
+				const delta = numeric ? nowNumber - beforeNumber : null;
+				return `<td class="diff-cell"><strong>${esc(nowValue)}</strong><small>planilha: ${esc(beforeValue)}${delta !== null ? ` · <span class="${delta > 0 ? "delta-up" : "delta-down"}">${delta > 0 ? "+" : ""}${esc(Math.round(delta * 100) / 100)}</span>` : ""}</small></td>`;
+			});
+			if (!before) state = "added";
+			else if (!now) state = "removed";
+			counts[state] += 1;
+			const label = { changed: ["orange", "Alterado"], added: ["green", "Só agora"], removed: ["red", "Só na planilha"], same: ["", "Igual"] }[state];
+			return {
+				state,
+				html: `<tr data-state="${state}"><td><strong>${esc(key)}</strong></td><td><span class="table-status ${label[0]}">${label[1]}</span></td>${cells.join("")}</tr>`
+			};
+		});
+		const summary = `<div class="compare-summary"><span class="table-status orange">${counts.changed} alterado(s)</span><span class="table-status green">${counts.added} só agora</span><span class="table-status red">${counts.removed} só na planilha</span><span class="table-status">${counts.same} igual(is)</span><label class="check-inline"><input type="checkbox" data-only-diff checked /> Mostrar só diferenças</label></div>`;
+		return `${intro}${summary}${table(
+			[keyColumn.header, "Situação", ...shared.map((column) => column.header)],
+			lines.map((line) => line.html),
+			"Nenhuma linha para comparar."
+		)}`;
+	}
+	function bindDataTools() {
+		if (document.body.dataset.dataToolsBound) return;
+		document.body.dataset.dataToolsBound = "1";
+		document.addEventListener("click", async (event) => {
+			const button = event.target.closest("[data-table-export], [data-table-import], [data-close-compare]");
+			if (!button) return;
+			if (button.matches("[data-close-compare]")) {
+				button.closest(".compare-panel")?.remove();
+				return;
+			}
+			const holder = button.closest("[data-dataset]");
+			const dataset = datasets.get(holder?.dataset.dataset);
+			if (!dataset) return;
+			if (button.matches("[data-table-export]")) {
+				const format = button.dataset.tableExport;
+				button.disabled = true;
+				try {
+					await PP.downloadPost(
+						"/api/reports/table-export",
+						{
+							title: dataset.title,
+							format,
+							columns: dataset.columns.map(({ key, header }) => ({ key, header })),
+							rows: dataset.rows.map((row) => Object.fromEntries(dataset.columns.map((column) => [column.key, plainCell(row[column.key])])))
+						},
+						`${fileSlug(dataset.title)}.${format}`
+					);
+				} catch (error) {
+					PP.toast(error.message, "error");
+				} finally {
+					button.disabled = false;
+				}
+				return;
+			}
+			const input = Object.assign(document.createElement("input"), { type: "file", accept: ".xlsx,.csv,text/csv" });
+			input.addEventListener("change", async () => {
+				const file = input.files[0];
+				if (!file) return;
+				// Abaixo da grade de paineis (largura total), ou logo abaixo do painel quando nao ha grade.
+				const anchor = holder.closest(".content-grid, .team-performance-grid") || holder.closest(".panel") || holder;
+				const panelId = `compare-${holder.dataset.dataset}`;
+				document.getElementById(panelId)?.remove();
+				const panel = document.createElement("section");
+				panel.className = "panel compare-panel";
+				panel.id = panelId;
+				panel.innerHTML = `<div class="panel-heading"><div><p class="eyebrow">Planilha importada</p><h2>Comparação: ${esc(dataset.title)}</h2></div><button class="chip" type="button" data-close-compare>Fechar</button></div>${PP.skeleton(3)}`;
+				anchor.after(panel);
+				panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+				try {
+					const sheet = await readSheet(file);
+					panel.querySelector(".panel-heading").insertAdjacentHTML("afterend", compareSheet(dataset, sheet, file.name));
+					panel.querySelector(".skeleton-list")?.remove();
+					const toggle = panel.querySelector("[data-only-diff]");
+					const applyFilter = () =>
+						panel.querySelectorAll("tr[data-state]").forEach((row) => {
+							row.hidden = toggle.checked && row.dataset.state === "same";
+						});
+					toggle?.addEventListener("change", applyFilter);
+					if (toggle) applyFilter();
+				} catch (error) {
+					panel.innerHTML = `<div class="panel-heading"><div><p class="eyebrow">Planilha importada</p><h2>Não foi possível abrir</h2></div><button class="chip" type="button" data-close-compare>Fechar</button></div><p class="feedback">${esc(error.message)}</p>`;
+				}
+			});
+			input.click();
+		});
+	}
+
 	// F11: envios agendados (o arquivo chega por e-mail com os filtros escolhidos).
 	async function renderSchedules(host) {
 		const [{ schedules }, meta] = await Promise.all([api.get("/api/reports/schedules"), PP.meta()]);
@@ -140,11 +305,54 @@ document.head.appendChild(sharedShellScript);
 			const host = document.querySelector("#report-view");
 			host.innerHTML = PP.skeleton(4);
 			try {
+				datasets.clear();
 				if (view === "summary") {
 					const data = await api.get(`/api/reports/summary?${reportQuery()}`);
+					const tools = {
+						byType: dataTools(
+							"Casos por tipo",
+							[
+								{ key: "label", header: "Tipo" },
+								{ key: "value", header: "Casos" }
+							],
+							data.byType
+						),
+						stalled: dataTools(
+							"Processos vencidos",
+							[
+								{ key: "id", header: "Processo" },
+								{ key: "client", header: "Cliente" },
+								{ key: "type", header: "Tipo" },
+								{ key: "status", header: "Status" },
+								{ key: "responsible", header: "Responsável" },
+								{ key: "dueAt", header: "Vencimento" }
+							],
+							data.stalled.map((item) => ({ ...item, status: PP.statusLabel(item.status), dueAt: PP.formatDateTime(item.dueAt) }))
+						),
+						productivity: dataTools(
+							"Produtividade por responsável",
+							[
+								{ key: "user", header: "Responsável" },
+								{ key: "total", header: "Processos" },
+								{ key: "completed", header: "Concluídos" }
+							],
+							data.productivity
+						),
+						events: dataTools(
+							"Eventos recentes",
+							[
+								{ key: "createdAt", header: "Data" },
+								{ key: "id", header: "Processo" },
+								{ key: "type", header: "Evento" },
+								{ key: "description", header: "Descrição" },
+								{ key: "responsible", header: "Responsável" }
+							],
+							data.events.map((event) => ({ ...event, createdAt: PP.formatDateTime(event.createdAt) }))
+						)
+					};
 					host.innerHTML = `<section class="indicator-grid report-cards">${card("Total de casos", data.totals.total)}${card("Aguardando documento", data.totals.pending, "orange")}${card("Garantias em análise", data.totals.guarantees_in_analysis, "red")}${card("Concluídos", data.totals.completed, "green")}</section>
-					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Casos por tipo</h2></div></div><div class="report-bars">${data.byType.map((item) => `<div class="report-bar"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i data-w="${Math.max(10, (item.value / Math.max(data.totals.total, 1)) * 100)}"></i></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
-					<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Prazo</p><h2>Processos vencidos</h2></div><span class="process-status">${data.stalled.length}</span></div>${table(
+					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Distribuição</p><h2>Casos por tipo</h2></div>${tools.byType}</div><div class="report-bars">${data.byType.map((item) => `<div class="report-bar"><div><strong>${esc(item.label)}</strong><span>${esc(item.value)}</span></div><i data-w="${Math.max(10, (item.value / Math.max(data.totals.total, 1)) * 100)}"></i></div>`).join("") || '<p class="muted">Sem dados.</p>'}</div></article>
+					<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Prazo</p><h2>Processos vencidos</h2></div><span class="process-status">${data.stalled.length}</span>${tools.stalled}</div>${table(
 						["Processo", "Cliente", "Status", "Vencimento"],
 						data.stalled
 							.slice(0, 10)
@@ -154,21 +362,41 @@ document.head.appendChild(sharedShellScript);
 							),
 						"Nenhum processo vencido."
 					)}</article></section>
-					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Produtividade</p><h2>Por responsável</h2></div></div>${table(
+					<section class="content-grid report-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Produtividade</p><h2>Por responsável</h2></div>${tools.productivity}</div>${table(
 						["Responsável", "Processos", "Concluídos"],
 						data.productivity.map((item) => `<tr><td>${esc(item.user)}</td><td>${esc(item.total)}</td><td>${esc(item.completed)}</td></tr>`)
-					)}</article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Rastreabilidade</p><h2>Eventos recentes</h2></div></div><div class="event-list">${data.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.id)} · ${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small></div></div>`).join("") || '<p class="muted">Sem eventos.</p>'}</div></article></section>`;
+					)}</article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Rastreabilidade</p><h2>Eventos recentes</h2></div>${tools.events}</div><div class="event-list" tabindex="0" aria-label="Eventos recentes (role para ver mais)">${data.events.map((event) => `<div class="event"><span>${esc(event.type)}</span><div><strong>${esc(event.id)} · ${esc(event.description)}</strong><small>${esc(event.responsible)} · ${esc(PP.formatDateTime(event.createdAt))}</small></div></div>`).join("") || '<p class="muted">Sem eventos.</p>'}</div></article></section>`;
 				} else if (view === "customer" || view === "product") {
 					const data = await api.get(`/api/reports/by-${view}?${reportQuery()}`);
+					const title = view === "customer" ? "Ocorrências por cliente" : "Reincidência por produto";
+					const columns = [
+						...(view === "product"
+							? [
+									{ key: "key", header: "Código" },
+									{ key: "label", header: "Produto" }
+								]
+							: [{ key: "label", header: "Cliente" }]),
+						{ key: "total", header: "Total" },
+						{ key: "warranties", header: "Garantias" },
+						{ key: "exchanges", header: "Trocas" },
+						{ key: "orders", header: "Pedidos" },
+						{ key: "quantity", header: "Peças" },
+						{ key: "lastAt", header: "Último movimento" }
+					];
 					host.innerHTML = section(
 						view === "customer" ? "Clientes" : "Produtos",
-						view === "customer" ? "Ocorrências por cliente" : "Reincidência por produto",
+						title,
 						table(
 							[view === "customer" ? "Cliente" : "Produto", "Total", "Garantias", "Trocas", "Pedidos", "Peças", "Último movimento"],
 							data.rows.map(
 								(row) =>
 									`<tr><td><strong>${esc(row.label)}</strong>${view === "product" ? `<br><small class="muted">${esc(row.key)}</small>` : ""}</td><td>${esc(row.total)}</td><td>${row.warranties > 1 && view === "product" ? `<span class="table-status red">${esc(row.warranties)} (reincidente)</span>` : esc(row.warranties)}</td><td>${esc(row.exchanges)}</td><td>${esc(row.orders)}</td><td>${esc(row.quantity)}</td><td>${esc(PP.formatDateTime(row.lastAt))}</td></tr>`
 							)
+						),
+						dataTools(
+							title,
+							columns,
+							data.rows.map((row) => ({ ...row, lastAt: PP.formatDateTime(row.lastAt) }))
 						)
 					);
 				} else if (view === "schedules") {
@@ -185,7 +413,21 @@ document.head.appendChild(sharedShellScript);
 						target.innerHTML = PP.skeleton(3);
 						try {
 							const { case: item } = await api.get(`/api/reports/by-case/${encodeURIComponent(event.currentTarget.id.value.trim())}`);
-							target.innerHTML = `<div class="kv-grid"><div><small>Processo</small><strong>${esc(item.id)}</strong></div><div><small>Cliente</small><strong>${esc(item.client)}</strong></div><div><small>Tipo</small><strong>${esc(item.type)}</strong></div><div><small>Status</small><strong>${esc(PP.statusLabel(item.status))}</strong></div><div><small>Responsável</small><strong>${esc(item.responsible)}</strong></div><div><small>Prazo</small><strong>${esc(PP.formatDateTime(item.dueAt))}</strong></div></div><h3>Linha do tempo</h3><div class="timeline">${item.events.map((entry) => `<div class="timeline-entry"><strong>${esc(entry.description)}</strong><small>${esc(entry.actorName || entry.responsible)} · ${esc(PP.formatDateTime(entry.createdAt))}</small></div>`).join("")}</div><button class="button button-secondary compact-button" type="button" onclick="window.print()">Imprimir</button>`;
+							const timelineTools = dataTools(
+								`Linha do tempo ${item.id}`,
+								[
+									{ key: "createdAt", header: "Data" },
+									{ key: "description", header: "Descrição" },
+									{ key: "actor", header: "Responsável" }
+								],
+								item.events.map((entry) => ({
+									createdAt: PP.formatDateTime(entry.createdAt),
+									description: entry.description,
+									actor: entry.actorName || entry.responsible
+								}))
+							);
+							target.innerHTML = `<div class="kv-grid"><div><small>Processo</small><strong>${esc(item.id)}</strong></div><div><small>Cliente</small><strong>${esc(item.client)}</strong></div><div><small>Tipo</small><strong>${esc(item.type)}</strong></div><div><small>Status</small><strong>${esc(PP.statusLabel(item.status))}</strong></div><div><small>Responsável</small><strong>${esc(item.responsible)}</strong></div><div><small>Prazo</small><strong>${esc(PP.formatDateTime(item.dueAt))}</strong></div></div><div class="panel-heading mt-16"><h3>Linha do tempo</h3>${timelineTools}</div><div class="timeline scroll-box" tabindex="0" aria-label="Linha do tempo (role para ver mais)">${item.events.map((entry) => `<div class="timeline-entry"><strong>${esc(entry.description)}</strong><small>${esc(entry.actorName || entry.responsible)} · ${esc(PP.formatDateTime(entry.createdAt))}</small></div>`).join("")}</div><button class="button button-secondary compact-button" type="button" data-print>Imprimir</button>`;
+							target.querySelector("[data-print]").addEventListener("click", () => window.print());
 						} catch (error) {
 							target.innerHTML = `<p class="feedback">${esc(error.message)}</p>`;
 						}
@@ -223,14 +465,29 @@ document.head.appendChild(sharedShellScript);
 		await renderView();
 	}
 
+	const memberColumns = [
+		{ key: "name", header: "Integrante" },
+		{ key: "team", header: "Time" },
+		{ key: "role", header: "Perfil" },
+		{ key: "casesRegistered", header: "Processos" },
+		{ key: "partsRegistered", header: "Peças" },
+		{ key: "casesThisMonth", header: "No mês" }
+	];
 	async function teamPerformance() {
 		const data = await api.get("/api/reports/team-performance");
 		const canGoal = PP.can("settings.manage");
+		datasets.clear();
+		const memberRow = (team) => (member) => ({ ...member, team: team.managerName, role: PP.roleLabel(member.role) });
+		const allTools = dataTools(
+			"Desempenho por time",
+			memberColumns,
+			data.teams.flatMap((team) => team.members.map(memberRow(team)))
+		);
 		const teamCards =
 			data.teams
 				.map(
 					(team) =>
-						`<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Time</p><h2>${esc(team.managerName)}</h2></div><span class="process-status">${esc(team.partsRegistered)} peças</span></div>${team.managerId && team.monthlyTarget ? `<div class="distribution-row"><div><strong>Meta do mês</strong><span>${esc(team.casesThisMonth)}/${esc(team.monthlyTarget)} processos</span></div><i data-w="${Math.min(100, (team.casesThisMonth / team.monthlyTarget) * 100)}"></i></div>` : ""}${canGoal && team.managerId ? `<form class="inline-form" data-goal="${esc(team.managerId)}"><label>Meta mensal (processos)<input name="monthlyTarget" type="number" min="1" value="${esc(team.monthlyTarget || "")}" required /></label><button class="button button-secondary compact-button" type="submit">Salvar meta</button></form>` : ""}${table(
+						`<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Time</p><h2>${esc(team.managerName)}</h2></div><span class="process-status">${esc(team.partsRegistered)} peças</span>${dataTools(`Time ${team.managerName}`, memberColumns, team.members.map(memberRow(team)))}</div>${team.managerId && team.monthlyTarget ? `<div class="distribution-row"><div><strong>Meta do mês</strong><span>${esc(team.casesThisMonth)}/${esc(team.monthlyTarget)} processos</span></div><i data-w="${Math.min(100, (team.casesThisMonth / team.monthlyTarget) * 100)}"></i></div>` : ""}${canGoal && team.managerId ? `<form class="inline-form" data-goal="${esc(team.managerId)}"><label>Meta mensal (processos)<input name="monthlyTarget" type="number" min="1" value="${esc(team.monthlyTarget || "")}" required /></label><button class="button button-secondary compact-button" type="submit">Salvar meta</button></form>` : ""}${table(
 							["Integrante", "Perfil", "Processos", "Peças", "No mês"],
 							team.members.map(
 								(member) =>
@@ -239,7 +496,9 @@ document.head.appendChild(sharedShellScript);
 						)}</article>`
 				)
 				.join("") || PP.emptyState("Nenhum time encontrado");
-		set(`<section class="team-performance-grid">${teamCards}</section>`);
+		set(
+			`${allTools ? `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Todos os times</p><h2>Exportar ou comparar o desempenho completo</h2></div>${allTools}</div></section>` : ""}<section class="team-performance-grid">${teamCards}</section>`
+		);
 		content()
 			.querySelectorAll("[data-goal]")
 			.forEach((form) =>
@@ -258,6 +517,23 @@ document.head.appendChild(sharedShellScript);
 
 	async function managerPerformance() {
 		const data = await api.get("/api/reports/manager-performance");
+		datasets.clear();
+		const tools = dataTools(
+			"Desempenho dos gerentes",
+			[
+				{ key: "name", header: "Gerente" },
+				{ key: "teamSize", header: "Time" },
+				{ key: "totalActions", header: "Ações" },
+				{ key: "navigationCount", header: "Navegações" },
+				{ key: "clickCount", header: "Cliques" },
+				{ key: "activeDays", header: "Dias ativos" },
+				{ key: "lastActivityAt", header: "Última atividade" },
+				{ key: "teamCases", header: "Casos do time" },
+				{ key: "teamCompletedCases", header: "Concluídos" },
+				{ key: "engagementScore", header: "Score" }
+			],
+			data.managers.map((manager) => ({ ...manager, lastActivityAt: manager.lastActivityAt ? PP.formatDateTime(manager.lastActivityAt) : "" }))
+		);
 		set(
 			section(
 				"Avaliação",
@@ -270,9 +546,358 @@ document.head.appendChild(sharedShellScript);
 					),
 					"Nenhum gerente cadastrado."
 				)}`,
-				`<span class="process-status">${data.managers.length} gerentes</span>`
+				`<span class="process-status">${data.managers.length} gerentes</span>${tools}`
 			)
 		);
+	}
+
+	// ------------------------------------------------- Construtor de relatorios
+	// Administrador e gerente montam o relatorio (fonte, colunas ou agrupamento, filtros), salvam como modelo
+	// e baixam quando quiserem. Modelos tambem podem ser exportados/importados como arquivo .json.
+	const BUILDER_PRESETS = [
+		{
+			name: "Garantias atrasadas",
+			description: "Garantias abertas com prazo (SLA) vencido.",
+			definition: {
+				source: "cases",
+				columns: ["case_number", "client", "product", "status", "responsible", "due_at", "days_open"],
+				filters: { type: "Garantia", overdue: "true" },
+				sort: { key: "due_at", direction: "asc" }
+			}
+		},
+		{
+			name: "Peças por produto",
+			description: "Total de processos, peças e valor agrupados por código de produto.",
+			definition: {
+				source: "cases",
+				groupBy: "product_code",
+				metrics: ["count", "quantity", "value"],
+				filters: {},
+				sort: { key: "quantity", direction: "desc" }
+			}
+		},
+		{
+			name: "Produtividade por responsável",
+			description: "Processos, concluídos, atrasados e tempo médio por responsável.",
+			definition: {
+				source: "cases",
+				groupBy: "responsible",
+				metrics: ["count", "completed", "overdue", "avg_days"],
+				filters: {},
+				sort: { key: "count", direction: "desc" }
+			}
+		},
+		{
+			name: "Evolução mensal",
+			description: "Processos criados por mês, com concluídos e valor.",
+			definition: { source: "cases", groupBy: "month", metrics: ["count", "completed", "value"], filters: {}, sort: { key: "group", direction: "asc" } }
+		},
+		{
+			name: "Movimentações do período",
+			description: "Todos os eventos da linha do tempo, um por linha.",
+			definition: {
+				source: "events",
+				columns: ["created_at", "case_number", "client", "event_type", "description", "responsible"],
+				filters: {},
+				sort: { key: "created_at", direction: "desc" }
+			}
+		}
+	];
+
+	async function reportsBuilder() {
+		const [{ sources }, meta] = await Promise.all([api.get("/api/reports/custom/catalog"), PP.meta()]);
+		const sourceByKey = Object.fromEntries(sources.map((source) => [source.key, source]));
+		let templates = [];
+		let editing = null; // modelo aberto (para "Salvar" atualizar em vez de criar)
+		const exportable = PP.can("reports.export");
+		const defaultFrom = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+
+		set(`<p class="muted builder-intro">Monte um relatório em 4 passos: <strong>1.</strong> escolha a fonte dos dados, <strong>2.</strong> escolha entre lista de registros ou totais agrupados, <strong>3.</strong> marque as colunas (ou métricas) e os filtros, <strong>4.</strong> pré-visualize, salve como modelo e baixe. Você só vê os processos que o seu perfil já pode ver.</p>
+		<div class="builder-layout">
+			<aside class="panel builder-side">
+				<div class="panel-heading"><div><p class="eyebrow">Modelos</p><h2>Salvos</h2></div><button class="chip" type="button" id="builder-new">${PP.icon("plus")}Novo</button></div>
+				<div id="builder-templates" class="builder-template-list" aria-live="polite">${PP.skeleton(3)}</div>
+				<div class="builder-file-actions"><button class="button button-secondary compact-button" type="button" id="builder-import">${PP.icon("import")}Importar modelo (.json)</button></div>
+				<p class="eyebrow mt-16">Comece por um pronto</p>
+				<div class="builder-template-list">${BUILDER_PRESETS.map((preset, index) => `<button type="button" class="builder-template" data-preset="${index}"><strong>${esc(preset.name)}</strong><small>${esc(preset.description)}</small></button>`).join("")}</div>
+			</aside>
+			<form id="builder-form" class="panel builder-form" novalidate>
+				<div class="panel-heading"><div><p class="eyebrow">Construtor</p><h2 id="builder-title">Novo relatório</h2></div></div>
+				<fieldset><legend>1. Identificação</legend><div class="editor-grid"><label>Nome do relatório<input name="name" maxlength="80" placeholder="Ex.: Garantias do mês por cliente" required /></label><label>Descrição (opcional)<input name="description" maxlength="240" placeholder="Para que serve este relatório" /></label></div><label class="check-inline"><input type="checkbox" name="shared" /> Compartilhar com os outros gerentes e administradores</label></fieldset>
+				<fieldset><legend>2. Fonte e formato</legend><div class="editor-grid"><label>Fonte dos dados<select name="source">${sources.map((source) => `<option value="${esc(source.key)}">${esc(source.label)}</option>`).join("")}</select></label><div class="builder-mode" role="radiogroup" aria-label="Formato"><label class="check-inline"><input type="radio" name="mode" value="list" checked /> Lista de registros (uma linha por item)</label><label class="check-inline"><input type="radio" name="mode" value="group" /> Totais agrupados (uma linha por grupo)</label></div></div></fieldset>
+				<fieldset data-mode-list><legend>3. Colunas</legend><p class="muted">Marque o que deve aparecer, na ordem em que aparece na lista.</p><div class="builder-checks" id="builder-columns"></div></fieldset>
+				<fieldset data-mode-group hidden><legend>3. Agrupamento e métricas</legend><div class="editor-grid"><label>Agrupar por<select name="groupBy" id="builder-group"></select></label></div><div class="builder-checks" id="builder-metrics"></div></fieldset>
+				<fieldset><legend>4. Filtros</legend><div class="editor-grid"><label><span id="builder-date-label">Período</span> — de<input name="from" type="date" value="${defaultFrom}" /></label><label>até<input name="to" type="date" /></label><label>Tipo<select name="type"><option value="">Todos</option>${meta.caseTypes.map((type) => `<option>${esc(type)}</option>`).join("")}</select></label><label>Status<select name="status"><option value="">Todos</option>${meta.statuses.map((status) => `<option value="${esc(status.code)}">${esc(status.label)}</option>`).join("")}</select></label><label>Responsável contém<input name="responsible" maxlength="120" /></label><label>Cliente contém<input name="client" maxlength="120" /></label><label>Código do produto contém<input name="productCode" maxlength="120" /></label></div><label class="check-inline"><input type="checkbox" name="overdue" /> Somente processos atrasados</label> <label class="check-inline"><input type="checkbox" name="archived" /> Somente arquivados</label></fieldset>
+				<fieldset><legend>5. Ordenação</legend><div class="editor-grid"><label>Ordenar por<select name="sortKey" id="builder-sort"></select></label><label>Direção<select name="direction"><option value="desc">Maior / mais recente primeiro</option><option value="asc">Menor / mais antigo primeiro</option></select></label></div></fieldset>
+				<p id="builder-feedback" class="feedback" role="alert"></p>
+				<div class="form-actions builder-actions">
+					<button class="button button-secondary" type="button" id="builder-preview-button">Pré-visualizar</button>
+					<button class="button button-secondary" type="button" id="builder-save-new">Salvar como novo</button>
+					<button class="button button-primary" type="submit" id="builder-save">Salvar modelo</button>
+				</div>
+				${exportable ? `<div class="builder-download"><span class="muted">Baixar agora (até 5.000 linhas):</span><button class="chip" type="button" data-builder-export="xlsx">${PP.icon("download")}Excel</button><button class="chip" type="button" data-builder-export="csv">CSV</button><button class="chip" type="button" data-builder-export="pdf">PDF</button><button class="chip" type="button" id="builder-export-json">Exportar modelo (.json)</button></div>` : ""}
+			</form>
+		</div>
+		<section class="panel" id="builder-preview" hidden></section>`);
+
+		const form = document.querySelector("#builder-form");
+		const feedback = document.querySelector("#builder-feedback");
+		const mode = () => form.querySelector("[name=mode]:checked").value;
+		const source = () => sourceByKey[form.source.value];
+		const checkbox = (name, item, checked) =>
+			`<label class="check-inline"><input type="checkbox" name="${name}" value="${esc(item.key)}" ${checked ? "checked" : ""} /> ${esc(item.header)}</label>`;
+
+		function renderSortOptions(selected) {
+			const current = selected ?? form.sortKey.value;
+			const options =
+				mode() === "group"
+					? [
+							{ key: "group", header: form.groupBy.selectedOptions[0]?.textContent || "Grupo" },
+							...source().metrics.filter((metric) => form.querySelector(`[name=metric][value="${metric.key}"]`)?.checked)
+						]
+					: source().columns.filter((column) => form.querySelector(`[name=column][value="${column.key}"]`)?.checked);
+			form.sortKey.innerHTML = `<option value="">Padrão</option>${options.map((option) => `<option value="${esc(option.key)}">${esc(option.header)}</option>`).join("")}`;
+			if (options.some((option) => option.key === current)) form.sortKey.value = current;
+		}
+		function renderSource(definition = null) {
+			const current = source();
+			document.querySelector("#builder-date-label").textContent = current.dateLabel;
+			const columns = definition?.columns || current.columns.slice(0, 6).map((column) => column.key);
+			document.querySelector("#builder-columns").innerHTML = current.columns.map((column) => checkbox("column", column, columns.includes(column.key))).join("");
+			form.groupBy.innerHTML = current.groups.map((group) => `<option value="${esc(group.key)}">${esc(group.header)}</option>`).join("");
+			if (definition?.groupBy) form.groupBy.value = definition.groupBy;
+			const metrics = definition?.metrics?.length ? definition.metrics : [current.metrics[0].key];
+			document.querySelector("#builder-metrics").innerHTML = current.metrics.map((metric) => checkbox("metric", metric, metrics.includes(metric.key))).join("");
+			// Filtros de processo valem para as duas fontes; "somente arquivados" so faz sentido para processos e eventos de processos arquivados.
+			renderSortOptions(definition?.sort?.key || "");
+		}
+		function syncMode() {
+			form.querySelector("[data-mode-list]").hidden = mode() !== "list";
+			form.querySelector("[data-mode-group]").hidden = mode() !== "group";
+			renderSortOptions();
+		}
+		function readDefinition() {
+			const filters = {};
+			["from", "to", "type", "status", "responsible", "client", "productCode"].forEach((name) => {
+				if (form[name].value.trim()) filters[name] = form[name].value.trim();
+			});
+			if (form.overdue.checked) filters.overdue = "true";
+			if (form.archived.checked) filters.archived = "true";
+			const grouped = mode() === "group";
+			return {
+				source: form.source.value,
+				columns: grouped ? [] : [...form.querySelectorAll("[name=column]:checked")].map((input) => input.value),
+				groupBy: grouped ? form.groupBy.value : null,
+				metrics: grouped ? [...form.querySelectorAll("[name=metric]:checked")].map((input) => input.value) : [],
+				filters,
+				sort: { key: form.sortKey.value || undefined, direction: form.direction.value }
+			};
+		}
+		function validate(definition) {
+			if (definition.groupBy && !definition.metrics.length) return "Marque ao menos uma métrica.";
+			if (!definition.groupBy && !definition.columns.length) return "Marque ao menos uma coluna.";
+			if (definition.filters.from && definition.filters.to && definition.filters.from > definition.filters.to) return "A data inicial é depois da final.";
+			return "";
+		}
+		function loadDefinition({ name = "", description = "", shared = false, definition }, template = null) {
+			editing = template && template.mine ? template : null;
+			document.querySelector("#builder-title").textContent = editing
+				? `Editando: ${editing.name}`
+				: template
+					? `${template.name} (de ${template.ownerName})`
+					: name || "Novo relatório";
+			form.name.value = name;
+			form.description.value = description || "";
+			form.shared.checked = Boolean(shared);
+			form.source.value = sourceByKey[definition?.source] ? definition.source : sources[0].key;
+			form.querySelector(`[name=mode][value=${definition?.groupBy ? "group" : "list"}]`).checked = true;
+			const filters = definition?.filters || {};
+			["from", "to", "type", "status", "responsible", "client", "productCode"].forEach((field) => {
+				form[field].value = filters[field] || "";
+			});
+			if (!definition && !filters.from) form.from.value = defaultFrom;
+			form.overdue.checked = filters.overdue === "true";
+			form.archived.checked = filters.archived === "true";
+			form.direction.value = definition?.sort?.direction || "desc";
+			renderSource(definition);
+			syncMode();
+			if (definition?.sort?.key) form.sortKey.value = definition.sort.key;
+			feedback.textContent = "";
+			document.querySelector("#builder-preview").hidden = true;
+		}
+
+		async function renderTemplates() {
+			const host = document.querySelector("#builder-templates");
+			try {
+				templates = (await api.get("/api/reports/templates")).templates;
+			} catch (error) {
+				host.innerHTML = `<p class="feedback">${esc(error.message)}</p>`;
+				return;
+			}
+			host.innerHTML =
+				templates
+					.map(
+						(template) =>
+							`<div class="builder-template${editing?.id === template.id ? " active" : ""}"><button type="button" class="builder-template-open" data-open-template="${esc(template.id)}"><strong>${esc(template.name)}</strong><small>${esc(template.description || sourceByKey[template.definition.source]?.label || "")}${template.mine ? "" : ` · de ${esc(template.ownerName)}`}${template.shared ? " · compartilhado" : ""}</small></button><div class="actions-cell">${exportable ? `<button class="chip" type="button" data-template-export="${esc(template.id)}" title="Baixar em Excel">${PP.icon("download")}XLSX</button>` : ""}${template.mine ? `<button class="chip" type="button" data-template-delete="${esc(template.id)}">Excluir</button>` : ""}</div></div>`
+					)
+					.join("") || PP.emptyState("Nenhum modelo salvo", "Monte um relatório ao lado e clique em Salvar modelo.");
+		}
+
+		async function preview() {
+			const definition = readDefinition();
+			const problem = validate(definition);
+			feedback.textContent = problem;
+			if (problem) return;
+			const host = document.querySelector("#builder-preview");
+			host.hidden = false;
+			host.innerHTML = PP.skeleton(4);
+			try {
+				const result = await api.post("/api/reports/custom/preview", { definition });
+				const formatCell = (value, column) =>
+					column.kind === "money" && value !== ""
+						? PP.formatMoney?.(value) || Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+						: value;
+				datasets.clear();
+				const title = form.name.value.trim() || "Relatório personalizado";
+				host.innerHTML = section(
+					"Pré-visualização",
+					title,
+					`<p class="muted">${result.rows.length} linha(s)${result.truncated ? " — mostrando as 200 primeiras; o arquivo baixado traz até 5.000" : ""}.</p>${table(
+						result.columns.map((column) => column.header),
+						result.rows.map((row) => `<tr>${result.columns.map((column) => `<td>${esc(formatCell(row[column.key], column))}</td>`).join("")}</tr>`),
+						"Nenhum registro com esses filtros."
+					)}`,
+					dataTools(title, result.columns, result.rows)
+				);
+				host.scrollIntoView({ behavior: "smooth", block: "start" });
+			} catch (error) {
+				host.innerHTML = `<p class="feedback">${esc(error.message)}</p>`;
+			}
+		}
+
+		async function save(asNew) {
+			const definition = readDefinition();
+			const problem = !form.name.value.trim() ? "Dê um nome ao relatório para salvar." : validate(definition);
+			feedback.textContent = problem;
+			if (problem) {
+				if (!form.name.value.trim()) form.name.focus();
+				return;
+			}
+			const body = { name: form.name.value.trim(), description: form.description.value.trim(), shared: form.shared.checked, definition };
+			try {
+				const { template } = editing && !asNew ? await api.put(`/api/reports/templates/${editing.id}`, body) : await api.post("/api/reports/templates", body);
+				editing = template;
+				document.querySelector("#builder-title").textContent = `Editando: ${template.name}`;
+				PP.toast("Modelo salvo.", "success");
+				await renderTemplates();
+			} catch (error) {
+				feedback.textContent = error.message;
+			}
+		}
+
+		const download = async (definition, format, title) => {
+			try {
+				await PP.downloadPost("/api/reports/custom/export", { definition, format, title }, `${fileSlug(title)}.${format}`);
+			} catch (error) {
+				PP.toast(error.message, "error");
+			}
+		};
+
+		form.source.addEventListener("change", () => renderSource());
+		form.querySelectorAll("[name=mode]").forEach((input) => input.addEventListener("change", syncMode));
+		form.groupBy.addEventListener("change", () => renderSortOptions());
+		form.addEventListener("change", (event) => {
+			if (event.target.matches("[name=column], [name=metric]")) renderSortOptions();
+		});
+		form.addEventListener("submit", (event) => {
+			event.preventDefault();
+			save(false);
+		});
+		document.querySelector("#builder-save-new").addEventListener("click", () => save(true));
+		document.querySelector("#builder-preview-button").addEventListener("click", preview);
+		document.querySelector("#builder-new").addEventListener("click", () => loadDefinition({ definition: null }));
+		form.querySelectorAll("[data-builder-export]").forEach((button) =>
+			button.addEventListener("click", () => {
+				const definition = readDefinition();
+				const problem = validate(definition);
+				feedback.textContent = problem;
+				if (!problem) download(definition, button.dataset.builderExport, form.name.value.trim() || "Relatorio personalizado");
+			})
+		);
+		document.querySelector("#builder-export-json")?.addEventListener("click", () => {
+			const payload = {
+				kind: "plano-pneumatic-report",
+				version: 1,
+				name: form.name.value.trim() || "Relatório personalizado",
+				description: form.description.value.trim(),
+				definition: readDefinition()
+			};
+			const link = Object.assign(document.createElement("a"), {
+				href: URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })),
+				download: `${fileSlug(payload.name)}.json`
+			});
+			link.click();
+			setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+		});
+		document.querySelector("#builder-import").addEventListener("click", () => {
+			const input = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
+			input.addEventListener("change", async () => {
+				const file = input.files[0];
+				if (!file) return;
+				try {
+					if (file.size > 100000) throw new Error("Arquivo grande demais para um modelo.");
+					const payload = JSON.parse(await file.text());
+					if (payload?.kind !== "plano-pneumatic-report" || !payload.definition?.source)
+						throw new Error("Este arquivo não é um modelo de relatório do Plano Pneumatic.");
+					loadDefinition({
+						name: String(payload.name || "").slice(0, 80),
+						description: String(payload.description || "").slice(0, 240),
+						definition: payload.definition
+					});
+					PP.toast("Modelo importado. Confira e clique em Salvar modelo para guardar.", "success");
+				} catch (error) {
+					PP.toast(error instanceof SyntaxError ? "Arquivo .json inválido." : error.message, "error");
+				}
+			});
+			input.click();
+		});
+		document.querySelector(".builder-side").addEventListener("click", async (event) => {
+			const presetButton = event.target.closest("[data-preset]");
+			if (presetButton) {
+				const preset = BUILDER_PRESETS[Number(presetButton.dataset.preset)];
+				loadDefinition({ name: preset.name, description: preset.description, definition: preset.definition });
+				form.scrollIntoView({ behavior: "smooth", block: "start" });
+				return;
+			}
+			const openButton = event.target.closest("[data-open-template]");
+			if (openButton) {
+				const template = templates.find((item) => item.id === Number(openButton.dataset.openTemplate));
+				if (template) loadDefinition(template, template);
+				await renderTemplates();
+				return;
+			}
+			const exportButton = event.target.closest("[data-template-export]");
+			if (exportButton) {
+				const template = templates.find((item) => item.id === Number(exportButton.dataset.templateExport));
+				if (template) download(template.definition, "xlsx", template.name);
+				return;
+			}
+			const deleteButton = event.target.closest("[data-template-delete]");
+			if (deleteButton) {
+				if (!(await PP.confirmAction("Excluir modelo", "O modelo deixa de aparecer para você e para quem o via compartilhado. Continuar?", "Excluir", true)))
+					return;
+				try {
+					await api.delete(`/api/reports/templates/${deleteButton.dataset.templateDelete}`);
+					if (editing?.id === Number(deleteButton.dataset.templateDelete)) loadDefinition({ definition: null });
+					await renderTemplates();
+				} catch (error) {
+					PP.toast(error.message, "error");
+				}
+			}
+		});
+
+		loadDefinition({ definition: null });
+		await renderTemplates();
 	}
 
 	// ------------------------------------------------------------- Configuracoes
@@ -1264,8 +1889,56 @@ document.head.appendChild(sharedShellScript);
 		await load();
 	}
 
+	// ------------------------------------------------------------- Guia do app
+	async function guidePage() {
+		const sections = (window.PPGuide || []).filter((item) => !item.capability || PP.can(item.capability));
+		const list = (items, ordered) =>
+			items?.length ? `<${ordered ? "ol" : "ul"} class="guide-list">${items.map((item) => `<li>${esc(item)}</li>`).join("")}</${ordered ? "ol" : "ul"}>` : "";
+		set(`<div class="guide-layout">
+			<nav class="panel guide-toc" aria-label="Índice do guia"><label class="guide-search">Procurar no guia<input type="search" id="guide-filter" placeholder="Ex.: anexar, meta, exportar" autocomplete="off" /></label><ol>${sections.map((item) => `<li><a href="#${esc(item.id)}" data-guide-link="${esc(item.id)}"><span aria-hidden="true">${PP.icon(item.icon)}</span>${esc(item.title)}</a></li>`).join("")}</ol></nav>
+			<div class="guide-sections">${sections
+				.map(
+					(item) =>
+						`<section class="panel guide-section" id="${esc(item.id)}" tabindex="-1"><div class="panel-heading"><div><p class="eyebrow">${item.paths?.[0] ? `<a class="table-link" href="${esc(item.paths[0])}">Abrir a tela →</a>` : "Guia"}</p><h2><span class="guide-icon" aria-hidden="true">${PP.icon(item.icon)}</span>${esc(item.title)}</h2></div></div><p>${esc(item.summary)}</p>${item.steps?.length ? `<h3>Como usar</h3>${list(item.steps, true)}` : ""}${item.tips?.length ? `<h3>Dicas</h3>${list(item.tips)}` : ""}${
+							item.table
+								? table(
+										["Perfil", "O que faz"],
+										item.table.map(([role, text]) => `<tr><td><strong>${esc(role)}</strong></td><td>${esc(text)}</td></tr>`)
+									)
+								: ""
+						}</section>`
+				)
+				.join("")}<p id="guide-empty" class="muted" hidden>Nada encontrado. Tente outra palavra.</p></div>
+		</div>`);
+		const filter = document.querySelector("#guide-filter");
+		const normalize = (text) => String(text).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+		filter.addEventListener("input", () => {
+			const term = normalize(filter.value.trim());
+			let visible = 0;
+			document.querySelectorAll(".guide-section").forEach((element) => {
+				const show = !term || normalize(element.textContent).includes(term);
+				element.hidden = !show;
+				document.querySelector(`[data-guide-link="${element.id}"]`).parentElement.hidden = !show;
+				visible += show ? 1 : 0;
+			});
+			document.querySelector("#guide-empty").hidden = visible > 0;
+		});
+		const focusHash = () => {
+			const target = window.location.hash && document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+			document.querySelectorAll("[data-guide-link]").forEach((link) => link.classList.toggle("active", `#${link.dataset.guideLink}` === window.location.hash));
+			if (target) {
+				target.scrollIntoView({ block: "start" });
+				target.focus({ preventScroll: true });
+			}
+		};
+		window.addEventListener("hashchange", focusHash);
+		focusHash();
+	}
+
 	const pages = {
 		omie: omiePage,
+		guide: guidePage,
+		"reports-builder": reportsBuilder,
 		reports,
 		"reports-team": teamPerformance,
 		"reports-managers": managerPerformance,
@@ -1285,7 +1958,14 @@ document.head.appendChild(sharedShellScript);
 		PP.bindLogout();
 		const managersTab = document.querySelector('[data-tab="managers"]');
 		if (managersTab && !PP.can("reports.managers.view")) managersTab.remove();
+		const builderTab = document.querySelector('[data-tab="builder"]');
+		if (builderTab && !PP.can("reports.builder")) builderTab.remove();
+		bindDataTools();
 		window.PPShellTools?.mount();
+		if (pageType === "reports-builder" && !PP.can("reports.builder")) {
+			set(section("Acesso", "Construtor de relatórios", '<p class="feedback">Disponível apenas para gerentes e administradores.</p>'));
+			return;
+		}
 		loading();
 		await pages[pageType]();
 	} catch (error) {

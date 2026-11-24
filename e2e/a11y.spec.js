@@ -9,6 +9,8 @@ const PAGES = [
 	["/garantia.html", null],
 	["/historico.html", null],
 	["/relatorios.html", null],
+	["/relatorios-personalizados.html", null],
+	["/guia.html", null],
 	["/cadastro-base.html", null],
 	["/importar.html", null],
 	["/omie.html", null],

@@ -158,6 +158,34 @@
 		button.title = label;
 	}
 
+	// Guia do app: abre na secao da tela atual (mapa tela -> secao do guia).
+	const GUIDE_SECTIONS = {
+		"/": "dashboard",
+		"/triagem.html": "triagem",
+		"/pedido-venda.html": "pedido",
+		"/base-troca.html": "troca",
+		"/garantia.html": "garantia",
+		"/caso.html": "processo",
+		"/historico.html": "historico",
+		"/relatorios.html": "relatorios",
+		"/relatorios-time.html": "relatorios",
+		"/relatorios-gerentes.html": "relatorios",
+		"/relatorios-personalizados.html": "construtor",
+		"/cadastro-base.html": "cadastro-base",
+		"/importar.html": "importar",
+		"/omie.html": "omie",
+		"/notificacoes.html": "notificacoes",
+		"/cadastros.html": "usuarios",
+		"/auditoria.html": "auditoria",
+		"/integracoes.html": "integracoes",
+		"/configuracoes.html": "configuracoes",
+		"/conta.html": "conta"
+	};
+	const guideHref = () => {
+		const section = GUIDE_SECTIONS[window.location.pathname.replace(/\/$/, "") || "/"];
+		return section ? `/guia.html#${section}` : "/guia.html";
+	};
+
 	function mount() {
 		const topbar = document.querySelector(".dashboard-content .topbar");
 		if (!topbar || topbar.querySelector(".shell-tools") || !window.PP?.getSession()?.user) return;
@@ -173,7 +201,7 @@
 		}
 		const tools = document.createElement("div");
 		tools.className = "shell-tools";
-		tools.innerHTML = `<button type="button" class="tool-button search-trigger" data-open-search aria-keyshortcuts="Control+K" title="Buscar processo (Ctrl+K)">${icon("search")}<span class="label">Buscar processo…</span><kbd>Ctrl K</kbd></button><button type="button" class="tool-button icon-only" data-theme-toggle></button><button type="button" class="tool-button icon-only" data-bell aria-label="Notificações" aria-haspopup="dialog" aria-expanded="false">${icon("bell")}<span class="bell-badge hidden"></span></button>`;
+		tools.innerHTML = `<button type="button" class="tool-button search-trigger" data-open-search aria-keyshortcuts="Control+K" title="Buscar processo (Ctrl+K)">${icon("search")}<span class="label">Buscar processo…</span><kbd>Ctrl K</kbd></button><a class="tool-button icon-only" href="${guideHref()}" data-guide data-track="guia" aria-label="Guia do app: como usar esta tela" title="Guia do app (F1)">${icon("guide")}</a><button type="button" class="tool-button icon-only" data-theme-toggle></button><button type="button" class="tool-button icon-only" data-bell aria-label="Notificações" aria-haspopup="dialog" aria-expanded="false">${icon("bell")}<span class="bell-badge hidden"></span></button>`;
 		topbar.appendChild(tools);
 		tools.querySelector("[data-open-search]").addEventListener("click", openPalette);
 		const themeButton = tools.querySelector("[data-theme-toggle]");
@@ -198,6 +226,9 @@
 		} else if (event.key === "/" && !typing && window.PP?.getSession()?.user) {
 			event.preventDefault();
 			openPalette();
+		} else if (event.key === "F1" && window.PP?.getSession()?.user) {
+			event.preventDefault();
+			window.location.href = guideHref();
 		} else if (event.key === "Escape" && panel) {
 			panel.remove();
 			panel = null;
