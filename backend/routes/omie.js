@@ -66,6 +66,10 @@ router.post(
 	requireCapability(capabilities.IMPORT_CASES),
 	wrap(async (request, response) => {
 		const { kind } = z.object({ kind: z.enum(["orders", "invoices"]) }).parse(request.body || {});
+		// Repetir a mesma busca em menos de 60 s faz o Omie bloquear: dentro desse intervalo ja esta atualizado.
+		const last = await omie.lastSuccess(kind);
+		if (last && Date.now() - new Date(last).getTime() < 60000)
+			return response.json({ recent: true, message: "Já atualizado há instantes.", result: { created: 0, updated: 0 } });
 		try {
 			return response.json({ result: await omie.runSync(kind, { trigger: "manual", userId: request.user.id }) });
 		} catch (error) {

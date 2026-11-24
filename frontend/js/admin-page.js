@@ -1952,6 +1952,7 @@ document.head.appendChild(sharedShellScript);
 			try {
 				const answer = await api.post("/api/omie/mirror/refresh", { kind: state.kind });
 				if (answer.running) PP.toast(answer.message, "info");
+				else if (answer.recent) PP.toast(answer.message, "info");
 				else PP.toast(`Atualizado: ${answer.result.created} novo(s), ${answer.result.updated} alterado(s).`, "success");
 				await load(true);
 			} catch (error) {
@@ -1999,9 +2000,11 @@ document.head.appendChild(sharedShellScript);
 			);
 			const pager = document.querySelector("#omie-pager");
 			pager.innerHTML =
-				(data.source === "live"
-					? '<span class="muted">Primeira carga do Omie em andamento: mostrando os mais recentes direto do Omie. Em alguns minutos a lista completa fica disponível aqui.</span>'
-					: "") +
+				({
+					live: '<span class="muted">Primeira carga do Omie em andamento: mostrando os mais recentes direto do Omie. Em alguns minutos a lista completa fica disponível aqui.</span>',
+					loading: '<span class="muted">Primeira carga do Omie em andamento: mostrando o que já chegou (os mais recentes vêm primeiro). A lista se completa sozinha.</span>',
+					waiting: `<span class="muted">O Omie pediu um pequeno intervalo entre consultas. A lista aparece sozinha em ${esc(data.retryAfter)} s.</span>`
+				}[data.source] || "") +
 				(data.totalPages > 1
 					? `<span class="muted">Página ${data.page} de ${data.totalPages} · ${data.total} registro(s)</span><button class="button button-secondary compact-button" type="button" data-page="${data.page - 1}" ${data.page <= 1 ? "disabled" : ""}>Mais recentes</button><button class="button button-secondary compact-button" type="button" data-page="${data.page + 1}" ${data.page >= data.totalPages ? "disabled" : ""}>Mais antigos</button>`
 					: `<span class="muted">${data.total} registro(s)</span>`);
@@ -2020,7 +2023,19 @@ document.head.appendChild(sharedShellScript);
 			if (state.page) params.set("page", state.page);
 			if (state.kind === "invoices") params.set("type", form.type.value);
 			try {
-				render(await api.get(`/api/omie/${state.kind}?${params}`));
+				const data = await api.get(`/api/omie/${state.kind}?${params}`);
+				render(data);
+				// Enquanto a carga inicial roda (ou o Omie pede intervalo), a tela se recarrega sozinha.
+				clearTimeout(state.retryTimer);
+				if (["live", "loading", "waiting"].includes(data.source)) {
+					const kind = state.kind;
+					state.retryTimer = setTimeout(
+						() => {
+							if (state.kind === kind && !state.selected.size && document.querySelector("#omie-list")) load(true);
+						},
+						(data.source === "waiting" ? data.retryAfter : 20) * 1000
+					);
+				}
 			} catch (error) {
 				list.innerHTML = PP.errorState(error.message);
 				list.querySelector("[data-retry]")?.addEventListener("click", load);

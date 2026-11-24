@@ -27,7 +27,7 @@ const ncmField = z.preprocess(
 	(value) => (value === "" || value === null || value === undefined ? undefined : omieProducts.normalizeNcm(value) || "invalido"),
 	z
 		.string()
-		.regex(/^d{4}.d{2}.d{2}$/, "NCM invalido: informe 8 digitos (0000.00.00).")
+		.regex(/^[0-9]{4}[.][0-9]{2}[.][0-9]{2}$/, "NCM invalido: informe 8 digitos (0000.00.00).")
 		.optional()
 );
 const productSchema = z.object({
@@ -127,12 +127,12 @@ router.get(
 		const clauses = [includeInactive === "true" ? "TRUE" : "active = TRUE"];
 		if (q) {
 			values.push(likeTerm(q));
-			clauses.push(`(code ILIKE ${values.length} OR description ILIKE ${values.length})`);
+			clauses.push(`(code ILIKE $${values.length} OR description ILIKE $${values.length})`);
 		}
 		if (omieFilter === "none") clauses.push("omie_status IS NULL");
 		else if (omieFilter) {
 			values.push(omieFilter);
-			clauses.push(`omie_status = ${values.length}`);
+			clauses.push(`omie_status = $${values.length}`);
 		}
 		const { rows } = await database.query(
 			`SELECT ${PRODUCT_FIELDS} FROM products WHERE ${clauses.join(" AND ")} ORDER BY code LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
@@ -171,7 +171,7 @@ router.patch(
 		if (!entries.length) return response.json({ product: null });
 		try {
 			const { rows } = await database.query(
-				`UPDATE products SET ${entries.map(([key], index) => `${PRODUCT_COLUMNS[key]} = ${index + 1}`).join(", ")}, updated_at = NOW() WHERE id = ${entries.length + 1} RETURNING ${PRODUCT_FIELDS}`,
+				`UPDATE products SET ${entries.map(([key], index) => `${PRODUCT_COLUMNS[key]} = $${index + 1}`).join(", ")}, updated_at = NOW() WHERE id = $${entries.length + 1} RETURNING ${PRODUCT_FIELDS}`,
 				[...entries.map(([, value]) => value), Number(request.params.id)]
 			);
 			if (!rows[0]) throw notFound("Produto nao encontrado.");

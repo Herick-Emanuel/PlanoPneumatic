@@ -57,6 +57,8 @@ test("espelho: primeira carga completa, depois so o que mudou (por data de alter
 	assert.equal(calls[0].param.filtrar_por_data_de, undefined, "primeira carga sem filtro de data");
 
 	invoiced = "S";
+	// Passou mais de 60 s desde a ultima busca (antes disso o app nao repete a consulta).
+	await h.database.query("UPDATE omie_sync_runs SET started_at = started_at - INTERVAL '2 minutes'");
 	calls.length = 0;
 	const second = await h.api("POST", "/api/omie/mirror/refresh", { token: manager.token, body: { kind: "orders" } });
 	assert.equal(second.status, 200);
@@ -222,4 +224,73 @@ test("sem Omie configurado a peca nova funciona como antes", async () => {
 	assert.equal(created.body.product.omieStatus, null);
 	const list = await h.api("GET", "/api/products", { token: operator.token });
 	assert.equal(list.body.omieConfigured, false);
+});
+
+test("tela nunca mostra erro de espera: Omie pedindo intervalo vira aviso; consulta repetida usa copia", async () => {
+	const omieImport = require("../services/omieImport");
+	const manager = await h.createUser("manager");
+	handlers.ListarNF = () => fault("ERROR: Consumo redundante detectado. Aguarde 36 segundos para executar a mesma consulta.");
+	const waiting = await h.api("GET", "/api/omie/invoices?from=2026-11-01", { token: manager.token });
+	assert.equal(waiting.status, 200);
+	assert.equal(waiting.body.source, "waiting");
+	assert.equal(waiting.body.retryAfter, 38);
+	assert.deepEqual(waiting.body.invoices, []);
+	await omieImport.idle();
+
+	// Espelho com parte da carga: le o que ja chegou, sem chamar o Omie.
+	await h.database.query("TRUNCATE omie_sync_runs, omie_orders RESTART IDENTITY");
+	handlers.ListarPedidos = () => fault("Ja existe uma requisicao desse metodo sendo executada");
+	await h.database.query(
+		`INSERT INTO omie_orders (omie_code, number, order_date, data) VALUES (9, '1009', '2026-11-20', '{"ref":"9","number":"1009","items":[],"customerCode":null}')`
+	);
+	await h.database.query("INSERT INTO omie_sync_runs (kind, trigger, status) VALUES ('orders', 'first-load', 'running')");
+	calls.length = 0;
+	const partial = await h.api("GET", "/api/omie/orders", { token: manager.token });
+	assert.equal(partial.body.source, "loading");
+	assert.deepEqual(
+		partial.body.orders.map((row) => row.number),
+		["1009"]
+	);
+	assert.equal(calls.length, 0);
+
+	// "Atualizar agora" logo depois de uma busca nao repete a consulta (o Omie bloquearia).
+	await h.database.query("UPDATE omie_sync_runs SET status = 'success'");
+	const recent = await h.api("POST", "/api/omie/mirror/refresh", { token: manager.token, body: { kind: "orders" } });
+	assert.equal(recent.body.recent, true);
+	assert.equal(calls.length, 0);
+});
+
+test("NCM: edicao normaliza o formato; sincronizacao traz unidade e NCM do Omie; nota com zeros a esquerda", async () => {
+	const manager = await h.createUser("manager");
+	const created = await h.api("POST", "/api/products", { token: manager.token, body: { code: "N-1", description: "Peca", unit: "UN" } });
+	const ok = await h.api("PATCH", `/api/products/${created.body.product.id}`, { token: manager.token, body: { ncm: "84812090" } });
+	assert.equal(ok.status, 200);
+	assert.equal(ok.body.product.ncm, "8481.20.90");
+	assert.equal((await h.api("PATCH", `/api/products/${created.body.product.id}`, { token: manager.token, body: { ncm: "12" } })).status, 400);
+
+	handlers.ListarProdutos = () =>
+		jsonResponse({
+			total_de_paginas: 1,
+			produto_servico_cadastro: [{ codigo_produto: 31, codigo: "OM-1", descricao: "Do Omie", unidade: "pc", ncm: "8414.80.19" }]
+		});
+	await h.api("POST", "/api/omie/sync", { token: manager.token, body: { kind: "products" } });
+	const { rows } = await h.database.query("SELECT unit, ncm FROM products WHERE code = 'OM-1'");
+	assert.deepEqual(rows[0], { unit: "PC", ncm: "8414.80.19" });
+
+	handlers.ListarNF = (param) =>
+		jsonResponse({
+			nfCadastro:
+				param.nNFInicial === 456
+					? [
+							{
+								ide: { nNF: "000456", serie: "1", dEmi: "12/11/2026", tpNF: "1" },
+								nfDestInt: { cRazao: "Oficina" },
+								det: [{ prod: { cProd: "X", xProd: "Y", qCom: 1 } }]
+							}
+						]
+					: []
+		});
+	await h.database.query("INSERT INTO omie_sync_runs (kind, trigger, status) VALUES ('invoices', 'manual', 'success')");
+	const imported = await h.api("POST", "/api/omie/import", { token: manager.token, body: { kind: "invoices", type: "Garantia", refs: ["000456"] } });
+	assert.equal(imported.body.created, 1, JSON.stringify(imported.body));
 });

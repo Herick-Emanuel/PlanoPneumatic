@@ -30,39 +30,71 @@ async function fetchPage(endpoint, method, base, listKey, page) {
 
 const { mapOrder, mapInvoice, attachCustomers, attachExisting } = mirror;
 
-// Primeira carga completa ainda nao terminou: consulta ao vivo e dispara a carga em segundo plano
-// (se ja estiver rodando, a nova tentativa so e ignorada).
-async function mirrorEmpty(kind) {
-	if (await omie.lastSuccess(kind)) return false;
-	firstLoad = Promise.all([firstLoad, omie.runSync(kind, { trigger: "first-load" }).catch(() => {})]);
-	return true;
-}
+// De onde a tela le, sem nunca esperar pelo Omie:
+//  - "mirror": carga completa feita -> so banco;
+//  - "loading": carga inicial em andamento -> o que ja chegou (a carga traz os mais recentes primeiro);
+//  - "live": espelho ainda vazio -> pagina mais recente direto do Omie (com cache), ou "waiting" se o Omie pedir intervalo.
 let firstLoad = Promise.resolve();
 // Promessa da carga inicial em segundo plano (os testes esperam por ela).
 const idle = () => firstLoad;
+async function readSource(kind) {
+	if (await omie.lastSuccess(kind)) return "mirror";
+	firstLoad = Promise.all([firstLoad, omie.runSync(kind, { trigger: "first-load" }).catch(() => {})]);
+	const { rows } = await database.query(`SELECT EXISTS (SELECT 1 FROM ${kind === "orders" ? "omie_orders" : "omie_invoices"}) AS has`);
+	return rows[0].has ? "loading" : "live";
+}
+
+// O Omie bloqueia a mesma consulta repetida em menos de 60 s ("consumo redundante"): a resposta ao vivo
+// fica guardada por 90 s, e quem abrir/recarregar a tela nesse intervalo recebe a copia.
+const LIVE_TTL = 90000;
+const liveCache = new Map();
+async function cachedLive(key, loader) {
+	const hit = liveCache.get(key);
+	if (hit && Date.now() - hit.at < LIVE_TTL) return hit.value;
+	const value = await loader();
+	liveCache.set(key, { at: Date.now(), value });
+	for (const [entry, item] of liveCache) if (Date.now() - item.at >= LIVE_TTL) liveCache.delete(entry);
+	return value;
+}
+// Omie pediu intervalo (ou esta ocupado): a tela mostra aviso e tenta de novo sozinha, sem erro.
+async function liveOrWait(kind, key, loader) {
+	try {
+		return await cachedLive(key, loader);
+	} catch (error) {
+		if (!["OMIE_RATE_LIMIT", "OMIE_UNREACHABLE"].includes(error.code) && !/requisi[cç][aã]o desse m[eé]todo/i.test(error.message)) throw error;
+		const retryAfter = Number(/(\d+) segundos/.exec(error.message)?.[1]) || 15;
+		return { [kind]: [], page: 1, totalPages: 1, total: 0, source: "waiting", retryAfter: Math.min(60, retryAfter + 2) };
+	}
+}
 
 // Ao vivo mostra so a pagina mais recente (a paginacao completa fica para quando o espelho carregar).
-async function listOrdersLive({ from, to }) {
-	const result = await fetchPage("produtos/pedido", "ListarPedidos", { apenas_importado_api: "N", ...dateFilter(from, to) }, "pedido_venda_produto");
-	const orders = await attachExisting(await attachCustomers(result.list.map(mapOrder)), "orders");
-	return { orders, page: 1, totalPages: 1, total: result.total, source: "live" };
-}
+const listOrdersLive = ({ from, to }) =>
+	liveOrWait("orders", `orders:${from}:${to}`, async () => {
+		const result = await fetchPage("produtos/pedido", "ListarPedidos", { apenas_importado_api: "N", ...dateFilter(from, to) }, "pedido_venda_produto");
+		const orders = await attachCustomers(result.list.map(mapOrder));
+		return { orders, page: 1, totalPages: 1, total: result.total, source: "live" };
+	});
 
-async function listInvoicesLive({ from, to, type }) {
-	const base = { ...dateFilter(from, to), ...(type === "entrada" ? { tpNF: "0" } : type === "saida" ? { tpNF: "1" } : {}) };
-	const result = await fetchPage("produtos/nfconsultar", "ListarNF", base, "nfCadastro");
-	const invoices = await attachExisting(await attachCustomers(result.list.map(mapInvoice)), "invoices");
-	return { invoices, page: 1, totalPages: 1, total: result.total, source: "live" };
-}
+const listInvoicesLive = ({ from, to, type }) =>
+	liveOrWait("invoices", `invoices:${from}:${to}:${type}`, async () => {
+		const base = { ...dateFilter(from, to), ...(type === "entrada" ? { tpNF: "0" } : type === "saida" ? { tpNF: "1" } : {}) };
+		const result = await fetchPage("produtos/nfconsultar", "ListarNF", base, "nfCadastro");
+		const invoices = await attachCustomers(result.list.map(mapInvoice));
+		return { invoices, page: 1, totalPages: 1, total: result.total, source: "live" };
+	});
 
 async function listOrders(query) {
-	if (await mirrorEmpty("orders")) return listOrdersLive(query);
-	return { ...(await mirror.list("orders", query)), source: "mirror" };
+	const source = await readSource("orders");
+	if (source !== "live") return { ...(await mirror.list("orders", query)), source };
+	const result = await listOrdersLive(query);
+	return { ...result, orders: await attachExisting(result.orders, "orders") };
 }
 
 async function listInvoices(query) {
-	if (await mirrorEmpty("invoices")) return listInvoicesLive(query);
-	return { ...(await mirror.list("invoices", query)), source: "mirror" };
+	const source = await readSource("invoices");
+	if (source !== "live") return { ...(await mirror.list("invoices", query)), source };
+	const result = await listInvoicesLive(query);
+	return { ...result, invoices: await attachExisting(result.invoices, "invoices") };
 }
 
 // Do espelho quando ja estiver la; senao consulta o Omie e guarda no espelho.
@@ -79,7 +111,7 @@ async function loadOrder(ref) {
 async function loadInvoice(ref) {
 	const cached = await mirror.findInvoice(ref);
 	if (cached) return cached;
-	const number = Number(String(ref).replace(/D/g, ""));
+	const number = Number(String(ref).replace(/[^0-9]/g, ""));
 	const data = await omie.call("produtos/nfconsultar", "ListarNF", { pagina: 1, registros_por_pagina: 5, nNFInicial: number, nNFFinal: number });
 	const invoice = (data.nfCadastro || []).find((entry) => String(entry.ide?.nNF).replace(/^0+/, "") === String(number));
 	if (!invoice) throw new AppError(404, "Nota fiscal nao encontrada no Omie.", "OMIE_NOT_FOUND");

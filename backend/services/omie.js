@@ -151,7 +151,7 @@ async function upsertProduct(record) {
 	const active = record.inativo !== "S";
 	// Unidade e NCM tambem vem do Omie (o app usa os mesmos ao enviar pecas novas).
 	const unit = clean(record.unidade, 10)?.toUpperCase() || null;
-	const ncmDigits = String(record.ncm || "").replace(/D/g, "");
+	const ncmDigits = String(record.ncm || "").replace(/[^0-9]/g, "");
 	const ncm = ncmDigits.length === 8 ? `${ncmDigits.slice(0, 4)}.${ncmDigits.slice(4, 6)}.${ncmDigits.slice(6)}` : null;
 	const synced = "omie_status = 'synced', omie_error = NULL, unit = COALESCE($5, unit), ncm = COALESCE($6, ncm), omie_synced_at = NOW(), updated_at = NOW()";
 	let result = await database.query(`UPDATE products SET code = $2, description = $3, active = $4, ${synced} WHERE omie_code = $1 RETURNING id`, [
