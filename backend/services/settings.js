@@ -10,7 +10,11 @@ const DEFAULTS = Object.freeze({
 	// administradores e gerentes so entram depois de ativar o MFA (TOTP).
 	mfa_required: false,
 	// registra as telas visitadas para os relatorios de uso (retencao em ACTIVITY_RETENTION_DAYS).
-	activity_tracking: true
+	activity_tracking: true,
+	// Controle de carcacas: prazo padrao de devolucao (dias) e data a partir da qual as NF-e de saida do
+	// Omie geram debito automatico (null = desligado; a migration 016 liga na data da implantacao).
+	carcass_due_days: 30,
+	carcass_omie_start: null
 });
 const SECURITY_SETTINGS = Object.freeze(["manager_team_scope", "mfa_required", "activity_tracking"]);
 

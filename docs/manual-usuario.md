@@ -31,6 +31,13 @@ Resumo, por cliente, por produto (reincidência) e por processo, com os mesmos f
 ## Cadastros (conforme o perfil)
 Clientes e produtos, importação de pedidos por CSV (modelo para baixar), usuários, auditoria, integrações (webhooks) e configurações (alertas, atualização automática, exigir documentação e SLA por tipo).
 
+## Controle de carcaças (aba Base de troca)
+A aba **Base de troca** tem duas partes: **Registrar troca** (o processo de troca que já existia) e **Controle de carcaças**.
+- Quem recebe uma peça remanufaturada fica devendo a carcaça. A saída é registrada à mão ou vem sozinha das NF-e de saída do Omie com peças marcadas como "Remanufaturada" (em Clientes e produtos), a partir da data definida em "Prazo e Omie".
+- Saldo por cliente e por representante (o representante vem do cadastro do cliente e pode ser trocado em um lançamento), com vencidas e próximo vencimento. O prazo padrão é configurável (30 dias por padrão).
+- Devolução aproveitável abate o saldo; refugada fica registrada e não abate. Ajustes pedem motivo; estorno (gerente/administrador) mantém o histórico.
+- Gerentes e administradores recebem um aviso diário quando há carcaças vencidas.
+
 ## Omie (ERP)
 - **Pedidos e notas do Omie:** os dados ficam guardados no app e são atualizados pelo próprio Omie (aviso em tempo real por webhook) e por uma busca automática a cada 10 minutos. A tela abre na hora, se atualiza sozinha a cada 30 segundos e tem o botão "Atualizar agora".
 - **Peça nova vai para o Omie:** ao cadastrar, informe a unidade; a peça fica "Aguardando aprovação". Gerente, supervisor ou administrador aprova (uma ou várias de uma vez), informa o NCM e a peça é criada no Omie com o mesmo código. Se o código já existir lá, os cadastros só são ligados. Erros de dados aparecem na peça para corrigir e reenviar; se o Omie estiver fora do ar, o app tenta de novo sozinho (até 3 vezes).

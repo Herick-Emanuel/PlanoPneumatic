@@ -164,6 +164,7 @@
 		"/triagem.html": "triagem",
 		"/pedido-venda.html": "pedido",
 		"/base-troca.html": "troca",
+		"/carcacas.html": "carcacas",
 		"/garantia.html": "garantia",
 		"/caso.html": "processo",
 		"/historico.html": "historico",

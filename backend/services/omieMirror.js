@@ -5,6 +5,7 @@
 //  - primeira carga completa, na primeira sincronizacao.
 const { database } = require("../db");
 const { isValidDocument, onlyDigits } = require("../validators/document");
+const { logEvent } = require("../middleware/errors");
 
 const PAGE_SIZE = 50;
 
@@ -102,6 +103,10 @@ async function upsertInvoice(raw) {
 		 RETURNING (xmax = 0) AS inserted`,
 		[key, invoice.ref, invoice.number, invoice.series, isoFromOmie(invoice.date), invoice.type, invoice.customerCode, invoice.total, invoice]
 	);
+	// NF de saida com peca remanufaturada gera o debito de carcaca (ou estorna, se a nota foi cancelada).
+	await require("./carcass")
+		.fromInvoice(invoice, key)
+		.catch((error) => logEvent("carcass_from_invoice_error", { key, error: error.message }));
 	return rows[0].inserted ? "created" : "updated";
 }
 

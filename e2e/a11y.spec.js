@@ -7,6 +7,7 @@ const PAGES = [
 	["/", "Dashboard operacional"],
 	["/triagem.html", null],
 	["/garantia.html", null],
+	["/carcacas.html", null],
 	["/historico.html", null],
 	["/relatorios.html", null],
 	["/relatorios-personalizados.html", null],

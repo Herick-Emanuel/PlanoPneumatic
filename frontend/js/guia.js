@@ -89,6 +89,27 @@ window.PPGuide = [
 		]
 	},
 	{
+		id: "carcacas",
+		title: "Controle de carcaças",
+		icon: "exchange",
+		paths: ["/carcacas.html"],
+		summary:
+			"Na aba Base de troca: quem recebe uma peça remanufaturada fica devendo a carcaça (a peça usada). Aqui fica o saldo por cliente e por representante, com prazo de devolução.",
+		steps: [
+			"Saída: “Registrar saída (cliente deve)” — cliente, peça, quantidade e documento. O prazo padrão é preenchido sozinho.",
+			"Notas do Omie: NF de saída com peça marcada como “Remanufaturada” (em Clientes e produtos) já gera a saída automaticamente.",
+			"Devolução: “Registrar devolução de carcaça” (ou o botão na linha do cliente). Aproveitável abate o saldo; refugada fica registrada e o cliente continua devendo.",
+			"Saldo por cliente ou por representante: veja o que está em aberto, o que venceu e o próximo vencimento; “Detalhar por peça” abre por código.",
+			"Lançamentos: o histórico completo. Errou? Gerente ou administrador estorna (o registro fica, mas deixa de contar)."
+		],
+		tips: [
+			"O representante vem do cadastro do cliente; dá para trocar em um lançamento específico.",
+			"Ajuste serve para corrigir o saldo (positivo aumenta, negativo diminui) e sempre pede o motivo.",
+			"Gerentes e administradores recebem um aviso diário quando há carcaças vencidas. O prazo padrão fica em “Prazo e Omie”.",
+			"Todas as tabelas têm Excel, CSV e PDF, e “Abrir planilha” para comparar com um saldo exportado antes."
+		]
+	},
+	{
 		id: "garantia",
 		title: "Garantia",
 		icon: "warranty",

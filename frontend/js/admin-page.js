@@ -1588,6 +1588,14 @@ document.head.appendChild(sharedShellScript);
 			);
 			const rows = isCustomers ? data.customers : data.products;
 			const omieOn = !isCustomers && Boolean(data.omieConfigured);
+			// Representante padrao do cliente (controle de carcacas).
+			const reps = isCustomers ? (await api.get("/api/representatives").catch(() => ({ representatives: [] }))).representatives : [];
+			const repSelect = (selected) =>
+				`<label>Representante<select name="representativeId"><option value="">Sem representante</option>${reps
+					.map((rep) => `<option value="${esc(rep.id)}" ${String(rep.id) === String(selected ?? "") ? "selected" : ""}>${esc(rep.name)}</option>`)
+					.join("")}</select></label>`;
+			const remanufacturedBox = (checked) =>
+				`<label class="check-inline"><input type="checkbox" name="remanufactured" value="true" ${checked ? "checked" : ""} /> Remanufaturada (a venda gera débito de carcaça)</label>`;
 			const selectable = omieOn && canApprove;
 			const omieCell = (row) => {
 				const [tone, label] = OMIE_STATUS[row.omieStatus || "none"] || OMIE_STATUS.none;
@@ -1610,7 +1618,7 @@ document.head.appendChild(sharedShellScript);
 				`<nav class="tabs" role="tablist"><button role="tab" class="${isCustomers ? "active" : ""}" data-tab="customers">Clientes</button><button role="tab" class="${isCustomers ? "" : "active"}" data-tab="products">Produtos</button></nav>${section(
 					isCustomers ? "Clientes" : "Produtos",
 					isCustomers ? "Cadastro de clientes" : "Cadastro de produtos",
-					`<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? '<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>' : `<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>${omieOn ? `<label>Unidade (Omie)<select name="unit" required><option value="">Escolha</option>${unitOptions("")}</select></label><label>Valor de referência (opcional)<input name="referencePrice" inputmode="decimal" placeholder="0,00" /></label>` : ""}`}</div>${omieOn ? '<p class="muted">A peça nova fica <strong>Aguardando aprovação</strong>. Gerente, supervisor ou administrador informa o NCM e envia ao Omie.</p>' : ""}<div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label>${
+					`<form id="registry-form" class="create-user-form" novalidate><div class="editor-grid">${isCustomers ? `<label>Nome ou razão social<input name="name" required maxlength="180" /></label><label>CPF ou CNPJ<input name="document" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label>${repSelect("")}` : `<label>Código<input name="code" required maxlength="80" /></label><label>Descrição<input name="description" required maxlength="180" /></label>${omieOn ? `<label>Unidade (Omie)<select name="unit" required><option value="">Escolha</option>${unitOptions("")}</select></label><label>Valor de referência (opcional)<input name="referencePrice" inputmode="decimal" placeholder="0,00" /></label>` : ""}`}</div>${isCustomers ? "" : remanufacturedBox(false)}${omieOn ? '<p class="muted">A peça nova fica <strong>Aguardando aprovação</strong>. Gerente, supervisor ou administrador informa o NCM e envia ao Omie.</p>' : ""}<div class="form-actions"><p id="registry-feedback" class="feedback" role="alert"></p><button class="button button-primary" type="submit">Cadastrar</button></div></form><div class="inline-form my-12"><label>Buscar<input id="registry-search" type="search" value="${esc(q)}" placeholder="${isCustomers ? "Nome ou documento" : "Código ou descrição"}" /></label>${
 						omieOn
 							? `<label>Situação no Omie<select id="registry-omie-filter"><option value="">Todas</option>${Object.entries(OMIE_STATUS)
 									.map(([key, [, label]]) => `<option value="${key}" ${key === omieFilter ? "selected" : ""}>${label}</option>`)
@@ -1618,11 +1626,11 @@ document.head.appendChild(sharedShellScript);
 							: ""
 					}${selectable ? `<button class="button button-primary compact-button" type="button" id="omie-batch" ${selectedProducts.size ? "" : "disabled"}>Aprovar e enviar selecionadas${selectedProducts.size ? ` (${selectedProducts.size})` : ""}</button>` : ""}</div>${table(
 						isCustomers
-							? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Status", ""]
-							: [...(selectable ? [""] : []), "Código", "Descrição", ...(omieOn ? ["Unidade", "NCM", "Omie"] : []), "Status", ""],
+							? ["Nome", "CPF/CNPJ", "E-mail", "Telefone", "Representante", "Status", ""]
+							: [...(selectable ? [""] : []), "Código", "Descrição", "Carcaça", ...(omieOn ? ["Unidade", "NCM", "Omie"] : []), "Status", ""],
 						rows.map(
 							(row) =>
-								`<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td>` : `${selectable ? `<td>${canSelect(row) ? `<input type="checkbox" data-select-product="${esc(row.id)}" aria-label="Selecionar ${esc(row.code)}" ${selectedProducts.has(row.id) ? "checked" : ""} />` : ""}</td>` : ""}<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td>${omieOn ? `<td>${esc(row.unit || "—")}</td><td>${esc(row.ncm || "—")}</td><td>${omieCell(row)}</td>` : ""}`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td><div class="actions-cell">${isCustomers ? "" : omieActions(row)}${canManage ? `<button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button>` : ""}</div></td></tr>`
+								`<tr>${isCustomers ? `<td><strong>${esc(row.name)}</strong></td><td>${esc(PP.maskDocument(row.document || ""))}</td><td>${esc(row.email || "")}</td><td>${esc(row.phone || "")}</td><td>${esc(row.representativeName || "—")}</td>` : `${selectable ? `<td>${canSelect(row) ? `<input type="checkbox" data-select-product="${esc(row.id)}" aria-label="Selecionar ${esc(row.code)}" ${selectedProducts.has(row.id) ? "checked" : ""} />` : ""}</td>` : ""}<td><strong>${esc(row.code)}</strong></td><td>${esc(row.description)}</td><td>${row.remanufactured ? '<span class="table-status blue">Remanufaturada</span>' : "—"}</td>${omieOn ? `<td>${esc(row.unit || "—")}</td><td>${esc(row.ncm || "—")}</td><td>${omieCell(row)}</td>` : ""}`}<td><span class="table-status ${row.active ? "green" : "red"}">${row.active ? "Ativo" : "Inativo"}</span></td><td><div class="actions-cell">${isCustomers ? "" : omieActions(row)}${canManage ? `<button class="button button-secondary compact-button" type="button" data-edit="${esc(row.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-active="${esc(row.id)}" data-value="${!row.active}">${row.active ? "Inativar" : "Reativar"}</button>` : ""}</div></td></tr>`
 						),
 						"Nada cadastrado ainda."
 					)}`
@@ -1677,13 +1685,14 @@ document.head.appendChild(sharedShellScript);
 					button.addEventListener("click", async () => {
 						const row = rows.find((entry) => String(entry.id) === button.dataset.edit);
 						const body = isCustomers
-							? `<label>Nome<input name="name" value="${esc(row.name)}" required /></label><label>CPF ou CNPJ<input name="document" value="${esc(PP.formatDocument(row.document || ""))}" /></label><label>E-mail<input name="email" value="${esc(row.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(row.phone || "")}" /></label>`
-							: `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>${omieOn ? `<label>Unidade<select name="unit"><option value="">—</option>${unitOptions(row.unit)}</select></label><label>NCM<input name="ncm" data-ncm inputmode="numeric" placeholder="0000.00.00" value="${esc(row.ncm || "")}" /></label><label>Valor de referência<input name="referencePrice" inputmode="decimal" value="${row.referencePrice ? esc(String(row.referencePrice).replace(".", ",")) : ""}" /></label>` : ""}`;
+							? `<label>Nome<input name="name" value="${esc(row.name)}" required /></label><label>CPF ou CNPJ<input name="document" value="${esc(PP.formatDocument(row.document || ""))}" /></label><label>E-mail<input name="email" value="${esc(row.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(row.phone || "")}" /></label>${repSelect(row.representativeId)}`
+							: `<label>Código<input name="code" value="${esc(row.code)}" required /></label><label>Descrição<input name="description" value="${esc(row.description)}" required /></label>${omieOn ? `<label>Unidade<select name="unit"><option value="">—</option>${unitOptions(row.unit)}</select></label><label>NCM<input name="ncm" data-ncm inputmode="numeric" placeholder="0000.00.00" value="${esc(row.ncm || "")}" /></label><label>Valor de referência<input name="referencePrice" inputmode="decimal" value="${row.referencePrice ? esc(String(row.referencePrice).replace(".", ",")) : ""}" /></label>` : ""}${remanufacturedBox(row.remanufactured)}`;
 						setTimeout(() => bindNcmInputs(document), 0);
 						const answer = await PP.dialog({ title: "Editar cadastro", body, confirmLabel: "Salvar" });
 						if (!answer) return;
 						if (!isCustomers && "referencePrice" in answer) answer.referencePrice = answer.referencePrice ? PP.parseMoney(answer.referencePrice) : null;
 						if (!isCustomers && answer.unit === "") delete answer.unit;
+						if (!isCustomers) answer.remanufactured = answer.remanufactured === "true";
 						try {
 							await api.patch(`/api/${tab}/${row.id}`, answer);
 							PP.toast("Atualizado.", "success");
@@ -2103,6 +2112,405 @@ document.head.appendChild(sharedShellScript);
 		await load();
 	}
 
+	// ------------------------------------------------- Controle de carcacas (base de troca)
+	// O cliente recebe a peca remanufaturada e fica devendo a carcaca. Saldo por cliente e por representante;
+	// devolucao aproveitavel abate, refugada so fica registrada; prazo padrao configuravel.
+	const CARCASS_KINDS = { debit: ["orange", "Saída (deve)"], return: ["green", "Devolução"], adjustment: ["blue", "Ajuste"] };
+	const formatDate = (value) => (value ? value.split("-").reverse().join("/") : "—");
+	const todayIsoDate = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+	async function carcassPage() {
+		const canManage = PP.can("carcass.manage");
+		const canReverse = PP.can("carcass.reverse");
+		const canRegistry = PP.can("registry.manage");
+		const state = { view: "customer", q: "", representativeId: "", overdue: false, all: false, entriesPage: 1, entriesCustomer: null, expanded: new Set() };
+		let representatives = [];
+		let config = { dueDays: 30, omieStart: null, canEdit: false };
+
+		const loadRepresentatives = async () => {
+			representatives = (await api.get("/api/representatives?includeInactive=true")).representatives;
+		};
+		const repOptions = (selected, emptyLabel) =>
+			`<option value="">${esc(emptyLabel)}</option>${representatives
+				.filter((rep) => rep.active || String(rep.id) === String(selected))
+				.map(
+					(rep) =>
+						`<option value="${esc(rep.id)}" ${String(rep.id) === String(selected) ? "selected" : ""}>${esc(rep.name)}${rep.code ? ` (${esc(rep.code)})` : ""}</option>`
+				)
+				.join("")}`;
+
+		set(`<section class="indicator-grid report-cards" id="carcass-cards">${PP.skeleton(1)}</section>
+			${canManage ? `<div class="carcass-actions"><button class="button button-primary" type="button" data-carcass-new="debit">+ Registrar saída (cliente deve)</button><button class="button button-secondary" type="button" data-carcass-new="return">Registrar devolução de carcaça</button><button class="button button-secondary" type="button" data-carcass-new="adjustment">Ajuste</button></div>` : ""}
+			<nav class="tabs" role="tablist" aria-label="Visões do controle de carcaças"><button class="active" role="tab" data-carcass-view="customer">Saldo por cliente</button><button role="tab" data-carcass-view="representative">Saldo por representante</button><button role="tab" data-carcass-view="entries">Lançamentos</button><button role="tab" data-carcass-view="representatives">Representantes</button><button role="tab" data-carcass-view="config">Prazo e Omie</button></nav>
+			<div id="carcass-view" aria-live="polite"></div>`);
+
+		async function renderCards() {
+			const data = await api.get("/api/carcass/summary");
+			document.querySelector("#carcass-cards").innerHTML =
+				`${card("Carcaças em aberto", data.totals.outstanding)}${card("Vencidas", data.totals.overdue, "red")}${card("Clientes devendo", data.totals.debtors, "orange")}${card(`Devolvidas no mês${data.totals.refusedThisMonth ? ` (+${data.totals.refusedThisMonth} refugadas)` : ""}`, data.totals.returnedThisMonth, "green")}`;
+		}
+
+		// ---- Saldo (por cliente ou por representante)
+		async function renderSummary() {
+			const host = document.querySelector("#carcass-view");
+			const byRep = state.view === "representative";
+			const params = new URLSearchParams({ groupBy: state.view });
+			if (state.q) params.set("q", state.q);
+			if (state.representativeId) params.set("representativeId", state.representativeId);
+			if (state.overdue) params.set("overdue", "true");
+			if (state.all) params.set("all", "true");
+			const data = await api.get(`/api/carcass/summary?${params}`);
+			datasets.clear();
+			const columns = [
+				{ key: "name", header: byRep ? "Representante" : "Cliente" },
+				...(byRep ? [{ key: "customerCount", header: "Clientes" }] : [{ key: "representativeName", header: "Representante" }]),
+				{ key: "outstanding", header: "Em aberto" },
+				{ key: "overdue", header: "Vencidas" },
+				{ key: "nextDue", header: "Próximo vencimento" },
+				{ key: "debited", header: "Saídas" },
+				{ key: "returned", header: "Devolvidas" },
+				{ key: "refused", header: "Refugadas" }
+			];
+			const tools = dataTools(
+				byRep ? "Saldo de carcaças por representante" : "Saldo de carcaças por cliente",
+				columns,
+				data.rows.map((row) => ({ ...row, nextDue: formatDate(row.nextDue) }))
+			);
+			const lineTable = (row) =>
+				`<tr class="carcass-detail"><td colspan="${byRep ? 8 : 8}">${table(
+					[...(byRep ? ["Cliente"] : []), "Peça", "Em aberto", "Vencidas", "Próximo vencimento", "Saídas", "Devolvidas", "Refugadas", ""],
+					row.lines.map(
+						(line) =>
+							`<tr>${byRep ? `<td>${esc(line.customerName)}</td>` : ""}<td><strong>${esc(line.productCode)}</strong><br><small class="muted">${esc(line.productDescription || "")}</small></td><td><strong>${esc(line.outstanding)}</strong></td><td>${line.overdue ? `<span class="table-status red">${esc(line.overdue)}</span>` : "0"}</td><td>${esc(formatDate(line.nextDue))}</td><td>${esc(line.debited)}</td><td>${esc(line.returned)}</td><td>${esc(line.refused)}</td><td>${canManage && line.outstanding > 0 && line.customerId ? `<button class="button button-secondary compact-button" type="button" data-carcass-return="${esc(line.customerId)}" data-code="${esc(line.productCode)}" data-name="${esc(line.customerName)}" data-qty="${esc(line.outstanding)}">Registrar devolução</button>` : ""}</td></tr>`
+					)
+				)}${!byRep && row.customerId ? `<button class="chip" type="button" data-carcass-ledger="${esc(row.customerId)}" data-name="${esc(row.name)}">Ver lançamentos deste cliente</button>` : ""}</td></tr>`;
+			host.innerHTML = section(
+				byRep ? "Representantes" : "Clientes",
+				byRep ? "Carcaças em aberto por representante" : "Carcaças em aberto por cliente",
+				`<form id="carcass-filters" class="inline-form my-12"><label>Buscar<input name="q" type="search" value="${esc(state.q)}" placeholder="${byRep ? "Representante" : "Cliente ou representante"}" /></label><label>Representante<select name="representativeId">${repOptions(state.representativeId, "Todos")}</select></label><label class="check-inline"><input type="checkbox" name="overdue" ${state.overdue ? "checked" : ""} /> Só com vencidas</label><label class="check-inline"><input type="checkbox" name="all" ${state.all ? "checked" : ""} /> Incluir quitados</label></form>
+				${table(
+					[
+						byRep ? "Representante" : "Cliente",
+						byRep ? "Clientes" : "Representante",
+						"Em aberto",
+						"Vencidas",
+						"Próximo vencimento",
+						"Devolvidas",
+						"Refugadas",
+						""
+					],
+					data.rows.flatMap((row) => {
+						const open = state.expanded.has(String(row.key));
+						return [
+							`<tr><td><strong>${esc(row.name)}</strong></td><td>${byRep ? esc(row.customerCount) : esc(row.representativeName || "—")}</td><td><strong>${esc(row.outstanding)}</strong></td><td>${row.overdue ? `<span class="table-status red">${esc(row.overdue)} vencida(s)</span>` : '<span class="table-status green">Em dia</span>'}</td><td>${esc(formatDate(row.nextDue))}</td><td>${esc(row.returned)}</td><td>${esc(row.refused)}</td><td><button class="chip" type="button" data-carcass-expand="${esc(row.key)}" aria-expanded="${open}">${open ? "Fechar" : "Detalhar por peça"}</button></td></tr>`,
+							open ? lineTable(row) : ""
+						];
+					}),
+					state.all ? "Nenhum lançamento ainda." : "Nenhuma carcaça em aberto."
+				)}`,
+				tools
+			);
+			const filters = host.querySelector("#carcass-filters");
+			const apply = () => {
+				state.q = filters.q.value.trim();
+				state.representativeId = filters.representativeId.value;
+				state.overdue = filters.overdue.checked;
+				state.all = filters.all.checked;
+				renderSummary();
+			};
+			filters.addEventListener("submit", (event) => {
+				event.preventDefault();
+				apply();
+			});
+			filters.q.addEventListener("input", PP.debounce(apply, 400));
+			[filters.representativeId, filters.overdue, filters.all].forEach((input) => input.addEventListener("change", apply));
+			host.querySelectorAll("[data-carcass-expand]").forEach((button) =>
+				button.addEventListener("click", () => {
+					const key = button.dataset.carcassExpand;
+					if (state.expanded.has(key)) state.expanded.delete(key);
+					else state.expanded.add(key);
+					renderSummary();
+				})
+			);
+			host
+				.querySelectorAll("[data-carcass-return]")
+				.forEach((button) =>
+					button.addEventListener("click", () =>
+						openEntry("return", { customerId: button.dataset.carcassReturn, customerName: button.dataset.name, productCode: button.dataset.code, quantity: 1 })
+					)
+				);
+			host.querySelectorAll("[data-carcass-ledger]").forEach((button) =>
+				button.addEventListener("click", () => {
+					state.entriesCustomer = { id: button.dataset.carcassLedger, name: button.dataset.name };
+					state.entriesPage = 1;
+					switchView("entries");
+				})
+			);
+		}
+
+		// ---- Lancamentos (livro)
+		async function renderEntries() {
+			const host = document.querySelector("#carcass-view");
+			const params = new URLSearchParams({ page: state.entriesPage });
+			if (state.entriesCustomer) params.set("customerId", state.entriesCustomer.id);
+			const data = await api.get(`/api/carcass/entries?${params}`);
+			datasets.clear();
+			const tools = dataTools(
+				"Lançamentos de carcaças",
+				[
+					{ key: "entryDate", header: "Data" },
+					{ key: "kindLabel", header: "Tipo" },
+					{ key: "customerName", header: "Cliente" },
+					{ key: "representativeName", header: "Representante" },
+					{ key: "productCode", header: "Peça" },
+					{ key: "quantity", header: "Qtd" },
+					{ key: "condition", header: "Condição" },
+					{ key: "dueDate", header: "Prazo" },
+					{ key: "document", header: "Documento" },
+					{ key: "origin", header: "Origem" },
+					{ key: "status", header: "Situação" }
+				],
+				data.entries.map((entry) => ({
+					...entry,
+					entryDate: formatDate(entry.entryDate),
+					dueDate: formatDate(entry.dueDate),
+					kindLabel: CARCASS_KINDS[entry.kind][1],
+					condition: entry.condition === "refugada" ? "Refugada" : entry.condition === "aproveitavel" ? "Aproveitável" : "",
+					origin: entry.source === "omie_nf" ? "Omie (NF)" : entry.createdByName || "",
+					status: entry.reversedAt ? `Estornado: ${entry.reversalReason || ""}` : "Válido"
+				}))
+			);
+			host.innerHTML = section(
+				"Livro",
+				state.entriesCustomer ? `Lançamentos de ${state.entriesCustomer.name}` : "Todos os lançamentos",
+				`${state.entriesCustomer ? '<p><button class="chip" type="button" id="carcass-ledger-all">Ver todos os clientes</button></p>' : ""}${table(
+					["Data", "Tipo", "Cliente", "Peça", "Qtd", "Condição", "Prazo", "Documento", "Origem", ""],
+					data.entries.map((entry) => {
+						const [tone, label] = CARCASS_KINDS[entry.kind];
+						return `<tr${entry.reversedAt ? ' class="row-reversed"' : ""}><td>${esc(formatDate(entry.entryDate))}</td><td><span class="table-status ${tone}">${label}</span></td><td><strong>${esc(entry.customerName)}</strong><br><small class="muted">${esc(entry.representativeName || "Sem representante")}</small></td><td><strong>${esc(entry.productCode)}</strong><br><small class="muted">${esc(entry.productDescription || "")}</small></td><td>${esc(entry.quantity)}</td><td>${entry.condition === "refugada" ? '<span class="table-status red">Refugada</span>' : entry.condition === "aproveitavel" ? "Aproveitável" : "—"}</td><td>${esc(formatDate(entry.dueDate))}</td><td>${esc(entry.document || "—")}${entry.notes ? `<br><small class="muted">${esc(entry.notes)}</small>` : ""}</td><td>${entry.source === "omie_nf" ? "Omie (NF)" : esc(entry.createdByName || "—")}</td><td>${entry.reversedAt ? `<span class="table-status">Estornado</span><br><small class="muted">${esc(entry.reversalReason || "")}</small>` : canReverse ? `<button class="button button-secondary compact-button" type="button" data-carcass-reverse="${esc(entry.id)}">Estornar</button>` : ""}</td></tr>`;
+					}),
+					"Nenhum lançamento."
+				)}<div class="form-actions">${data.totalPages > 1 ? `<span class="muted">Página ${data.page} de ${data.totalPages} · ${data.total} lançamento(s)</span><button class="button button-secondary compact-button" type="button" data-entries-page="${data.page - 1}" ${data.page <= 1 ? "disabled" : ""}>Mais recentes</button><button class="button button-secondary compact-button" type="button" data-entries-page="${data.page + 1}" ${data.page >= data.totalPages ? "disabled" : ""}>Mais antigos</button>` : `<span class="muted">${data.total} lançamento(s)</span>`}</div>`,
+				tools
+			);
+			host.querySelector("#carcass-ledger-all")?.addEventListener("click", () => {
+				state.entriesCustomer = null;
+				state.entriesPage = 1;
+				renderEntries();
+			});
+			host.querySelectorAll("[data-entries-page]").forEach((button) =>
+				button.addEventListener("click", () => {
+					state.entriesPage = Number(button.dataset.entriesPage);
+					renderEntries();
+				})
+			);
+			host.querySelectorAll("[data-carcass-reverse]").forEach((button) =>
+				button.addEventListener("click", async () => {
+					const answer = await PP.dialog({
+						title: "Estornar lançamento",
+						body: '<p>O lançamento continua no histórico, mas deixa de contar no saldo.</p><label>Motivo<input name="reason" required minlength="3" maxlength="240" /></label>',
+						confirmLabel: "Estornar",
+						danger: true
+					});
+					if (!answer) return;
+					try {
+						await api.post(`/api/carcass/entries/${button.dataset.carcassReverse}/reverse`, { reason: answer.reason });
+						PP.toast("Lançamento estornado.", "success");
+						await Promise.all([renderEntries(), renderCards()]);
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		}
+
+		// ---- Representantes
+		async function renderRepresentatives() {
+			const host = document.querySelector("#carcass-view");
+			await loadRepresentatives();
+			host.innerHTML = section(
+				"Cadastro",
+				"Representantes",
+				`<p class="muted">Defina o representante padrão de cada cliente em <a class="table-link" href="/cadastro-base.html">Clientes e produtos</a>. Cada lançamento herda o representante do cliente e pode ser trocado.</p>${canRegistry ? '<form id="rep-form" class="inline-form my-12" novalidate><label>Nome<input name="name" required maxlength="120" /></label><label>Código<input name="code" maxlength="40" /></label><label>E-mail<input name="email" type="email" /></label><label>Telefone<input name="phone" /></label><button class="button button-primary compact-button" type="submit">Cadastrar</button></form>' : ""}${table(
+					["Nome", "Código", "Contato", "Clientes", "Status", ""],
+					representatives.map(
+						(rep) =>
+							`<tr><td><strong>${esc(rep.name)}</strong></td><td>${esc(rep.code || "—")}</td><td>${esc([rep.email, rep.phone].filter(Boolean).join(" · ") || "—")}</td><td>${esc(rep.customerCount)}</td><td><span class="table-status ${rep.active ? "green" : "red"}">${rep.active ? "Ativo" : "Inativo"}</span></td><td>${canRegistry ? `<div class="actions-cell"><button class="button button-secondary compact-button" type="button" data-rep-edit="${esc(rep.id)}">Editar</button><button class="button button-secondary compact-button" type="button" data-rep-active="${esc(rep.id)}" data-value="${!rep.active}">${rep.active ? "Inativar" : "Reativar"}</button></div>` : ""}</td></tr>`
+					),
+					"Nenhum representante cadastrado."
+				)}`
+			);
+			host.querySelector("#rep-form")?.addEventListener("submit", async (event) => {
+				event.preventDefault();
+				const form = event.currentTarget;
+				if (!form.name.value.trim()) return PP.toast("Informe o nome.", "error");
+				try {
+					await api.post("/api/representatives", Object.fromEntries(new FormData(form)));
+					PP.toast("Representante cadastrado.", "success");
+					await renderRepresentatives();
+				} catch (error) {
+					PP.toast(error.message, "error");
+				}
+			});
+			host.querySelectorAll("[data-rep-active]").forEach((button) =>
+				button.addEventListener("click", async () => {
+					await api
+						.patch(`/api/representatives/${button.dataset.repActive}`, { active: button.dataset.value === "true" })
+						.catch((error) => PP.toast(error.message, "error"));
+					await renderRepresentatives();
+				})
+			);
+			host.querySelectorAll("[data-rep-edit]").forEach((button) =>
+				button.addEventListener("click", async () => {
+					const rep = representatives.find((item) => String(item.id) === button.dataset.repEdit);
+					const answer = await PP.dialog({
+						title: "Editar representante",
+						body: `<label>Nome<input name="name" value="${esc(rep.name)}" required /></label><label>Código<input name="code" value="${esc(rep.code || "")}" /></label><label>E-mail<input name="email" value="${esc(rep.email || "")}" /></label><label>Telefone<input name="phone" value="${esc(rep.phone || "")}" /></label>`,
+						confirmLabel: "Salvar"
+					});
+					if (!answer) return;
+					try {
+						await api.patch(`/api/representatives/${rep.id}`, answer);
+						await renderRepresentatives();
+					} catch (error) {
+						PP.toast(error.message, "error");
+					}
+				})
+			);
+		}
+
+		// ---- Prazo e Omie
+		async function renderConfig() {
+			const host = document.querySelector("#carcass-view");
+			config = await api.get("/api/carcass/config");
+			host.innerHTML = section(
+				"Regras",
+				"Prazo de devolução e notas do Omie",
+				`<p class="muted">O prazo vale para cada nova saída (dá para mudar em um lançamento específico). Notas fiscais de saída do Omie com peças marcadas como <strong>remanufaturadas</strong> (em Clientes e produtos) geram a saída automaticamente, a partir da data abaixo. Nota cancelada no Omie estorna a saída.</p><form id="carcass-config" class="inline-form" novalidate><label>Prazo padrão (dias)<input name="dueDays" type="number" min="1" max="365" value="${esc(config.dueDays)}" ${config.canEdit ? "" : "disabled"} /></label><label>Notas do Omie a partir de<input name="omieStart" type="date" value="${esc(config.omieStart || "")}" ${config.canEdit ? "" : "disabled"} /></label>${config.canEdit ? '<button class="button button-primary compact-button" type="submit">Salvar</button>' : ""}</form>${config.omieStart ? "" : '<p class="feedback">Sem data: as notas do Omie não geram saídas (só lançamentos manuais).</p>'}${config.canEdit ? "" : '<p class="muted">Somente gerentes e administradores alteram estas regras.</p>'}`
+			);
+			host.querySelector("#carcass-config").addEventListener("submit", async (event) => {
+				event.preventDefault();
+				const form = event.currentTarget;
+				try {
+					await api.put("/api/carcass/config", { dueDays: Number(form.dueDays.value), omieStart: form.omieStart.value || null });
+					PP.toast("Regras salvas.", "success");
+					await renderConfig();
+				} catch (error) {
+					PP.toast(error.message, "error");
+				}
+			});
+		}
+
+		// ---- Novo lancamento (saida, devolucao ou ajuste)
+		async function openEntry(kind, preset = {}) {
+			const titles = { debit: "Registrar saída de peça remanufaturada", return: "Registrar devolução de carcaça", adjustment: "Ajuste de saldo" };
+			const hints = {
+				debit: `O cliente passa a dever as carcaças. Prazo padrão: ${config.dueDays} dias.`,
+				return: "Aproveitável abate o saldo. Refugada fica registrada e o cliente continua devendo.",
+				adjustment: "Use quantidade positiva para aumentar o saldo devido e negativa para diminuir. Informe o motivo."
+			};
+			const body = `<p class="muted">${esc(hints[kind])}</p>
+				<label>Cliente<input name="customerName" list="carcass-customer-list" required autocomplete="off" placeholder="Digite 2 letras do nome" value="${esc(preset.customerName || "")}" /></label><datalist id="carcass-customer-list"></datalist><input type="hidden" name="customerId" value="${esc(preset.customerId || "")}" />
+				<label>Representante<select name="representativeId">${repOptions("", "Padrão do cliente")}</select></label>
+				<label>Código da peça<input name="productCode" list="carcass-product-list" required autocomplete="off" value="${esc(preset.productCode || "")}" /></label><datalist id="carcass-product-list"></datalist>
+				<label>Quantidade<input name="quantity" type="number" ${kind === "adjustment" ? "" : 'min="1"'} required value="${esc(preset.quantity || 1)}" /></label>
+				${kind === "return" ? '<label>Condição da carcaça<select name="condition" required><option value="aproveitavel">Aproveitável (abate o saldo)</option><option value="refugada">Refugada (não abate)</option></select></label>' : ""}
+				<label>Data<input name="entryDate" type="date" value="${todayIsoDate()}" max="${todayIsoDate()}" /></label>
+				${kind === "debit" ? `<label>Prazo de devolução (opcional)<input name="dueDate" type="date" /></label>` : ""}
+				<label>Documento (NF, pedido)<input name="document" maxlength="120" /></label>
+				<label>Observações${kind === "adjustment" ? " (motivo)" : ""}<input name="notes" maxlength="1000" ${kind === "adjustment" ? "required" : ""} /></label>`;
+			const customers = new Map();
+			setTimeout(() => {
+				const modal = document.querySelector(".modal") || document;
+				const nameInput = modal.querySelector('[name="customerName"]');
+				const idInput = modal.querySelector('[name="customerId"]');
+				const codeInput = modal.querySelector('[name="productCode"]');
+				if (!nameInput) return;
+				nameInput.addEventListener(
+					"input",
+					PP.debounce(async () => {
+						idInput.value = customers.get(nameInput.value)?.id || "";
+						if (nameInput.value.trim().length < 2 || idInput.value) return;
+						const { customers: found } = await api.get(`/api/customers?limit=20&q=${encodeURIComponent(nameInput.value.trim())}`);
+						modal.querySelector("#carcass-customer-list").innerHTML = found
+							.map((customer) => {
+								customers.set(customer.name, customer);
+								return `<option value="${esc(customer.name)}">${esc(PP.maskDocument(customer.document || ""))}${customer.representativeName ? ` · ${esc(customer.representativeName)}` : ""}</option>`;
+							})
+							.join("");
+					}, 250)
+				);
+				nameInput.addEventListener("change", () => {
+					idInput.value = customers.get(nameInput.value)?.id || "";
+				});
+				codeInput.addEventListener(
+					"input",
+					PP.debounce(async () => {
+						if (codeInput.value.trim().length < 2) return;
+						const { products } = await api.get(`/api/products?limit=20&q=${encodeURIComponent(codeInput.value.trim())}`);
+						modal.querySelector("#carcass-product-list").innerHTML = products
+							.map((product) => `<option value="${esc(product.code)}">${esc(product.description)}${product.remanufactured ? " · remanufaturada" : ""}</option>`)
+							.join("");
+					}, 250)
+				);
+			}, 0);
+			const answer = await PP.dialog({ title: titles[kind], body, confirmLabel: "Registrar" });
+			if (!answer) return;
+			if (!answer.customerId) {
+				PP.toast("Escolha o cliente na lista de sugestões.", "error");
+				return openEntry(kind, { ...preset, ...answer });
+			}
+			try {
+				await api.post("/api/carcass/entries", {
+					kind,
+					customerId: Number(answer.customerId),
+					...(answer.representativeId ? { representativeId: Number(answer.representativeId) } : {}),
+					productCode: answer.productCode,
+					quantity: Number(answer.quantity),
+					condition: answer.condition,
+					entryDate: answer.entryDate,
+					dueDate: answer.dueDate,
+					document: answer.document,
+					notes: answer.notes
+				});
+				PP.toast("Lançamento registrado.", "success");
+				await Promise.all([renderCards(), renderCurrent()]);
+			} catch (error) {
+				PP.toast(error.message, "error");
+			}
+		}
+
+		const renderCurrent = async () => {
+			const host = document.querySelector("#carcass-view");
+			try {
+				if (state.view === "entries") await renderEntries();
+				else if (state.view === "representatives") await renderRepresentatives();
+				else if (state.view === "config") await renderConfig();
+				else await renderSummary();
+			} catch (error) {
+				host.innerHTML = PP.errorState(error.message);
+				host.querySelector("[data-retry]")?.addEventListener("click", renderCurrent);
+			}
+		};
+		function switchView(view) {
+			state.view = view;
+			content()
+				.querySelectorAll("[data-carcass-view]")
+				.forEach((tab) => tab.classList.toggle("active", tab.dataset.carcassView === view));
+			document.querySelector("#carcass-view").innerHTML = PP.skeleton(4);
+			renderCurrent();
+		}
+		content()
+			.querySelectorAll("[data-carcass-view]")
+			.forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.carcassView)));
+		content()
+			.querySelectorAll("[data-carcass-new]")
+			.forEach((button) => button.addEventListener("click", () => openEntry(button.dataset.carcassNew)));
+
+		[config] = await Promise.all([api.get("/api/carcass/config"), loadRepresentatives()]);
+		await Promise.all([renderCards(), renderCurrent()]);
+	}
+
 	// ------------------------------------------------------------- Guia do app
 	async function guidePage() {
 		const sections = (window.PPGuide || []).filter((item) => !item.capability || PP.can(item.capability));
@@ -2152,6 +2560,7 @@ document.head.appendChild(sharedShellScript);
 	const pages = {
 		omie: omiePage,
 		guide: guidePage,
+		carcass: carcassPage,
 		"reports-builder": reportsBuilder,
 		reports,
 		"reports-team": teamPerformance,

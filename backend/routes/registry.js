@@ -10,14 +10,24 @@ const omie = require("../services/omie");
 const omieProducts = require("../services/omieProducts");
 
 const router = express.Router();
-router.use(["/customers", "/products"], requireAuth);
+router.use(["/customers", "/products", "/representatives"], requireAuth);
 
+// Representante padrao do cliente (controle de carcacas): "" ou null tira o representante.
+const representativeField = z.preprocess((value) => (value === "" || value === null ? null : value), z.coerce.number().int().positive().nullable().optional());
 const customerSchema = z.object({
 	name: requiredText("o nome do cliente", 180),
 	document: optionalDocument,
 	email: z.preprocess((value) => (value === "" ? undefined : value), z.string().trim().email("E-mail invalido.").max(180).optional()),
-	phone: optionalText(40)
+	phone: optionalText(40),
+	representativeId: representativeField
 });
+const CUSTOMER_FIELDS = `id, name, document, email, phone, active, representative_id AS "representativeId",
+	(SELECT r.name FROM representatives r WHERE r.id = customers.representative_id) AS "representativeName"`;
+const CUSTOMER_COLUMNS = { name: "name", document: "document", email: "email", phone: "phone", active: "active", representativeId: "representative_id" };
+const booleanField = z.preprocess(
+	(value) => (value === "on" || value === "true" ? true : value === "false" || value === "" ? false : value),
+	z.boolean().optional()
+);
 // Unidade e valor de referencia sao enviados ao Omie; o NCM e informado por quem aprova o envio.
 const unitField = z.preprocess(
 	(value) => (value === "" || value === null ? undefined : String(value).trim().toUpperCase()),
@@ -34,11 +44,20 @@ const productSchema = z.object({
 	code: requiredText("o codigo do produto", 80),
 	description: requiredText("a descricao do produto", 180),
 	unit: unitField,
-	referencePrice: money
+	referencePrice: money,
+	remanufactured: booleanField
 });
-const PRODUCT_FIELDS = `id, code, description, active, unit, ncm, reference_price AS "referencePrice", omie_code AS "omieCode", omie_status AS "omieStatus",
+const PRODUCT_FIELDS = `id, code, description, active, remanufactured, unit, ncm, reference_price AS "referencePrice", omie_code AS "omieCode", omie_status AS "omieStatus",
 	omie_error AS "omieError", omie_attempts AS "omieAttempts", omie_next_attempt_at AS "omieNextAttemptAt", omie_sent_at AS "omieSentAt"`;
-const PRODUCT_COLUMNS = { code: "code", description: "description", unit: "unit", ncm: "ncm", referencePrice: "reference_price", active: "active" };
+const PRODUCT_COLUMNS = {
+	code: "code",
+	description: "description",
+	unit: "unit",
+	ncm: "ncm",
+	referencePrice: "reference_price",
+	active: "active",
+	remanufactured: "remanufactured"
+};
 const searchSchema = z.object({
 	q: z.string().trim().max(120).optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -73,7 +92,7 @@ router.get(
 			clauses.push(digits ? "(name ILIKE $1 OR document LIKE $2)" : "name ILIKE $1");
 		}
 		const { rows } = await database.query(
-			`SELECT id, name, document, email, phone, active FROM customers WHERE ${clauses.join(" AND ")} ORDER BY name LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
+			`SELECT ${CUSTOMER_FIELDS} FROM customers WHERE ${clauses.join(" AND ")} ORDER BY name LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
 			values
 		);
 		return response.json({ customers: rows });
@@ -87,8 +106,8 @@ router.post(
 		const data = customerSchema.parse(request.body);
 		try {
 			const { rows } = await database.query(
-				"INSERT INTO customers (name, document, email, phone) VALUES ($1, $2, $3, $4) RETURNING id, name, document, email, phone, active",
-				[data.name, data.document ?? null, data.email ?? null, data.phone ?? null]
+				`INSERT INTO customers (name, document, email, phone, representative_id) VALUES ($1, $2, $3, $4, $5) RETURNING ${CUSTOMER_FIELDS}`,
+				[data.name, data.document ?? null, data.email ?? null, data.phone ?? null, data.representativeId ?? null]
 			);
 			return response.status(201).json({ customer: rows[0] });
 		} catch (error) {
@@ -102,13 +121,11 @@ router.patch(
 	wrap(async (request, response) => {
 		requireRegistryManage(request);
 		const data = customerSchema.partial().extend({ active: z.boolean().optional() }).parse(request.body);
-		const entries = Object.entries({ name: data.name, document: data.document, email: data.email, phone: data.phone, active: data.active }).filter(
-			([key]) => key in request.body
-		);
+		const entries = Object.entries(data).filter(([key]) => key in request.body && CUSTOMER_COLUMNS[key]);
 		if (!entries.length) return response.json({ customer: null });
 		try {
 			const { rows } = await database.query(
-				`UPDATE customers SET ${entries.map(([key], index) => `${key} = $${index + 1}`).join(", ")}, updated_at = NOW() WHERE id = $${entries.length + 1} RETURNING id, name, document, email, phone, active`,
+				`UPDATE customers SET ${entries.map(([key], index) => `${CUSTOMER_COLUMNS[key]} = $${index + 1}`).join(", ")}, updated_at = NOW() WHERE id = $${entries.length + 1} RETURNING ${CUSTOMER_FIELDS}`,
 				[...entries.map(([, value]) => value ?? null), Number(request.params.id)]
 			);
 			if (!rows[0]) throw notFound("Cliente nao encontrado.");
@@ -152,8 +169,8 @@ router.post(
 		if (status && !data.unit) throw badRequest("Informe a unidade da peca (exigida pelo Omie).", "UNIT_REQUIRED");
 		try {
 			const { rows } = await database.query(
-				`INSERT INTO products (code, description, unit, reference_price, omie_status) VALUES ($1, $2, $3, $4, $5) RETURNING ${PRODUCT_FIELDS}`,
-				[data.code, data.description, data.unit || null, data.referencePrice ?? null, status]
+				`INSERT INTO products (code, description, unit, reference_price, omie_status, remanufactured) VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${PRODUCT_FIELDS}`,
+				[data.code, data.description, data.unit || null, data.referencePrice ?? null, status, Boolean(data.remanufactured)]
 			);
 			return response.status(201).json({ product: rows[0] });
 		} catch (error) {
@@ -178,6 +195,65 @@ router.patch(
 			return response.json({ product: rows[0] });
 		} catch (error) {
 			return duplicate(error, "Ja existe um produto com este codigo.");
+		}
+	})
+);
+
+// Representantes (controle de carcacas): saldo de carcacas por representante.
+const representativeSchema = z.object({
+	name: requiredText("o nome do representante", 120),
+	code: optionalText(40),
+	email: z.preprocess((value) => (value === "" ? undefined : value), z.string().trim().email("E-mail invalido.").max(180).optional()),
+	phone: optionalText(40)
+});
+const REPRESENTATIVE_FIELDS = `id, name, code, email, phone, active, (SELECT COUNT(*)::int FROM customers c WHERE c.representative_id = representatives.id) AS "customerCount"`;
+router.get(
+	"/representatives",
+	wrap(async (request, response) => {
+		const { q, includeInactive } = searchSchema.parse(request.query);
+		const values = [];
+		const clauses = [includeInactive === "true" ? "TRUE" : "active = TRUE"];
+		if (q) {
+			values.push(likeTerm(q));
+			clauses.push("(name ILIKE $1 OR code ILIKE $1)");
+		}
+		const { rows } = await database.query(`SELECT ${REPRESENTATIVE_FIELDS} FROM representatives WHERE ${clauses.join(" AND ")} ORDER BY name`, values);
+		return response.json({ representatives: rows });
+	})
+);
+router.post(
+	"/representatives",
+	wrap(async (request, response) => {
+		requireRegistryManage(request);
+		const data = representativeSchema.parse(request.body);
+		try {
+			const { rows } = await database.query(
+				`INSERT INTO representatives (name, code, email, phone) VALUES ($1, $2, $3, $4) RETURNING ${REPRESENTATIVE_FIELDS}`,
+				[data.name, data.code ?? null, data.email ?? null, data.phone ?? null]
+			);
+			return response.status(201).json({ representative: rows[0] });
+		} catch (error) {
+			return duplicate(error, "Ja existe um representante com este codigo.");
+		}
+	})
+);
+router.patch(
+	"/representatives/:id",
+	wrap(async (request, response) => {
+		requireRegistryManage(request);
+		const data = representativeSchema.partial().extend({ active: z.boolean().optional() }).parse(request.body);
+		const allowed = ["name", "code", "email", "phone", "active"];
+		const entries = Object.entries(data).filter(([key]) => key in request.body && allowed.includes(key));
+		if (!entries.length) return response.json({ representative: null });
+		try {
+			const { rows } = await database.query(
+				`UPDATE representatives SET ${entries.map(([key], index) => `${key} = $${index + 1}`).join(", ")}, updated_at = NOW() WHERE id = $${entries.length + 1} RETURNING ${REPRESENTATIVE_FIELDS}`,
+				[...entries.map(([, value]) => value ?? null), Number(request.params.id)]
+			);
+			if (!rows[0]) throw notFound("Representante nao encontrado.");
+			return response.json({ representative: rows[0] });
+		} catch (error) {
+			return duplicate(error, "Ja existe um representante com este codigo.");
 		}
 	})
 );

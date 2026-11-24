@@ -8,7 +8,8 @@ const KIND_TITLES = {
 	STATUS_CHANGED: "Mudança de status",
 	SLA_DUE: "Prazo perto de vencer",
 	SLA_OVERDUE: "Prazo vencido",
-	COMMERCIAL_DIVERGENCE: "Divergência comercial com o Omie"
+	COMMERCIAL_DIVERGENCE: "Divergência comercial com o Omie",
+	CARCASS_OVERDUE: "Carcaças com prazo vencido"
 };
 
 // Envios por e-mail e WhatsApp rodam fora da requisicao; idle() deixa os testes esperarem o fim.

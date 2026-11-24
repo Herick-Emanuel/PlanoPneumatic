@@ -2552,6 +2552,65 @@
           "description": "Regra de negocio violada (transicao, checklist, documentos)"
         "429":
           "description": "Muitas tentativas (Retry-After)"
+  "/api/representatives":
+    "get":
+      "tags":
+        - "Cadastros"
+      "summary": "GET /api/representatives"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+    "post":
+      "tags":
+        - "Cadastros"
+      "summary": "POST /api/representatives"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
+  "/api/representatives/{id}":
+    "patch":
+      "tags":
+        - "Cadastros"
+      "summary": "PATCH /api/representatives/{id}"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "Sucesso"
+        "400":
+          "description": "Dados invalidos (code VALIDATION_ERROR, errors[])"
+        "401":
+          "description": "Sessao invalida ou expirada"
+        "403":
+          "description": "Perfil sem permissao, CSRF invalido, origem nao permitida ou troca de senha/MFA pendente (code)"
+        "422":
+          "description": "Regra de negocio violada (transicao, checklist, documentos)"
+        "429":
+          "description": "Muitas tentativas (Retry-After)"
   "/api/search":
     "get":
       "tags":

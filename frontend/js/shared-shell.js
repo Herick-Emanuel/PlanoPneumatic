@@ -16,6 +16,7 @@
 		"/relatorios-gerentes.html": "Desempenho de gerentes",
 		"/relatorios-personalizados.html": "Construtor de relatórios",
 		"/guia.html": "Guia do app",
+		"/carcacas.html": "Controle de carcaças",
 		"/cadastros.html": "Usuários",
 		"/cadastro-base.html": "Clientes e produtos",
 		"/importar.html": "Importar pedidos",
@@ -232,7 +233,7 @@
 				const links = items
 					.filter(([, , , , capability]) => allowed(capability))
 					.map(([href, iconName, label, key]) => {
-						const active = href === path || (path === "/caso.html" && key === "historico");
+						const active = href === path || (path === "/caso.html" && key === "historico") || (path === "/carcacas.html" && key === "troca");
 						return `<a class="nav-link${active ? " active" : ""}" href="${href}" data-nav-key="${key}"${active ? ' aria-current="page"' : ""}><span aria-hidden="true">${icon(iconName)}</span><span class="nav-label">${label}</span></a>`;
 					})
 					.join("");

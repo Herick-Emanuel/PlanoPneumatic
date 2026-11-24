@@ -613,3 +613,25 @@ button.builder-template {
 		animation: none;
 	}
 }
+
+/* Controle de carcacas. */
+.carcass-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 0 0 16px;
+}
+.carcass-detail > td {
+	background: var(--surface-2);
+	padding: 12px 16px 16px;
+}
+.carcass-detail .table-wrap {
+	margin-bottom: 10px;
+}
+.row-reversed td {
+	color: var(--text-3);
+	text-decoration: line-through;
+}
+.row-reversed td:last-child {
+	text-decoration: none;
+}

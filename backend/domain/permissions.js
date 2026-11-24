@@ -26,7 +26,10 @@ const capabilities = Object.freeze({
 	VIEW_MANAGER_PERFORMANCE: "reports.managers.view",
 	EXPORT_REPORTS: "reports.export",
 	BUILD_REPORTS: "reports.builder",
-	APPROVE_OMIE_PRODUCTS: "registry.omie.approve"
+	APPROVE_OMIE_PRODUCTS: "registry.omie.approve",
+	// Controle de carcacas: lancar saidas, devolucoes e ajustes; estornar e configurar o prazo.
+	MANAGE_CARCASS: "carcass.manage",
+	REVERSE_CARCASS: "carcass.reverse"
 });
 
 const c = capabilities;
@@ -43,6 +46,8 @@ const permissionMatrix = Object.freeze({
 		c.VIEW_TEAM_REPORTS,
 		c.BUILD_REPORTS,
 		c.APPROVE_OMIE_PRODUCTS,
+		c.MANAGE_CARCASS,
+		c.REVERSE_CARCASS,
 		c.EDIT_USER,
 		c.DECIDE_CASE,
 		c.TECHNICAL_ANALYSIS,
@@ -55,10 +60,10 @@ const permissionMatrix = Object.freeze({
 		c.MANAGE_SETTINGS,
 		...everyone
 	],
-	[roles.SUPERVISOR]: [c.ASSIGN_CASES, c.IMPORT_CASES, c.VIEW_ALL_CASES, c.MANAGE_REGISTRY, c.APPROVE_OMIE_PRODUCTS, ...everyone],
-	[roles.OPERATOR]: [...everyone],
+	[roles.SUPERVISOR]: [c.ASSIGN_CASES, c.IMPORT_CASES, c.VIEW_ALL_CASES, c.MANAGE_REGISTRY, c.APPROVE_OMIE_PRODUCTS, c.MANAGE_CARCASS, ...everyone],
+	[roles.OPERATOR]: [c.MANAGE_CARCASS, ...everyone],
 	[roles.TECHNICIAN]: [c.DECIDE_CASE, c.TECHNICAL_ANALYSIS, c.VIEW_ALL_CASES, ...everyone],
-	[roles.LOGISTICS]: [c.MANAGE_LOGISTICS, c.VIEW_ALL_CASES, ...everyone],
+	[roles.LOGISTICS]: [c.MANAGE_LOGISTICS, c.VIEW_ALL_CASES, c.MANAGE_CARCASS, ...everyone],
 	[roles.AUDITOR]: [c.VIEW_ALL_CASES, c.VIEW_AUDIT, c.EXPORT_REPORTS]
 });
 
