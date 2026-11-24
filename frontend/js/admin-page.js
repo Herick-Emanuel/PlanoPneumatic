@@ -2002,7 +2002,8 @@ document.head.appendChild(sharedShellScript);
 			pager.innerHTML =
 				({
 					live: '<span class="muted">Primeira carga do Omie em andamento: mostrando os mais recentes direto do Omie. Em alguns minutos a lista completa fica disponível aqui.</span>',
-					loading: '<span class="muted">Primeira carga do Omie em andamento: mostrando o que já chegou (os mais recentes vêm primeiro). A lista se completa sozinha.</span>',
+					loading:
+						'<span class="muted">Primeira carga do Omie em andamento: mostrando o que já chegou (os mais recentes vêm primeiro). A lista se completa sozinha.</span>',
 					waiting: `<span class="muted">O Omie pediu um pequeno intervalo entre consultas. A lista aparece sozinha em ${esc(data.retryAfter)} s.</span>`
 				}[data.source] || "") +
 				(data.totalPages > 1
