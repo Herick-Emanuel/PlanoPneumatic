@@ -1,6 +1,7 @@
 // Webhook do Omie: o ERP avisa na hora quando um pedido, nota, produto ou cliente muda, e o app atualiza
-// so aquele registro no espelho/cadastro. Configuracao no Omie: Configuracoes > Integracoes > Webhooks,
-// URL https://<app>/api/omie/webhook/<OMIE_WEBHOOK_TOKEN>.
+// so aquele registro no espelho/cadastro. Configuracao: Portal do Desenvolvedor do Omie (developer.omie.com.br)
+// > aplicativo > Webhooks, URL publica https://<app>/api/omie/webhook/<OMIE_WEBHOOK_TOKEN> (o token e criado
+// por nos, nao pelo Omie). Ao salvar, o Omie manda um aviso de teste, respondido com 200.
 // O aviso e respondido na hora (200) e processado em seguida, um por vez, para nao estourar o limite do Omie.
 const { database } = require("../db");
 const { logEvent } = require("../middleware/errors");
